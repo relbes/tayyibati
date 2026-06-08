@@ -1,0 +1,113 @@
+Build a production-ready Arabic-first AI mobile (for ios and android) application called "طيباتي - Tayyibati".
+
+Purpose:
+Users can search foods, meals, ingredients, products, or upload food images. The system evaluates compatibility with the Tayyibat dietary system using a structured internal knowledge base, not AI guesses.
+
+choose the best tech for frontend and backend
+
+- OpenAI API available
+- Arabic RTL support
+- Dark and Light mode
+
+Core Features:
+
+1. Food Search
+- User enters a food name, ingredient, meal, restaurant meal, or product.
+- AI extracts ingredients.
+- System checks all ingredients against the Tayyibat database.
+- Return:
+  - Allowed ingredients
+  - Forbidden ingredients
+  - Unknown ingredients
+  - Compatibility percentage
+  - Detailed explanations
+
+2. Image Analysis
+- Upload image of food, meal, product, or ingredients.
+- OpenAI Vision identifies ingredients.
+- Compare identified ingredients with Tayyibat database.
+- Return full compatibility report.
+
+3. Product Label Scanner
+- User uploads product image.
+- Extract ingredients using OCR.
+- Compare ingredients against Tayyibat database.
+- Highlight problematic ingredients.
+
+4. Admin Dashboard
+- Add allowed foods.
+- Add forbidden foods.
+- Edit reasons.
+- Add categories.
+- Import/export CSV.
+- Search and manage database.
+
+5. User Accounts
+- Sign up
+- Login
+- Google Login
+- Saved history
+
+6. Reports
+For every analysis return:
+
+Compatibility Score (0-100)
+
+Allowed Ingredients
+Forbidden Ingredients
+Unknown Ingredients
+
+Detailed Explanation
+
+Suggested Tayyibat Alternatives
+
+7. Database Structure
+
+Foods Table:
+id
+name_ar
+name_en
+category
+status (allowed, forbidden, conditional)
+reason
+notes
+created_at
+
+8. UI Pages
+
+Home
+Food Search
+Image Analysis
+History
+Profile
+Pricing
+Admin Dashboard
+
+9. Monetization
+
+Freemium Model
+
+Free:
+10 analyses per day
+
+Premium:
+Unlimited analyses
+
+Stripe subscription support
+
+10. Safety
+
+AI must never invent Tayyibat rules.
+All final judgments must come from the database.
+AI should only identify foods and ingredients.
+Database is the source of truth.
+
+11. Future Ready
+
+Prepare API architecture for:
+- Android app
+- iPhone app
+- Barcode scanning
+- Arabic voice input
+
+Generate complete production-ready code structure and database schema.
