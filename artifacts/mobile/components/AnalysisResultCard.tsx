@@ -1,0 +1,171 @@
+import React, { useState } from "react";
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useColors } from "@/hooks/useColors";
+import { ScoreRing } from "./ScoreRing";
+import { IngredientChip } from "./IngredientChip";
+import type { AnalysisReport } from "@/context/AnalysisContext";
+
+interface AnalysisResultCardProps {
+  report: AnalysisReport;
+}
+
+export function AnalysisResultCard({ report }: AnalysisResultCardProps) {
+  const colors = useColors();
+  const [expanded, setExpanded] = useState<string | null>("forbidden");
+
+  const sections = [
+    { key: "forbidden", label: "محظور", color: colors.forbidden, items: report.forbidden, icon: "close-circle" as const },
+    { key: "conditional", label: "مشروط", color: colors.conditional, items: report.conditional, icon: "alert-circle" as const },
+    { key: "allowed", label: "مسموح", color: colors.allowed, items: report.allowed, icon: "checkmark-circle" as const },
+    { key: "unknown", label: "غير معروف", color: colors.unknown, items: report.unknown, icon: "help-circle" as const },
+  ].filter((s) => s.items.length > 0);
+
+  return (
+    <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={styles.scoreRow}>
+        <ScoreRing score={report.compatibilityScore} />
+        <View style={styles.scoreInfo}>
+          <Text style={[styles.queryText, { color: colors.foreground }]} numberOfLines={2}>
+            {report.query}
+          </Text>
+          <Text style={[styles.explainText, { color: colors.mutedForeground }]} numberOfLines={3}>
+            {report.explanation}
+          </Text>
+          <View style={styles.statsRow}>
+            {[
+              { count: report.forbidden.length, color: colors.forbidden, label: "محظور" },
+              { count: report.conditional.length, color: colors.conditional, label: "مشروط" },
+              { count: report.allowed.length, color: colors.allowed, label: "مسموح" },
+            ].map((s) => (
+              <View key={s.label} style={styles.stat}>
+                <Text style={[styles.statCount, { color: s.color }]}>{s.count}</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      </View>
+
+      {sections.map((section) => (
+        <View key={section.key} style={[styles.section, { borderTopColor: colors.border }]}>
+          <TouchableOpacity
+            style={styles.sectionHeader}
+            onPress={() => setExpanded(expanded === section.key ? null : section.key)}
+          >
+            <View style={styles.sectionLeft}>
+              <Ionicons name={section.icon} size={18} color={section.color} />
+              <Text style={[styles.sectionTitle, { color: section.color }]}>
+                {section.label} ({section.items.length})
+              </Text>
+            </View>
+            <Ionicons
+              name={expanded === section.key ? "chevron-up" : "chevron-down"}
+              size={16}
+              color={colors.mutedForeground}
+            />
+          </TouchableOpacity>
+          {expanded === section.key && (
+            <View style={styles.chipContainer}>
+              {section.items.map((item, i) => (
+                <IngredientChip key={i} ingredient={item} />
+              ))}
+            </View>
+          )}
+        </View>
+      ))}
+
+      {report.suggestions.length > 0 && (
+        <View style={[styles.section, { borderTopColor: colors.border }]}>
+          <View style={styles.sectionHeader}>
+            <View style={styles.sectionLeft}>
+              <Ionicons name="bulb" size={18} color={colors.accent} />
+              <Text style={[styles.sectionTitle, { color: colors.accent }]}>اقتراحات</Text>
+            </View>
+          </View>
+          {report.suggestions.map((s, i) => (
+            <Text key={i} style={[styles.suggestion, { color: colors.mutedForeground }]}>
+              • {s}
+            </Text>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+  },
+  scoreRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    padding: 16,
+  },
+  scoreInfo: {
+    flex: 1,
+    gap: 6,
+  },
+  queryText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+    textAlign: "right",
+  },
+  explainText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    textAlign: "right",
+    lineHeight: 20,
+  },
+  statsRow: {
+    flexDirection: "row",
+    gap: 12,
+    justifyContent: "flex-end",
+  },
+  stat: {
+    alignItems: "center",
+  },
+  statCount: {
+    fontSize: 18,
+    fontFamily: "Inter_700Bold",
+  },
+  statLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+  },
+  section: {
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  sectionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontFamily: "Inter_600SemiBold",
+  },
+  chipContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: 10,
+  },
+  suggestion: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    marginTop: 6,
+    textAlign: "right",
+    lineHeight: 20,
+  },
+});

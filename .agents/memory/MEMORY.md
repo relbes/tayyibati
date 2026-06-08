@@ -1,0 +1,1 @@
+- [Tayyibati App Architecture](tayyibati-arch.md) — key decisions: OpenAI for extraction only, DB is source of truth, seeding via psql not scripts package.

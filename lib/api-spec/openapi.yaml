@@ -1,15 +1,22 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Tayyibati API specification
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: foods
+    description: Food database management
+  - name: analysis
+    description: Food analysis operations
+  - name: history
+    description: User analysis history
+  - name: users
+    description: User account operations
 paths:
   /healthz:
     get:
@@ -24,6 +31,251 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /foods:
+    get:
+      operationId: listFoods
+      tags: [foods]
+      summary: List foods
+      parameters:
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [allowed, forbidden, conditional]
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of foods
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Food"
+    post:
+      operationId: createFood
+      tags: [foods]
+      summary: Create a food entry (admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FoodInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+
+  /foods/{id}:
+    get:
+      operationId: getFood
+      tags: [foods]
+      summary: Get a food by id
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Food
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+    patch:
+      operationId: updateFood
+      tags: [foods]
+      summary: Update a food entry (admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FoodUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Food"
+    delete:
+      operationId: deleteFood
+      tags: [foods]
+      summary: Delete a food (admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /foods/stats:
+    get:
+      operationId: getFoodStats
+      tags: [foods]
+      summary: Get database statistics
+      responses:
+        "200":
+          description: Stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FoodStats"
+
+  /analysis/text:
+    post:
+      operationId: analyzeText
+      tags: [analysis]
+      summary: Analyze food by text description
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TextAnalysisInput"
+      responses:
+        "200":
+          description: Analysis report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisReport"
+
+  /analysis/image:
+    post:
+      operationId: analyzeImage
+      tags: [analysis]
+      summary: Analyze food by image (base64)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageAnalysisInput"
+      responses:
+        "200":
+          description: Analysis report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalysisReport"
+
+  /history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: List user analysis history
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: History list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryItem"
+
+  /history/{id}:
+    get:
+      operationId: getHistoryItem
+      tags: [history]
+      summary: Get a history item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: History item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HistoryItem"
+    delete:
+      operationId: deleteHistoryItem
+      tags: [history]
+      summary: Delete a history item
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /users/usage:
+    get:
+      operationId: getUserUsage
+      tags: [users]
+      summary: Get user daily usage count
+      parameters:
+        - in: query
+          name: userId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Usage info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserUsage"
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +286,223 @@ components:
       required:
         - status
 
+    Food:
+      type: object
+      properties:
+        id:
+          type: integer
+        nameAr:
+          type: string
+        nameEn:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [allowed, forbidden, conditional]
+        reason:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+      required:
+        - id
+        - nameAr
+        - nameEn
+        - category
+        - status
+        - createdAt
+
+    FoodInput:
+      type: object
+      properties:
+        nameAr:
+          type: string
+        nameEn:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [allowed, forbidden, conditional]
+        reason:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+      required:
+        - nameAr
+        - nameEn
+        - category
+        - status
+
+    FoodUpdate:
+      type: object
+      properties:
+        nameAr:
+          type: string
+        nameEn:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+          enum: [allowed, forbidden, conditional]
+        reason:
+          type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+
+    FoodStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        allowed:
+          type: integer
+        forbidden:
+          type: integer
+        conditional:
+          type: integer
+        categories:
+          type: integer
+      required:
+        - total
+        - allowed
+        - forbidden
+        - conditional
+        - categories
+
+    IngredientResult:
+      type: object
+      properties:
+        name:
+          type: string
+        nameAr:
+          type: string
+        status:
+          type: string
+          enum: [allowed, forbidden, conditional, unknown]
+        reason:
+          type: ["string", "null"]
+      required:
+        - name
+        - nameAr
+        - status
+
+    AnalysisReport:
+      type: object
+      properties:
+        query:
+          type: string
+        compatibilityScore:
+          type: integer
+        allowed:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientResult"
+        forbidden:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientResult"
+        conditional:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientResult"
+        unknown:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientResult"
+        explanation:
+          type: string
+        suggestions:
+          type: array
+          items:
+            type: string
+        analysisType:
+          type: string
+          enum: [text, image, label]
+      required:
+        - query
+        - compatibilityScore
+        - allowed
+        - forbidden
+        - conditional
+        - unknown
+        - explanation
+        - suggestions
+        - analysisType
+
+    TextAnalysisInput:
+      type: object
+      properties:
+        query:
+          type: string
+        userId:
+          type: ["string", "null"]
+      required:
+        - query
+
+    ImageAnalysisInput:
+      type: object
+      properties:
+        imageBase64:
+          type: string
+        mimeType:
+          type: string
+        userId:
+          type: ["string", "null"]
+        analysisType:
+          type: string
+          enum: [food, label]
+      required:
+        - imageBase64
+        - mimeType
+        - analysisType
+
+    HistoryItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        userId:
+          type: string
+        query:
+          type: string
+        analysisType:
+          type: string
+          enum: [text, image, label]
+        compatibilityScore:
+          type: integer
+        report:
+          $ref: "#/components/schemas/AnalysisReport"
+        createdAt:
+          type: string
+      required:
+        - id
+        - userId
+        - query
+        - analysisType
+        - compatibilityScore
+        - report
+        - createdAt
+
+    UserUsage:
+      type: object
+      properties:
+        userId:
+          type: string
+        dailyCount:
+          type: integer
+        dailyLimit:
+          type: integer
+        isPremium:
+          type: boolean
+        remainingToday:
+          type: integer
+      required:
+        - userId
+        - dailyCount
+        - dailyLimit
+        - isPremium
+        - remainingToday

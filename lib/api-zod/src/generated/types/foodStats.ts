@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface FoodStats {
+  total: number;
+  allowed: number;
+  forbidden: number;
+  conditional: number;
+  categories: number;
 }
