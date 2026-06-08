@@ -20,6 +20,7 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AdminStats,
   AnalysisReport,
   Food,
   FoodInput,
@@ -29,6 +30,7 @@ import type {
   HealthStatus,
   HistoryItem,
   ImageAnalysisInput,
+  ListAdminHistoryParams,
   ListFoodsParams,
   ListHistoryParams,
   TextAnalysisInput,
@@ -718,7 +720,7 @@ export const useAnalyzeImage = <TError = ErrorType<unknown>,
       return useMutation(getAnalyzeImageMutationOptions(options));
     }
 
-export const getListHistoryUrl = (params: ListHistoryParams,) => {
+export const getListHistoryUrl = (params?: ListHistoryParams,) => {
   const normalizedParams = new URLSearchParams();
 
   Object.entries(params || {}).forEach(([key, value]) => {
@@ -736,7 +738,7 @@ export const getListHistoryUrl = (params: ListHistoryParams,) => {
 /**
  * @summary List user analysis history
  */
-export const listHistory = async (params: ListHistoryParams, options?: RequestInit): Promise<HistoryItem[]> => {
+export const listHistory = async (params?: ListHistoryParams, options?: RequestInit): Promise<HistoryItem[]> => {
 
   return customFetch<HistoryItem[]>(getListHistoryUrl(params),
   {
@@ -758,7 +760,7 @@ export const getListHistoryQueryKey = (params?: ListHistoryParams,) => {
     }
 
 
-export const getListHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listHistory>>, TError = ErrorType<unknown>>(params: ListHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listHistory>>, TError = ErrorType<unknown>>(params?: ListHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
@@ -785,11 +787,172 @@ export type ListHistoryQueryError = ErrorType<unknown>
  */
 
 export function useListHistory<TData = Awaited<ReturnType<typeof listHistory>>, TError = ErrorType<unknown>>(
- params: ListHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ params?: ListHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListAdminHistoryUrl = (params?: ListAdminHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/admin/history?${stringifiedParams}` : `/api/admin/history`
+}
+
+/**
+ * @summary List all analysis history (admin)
+ */
+export const listAdminHistory = async (params?: ListAdminHistoryParams, options?: RequestInit): Promise<HistoryItem[]> => {
+
+  return customFetch<HistoryItem[]>(getListAdminHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAdminHistoryQueryKey = (params?: ListAdminHistoryParams,) => {
+    return [
+    `/api/admin/history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAdminHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listAdminHistory>>, TError = ErrorType<unknown>>(params?: ListAdminHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAdminHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAdminHistory>>> = ({ signal }) => listAdminHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAdminHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAdminHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listAdminHistory>>>
+export type ListAdminHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List all analysis history (admin)
+ */
+
+export function useListAdminHistory<TData = Awaited<ReturnType<typeof listAdminHistory>>, TError = ErrorType<unknown>>(
+ params?: ListAdminHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAdminHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAdminHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetAdminStatsUrl = () => {
+
+
+
+
+  return `/api/admin/stats`
+}
+
+/**
+ * @summary Get admin analytics stats
+ */
+export const getAdminStats = async ( options?: RequestInit): Promise<AdminStats> => {
+
+  return customFetch<AdminStats>(getGetAdminStatsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetAdminStatsQueryKey = () => {
+    return [
+    `/api/admin/stats`
+    ] as const;
+    }
+
+
+export const getGetAdminStatsQueryOptions = <TData = Awaited<ReturnType<typeof getAdminStats>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetAdminStatsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAdminStats>>> = ({ signal }) => getAdminStats({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAdminStats>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetAdminStatsQueryResult = NonNullable<Awaited<ReturnType<typeof getAdminStats>>>
+export type GetAdminStatsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get admin analytics stats
+ */
+
+export function useGetAdminStats<TData = Awaited<ReturnType<typeof getAdminStats>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAdminStats>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetAdminStatsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

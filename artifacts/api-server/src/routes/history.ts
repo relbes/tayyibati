@@ -8,7 +8,7 @@ const router = Router();
 router.get("/history", async (req, res) => {
   try {
     const { userId, limit = "20", offset = "0" } = req.query as Record<string, string>;
-    if (!userId) return res.status(400).json({ error: "userId is required" });
+    if (!userId) return res.status(400).json({ error: "userId required" });
 
     const items = await db
       .select()

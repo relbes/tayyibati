@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListHistoryParams = {
-userId?: string;
-limit?: number;
-offset?: number;
-};
+export interface ScoreBucket {
+  range: string;
+  count: number;
+}

@@ -6,8 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ListHistoryParams = {
-userId?: string;
+export type ListAdminHistoryParams = {
 limit?: number;
 offset?: number;
 };

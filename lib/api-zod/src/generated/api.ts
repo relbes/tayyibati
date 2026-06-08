@@ -215,7 +215,7 @@ export const listHistoryQueryLimitDefault = 20;
 export const listHistoryQueryOffsetDefault = 0;
 
 export const ListHistoryQueryParams = zod.object({
-  "userId": zod.coerce.string(),
+  "userId": zod.coerce.string().optional(),
   "limit": zod.coerce.number().default(listHistoryQueryLimitDefault),
   "offset": zod.coerce.number().default(listHistoryQueryOffsetDefault)
 })
@@ -260,6 +260,80 @@ export const ListHistoryResponseItem = zod.object({
   "createdAt": zod.string()
 })
 export const ListHistoryResponse = zod.array(ListHistoryResponseItem)
+
+
+/**
+ * @summary List all analysis history (admin)
+ */
+export const listAdminHistoryQueryLimitDefault = 50;
+export const listAdminHistoryQueryOffsetDefault = 0;
+
+export const ListAdminHistoryQueryParams = zod.object({
+  "limit": zod.coerce.number().default(listAdminHistoryQueryLimitDefault),
+  "offset": zod.coerce.number().default(listAdminHistoryQueryOffsetDefault)
+})
+
+export const ListAdminHistoryResponseItem = zod.object({
+  "id": zod.number(),
+  "userId": zod.string(),
+  "query": zod.string(),
+  "analysisType": zod.enum(['text', 'image', 'label']),
+  "compatibilityScore": zod.number(),
+  "report": zod.object({
+  "query": zod.string(),
+  "compatibilityScore": zod.number(),
+  "allowed": zod.array(zod.object({
+  "name": zod.string(),
+  "nameAr": zod.string(),
+  "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "reason": zod.string().nullish()
+})),
+  "forbidden": zod.array(zod.object({
+  "name": zod.string(),
+  "nameAr": zod.string(),
+  "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "reason": zod.string().nullish()
+})),
+  "conditional": zod.array(zod.object({
+  "name": zod.string(),
+  "nameAr": zod.string(),
+  "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "reason": zod.string().nullish()
+})),
+  "unknown": zod.array(zod.object({
+  "name": zod.string(),
+  "nameAr": zod.string(),
+  "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "reason": zod.string().nullish()
+})),
+  "explanation": zod.string(),
+  "suggestions": zod.array(zod.string()),
+  "analysisType": zod.enum(['text', 'image', 'label'])
+}),
+  "createdAt": zod.string()
+})
+export const ListAdminHistoryResponse = zod.array(ListAdminHistoryResponseItem)
+
+
+/**
+ * @summary Get admin analytics stats
+ */
+export const GetAdminStatsResponse = zod.object({
+  "totalAnalyses": zod.number(),
+  "totalUsers": zod.number(),
+  "avgScore": zod.number(),
+  "textAnalyses": zod.number(),
+  "imageAnalyses": zod.number(),
+  "labelAnalyses": zod.number(),
+  "dailyAnalyses": zod.array(zod.object({
+  "date": zod.string(),
+  "count": zod.number()
+})),
+  "scoreBuckets": zod.array(zod.object({
+  "range": zod.string(),
+  "count": zod.number()
+}))
+})
 
 
 /**

@@ -4,6 +4,7 @@ import foodsRouter from "./foods";
 import analysisRouter from "./analysis";
 import historyRouter from "./history";
 import usersRouter from "./users";
+import adminRouter from "./admin";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(foodsRouter);
 router.use(analysisRouter);
 router.use(historyRouter);
 router.use(usersRouter);
+router.use(adminRouter);
 
 export default router;

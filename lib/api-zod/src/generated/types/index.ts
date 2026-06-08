@@ -6,8 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './adminStats';
 export * from './analysisReport';
 export * from './analysisReportAnalysisType';
+export * from './dailyAnalysis';
 export * from './food';
 export * from './foodInput';
 export * from './foodInputStatus';
@@ -23,8 +25,10 @@ export * from './imageAnalysisInput';
 export * from './imageAnalysisInputAnalysisType';
 export * from './ingredientResult';
 export * from './ingredientResultStatus';
+export * from './listAdminHistoryParams';
 export * from './listFoodsParams';
 export * from './listFoodsStatus';
 export * from './listHistoryParams';
+export * from './scoreBucket';
 export * from './textAnalysisInput';
 export * from './userUsage';

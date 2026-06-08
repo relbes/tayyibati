@@ -167,6 +167,27 @@ export interface UserUsage {
   remainingToday: number;
 }
 
+export interface DailyAnalysis {
+  date: string;
+  count: number;
+}
+
+export interface ScoreBucket {
+  range: string;
+  count: number;
+}
+
+export interface AdminStats {
+  totalAnalyses: number;
+  totalUsers: number;
+  avgScore: number;
+  textAnalyses: number;
+  imageAnalyses: number;
+  labelAnalyses: number;
+  dailyAnalyses: DailyAnalysis[];
+  scoreBuckets: ScoreBucket[];
+}
+
 export type ListFoodsParams = {
 search?: string;
 status?: ListFoodsStatus;
@@ -185,7 +206,12 @@ export const ListFoodsStatus = {
 } as const;
 
 export type ListHistoryParams = {
-userId: string;
+userId?: string;
+limit?: number;
+offset?: number;
+};
+
+export type ListAdminHistoryParams = {
 limit?: number;
 offset?: number;
 };

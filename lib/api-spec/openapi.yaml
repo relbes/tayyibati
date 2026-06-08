@@ -202,7 +202,6 @@ paths:
       parameters:
         - in: query
           name: userId
-          required: true
           schema:
             type: string
         - in: query
@@ -224,6 +223,45 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/HistoryItem"
+
+  /admin/history:
+    get:
+      operationId: listAdminHistory
+      tags: [history]
+      summary: List all analysis history (admin)
+      parameters:
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 50
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: History list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryItem"
+
+  /admin/stats:
+    get:
+      operationId: getAdminStats
+      tags: [users]
+      summary: Get admin analytics stats
+      responses:
+        "200":
+          description: Admin stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminStats"
 
   /history/{id}:
     get:
@@ -506,3 +544,58 @@ components:
         - dailyLimit
         - isPremium
         - remainingToday
+
+    DailyAnalysis:
+      type: object
+      properties:
+        date:
+          type: string
+        count:
+          type: integer
+      required:
+        - date
+        - count
+
+    ScoreBucket:
+      type: object
+      properties:
+        range:
+          type: string
+        count:
+          type: integer
+      required:
+        - range
+        - count
+
+    AdminStats:
+      type: object
+      properties:
+        totalAnalyses:
+          type: integer
+        totalUsers:
+          type: integer
+        avgScore:
+          type: integer
+        textAnalyses:
+          type: integer
+        imageAnalyses:
+          type: integer
+        labelAnalyses:
+          type: integer
+        dailyAnalyses:
+          type: array
+          items:
+            $ref: "#/components/schemas/DailyAnalysis"
+        scoreBuckets:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreBucket"
+      required:
+        - totalAnalyses
+        - totalUsers
+        - avgScore
+        - textAnalyses
+        - imageAnalyses
+        - labelAnalyses
+        - dailyAnalyses
+        - scoreBuckets
