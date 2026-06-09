@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View,
   Text,
@@ -8,22 +8,36 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { analyzeText } from "@/lib/api";
+import { analyzeText, listFoods } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 
-const SUGGESTIONS = [
+const QUICK_SUGGESTIONS = [
   "بيتزا", "كنتاكي", "همبرغر", "شاورما", "كباب", "فول مدمس",
   "عصير برتقال", "شوكولاته", "جيلي", "هوت دوج", "سوشي",
 ];
+
+type FoodSuggestion = { id: number; nameAr: string; nameEn: string; status: string };
+
+const STATUS_COLORS: Record<string, string> = {
+  allowed: "#16a34a",
+  forbidden: "#dc2626",
+  conditional: "#d97706",
+};
+
+const STATUS_DOT: Record<string, string> = {
+  allowed: "#22c55e",
+  forbidden: "#ef4444",
+  conditional: "#f59e0b",
+};
 
 export default function SearchScreen() {
   const colors = useColors();
@@ -32,12 +46,51 @@ export default function SearchScreen() {
   const { setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<any>(null);
+  const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
   const inputRef = useRef<TextInput>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  const fetchSuggestions = useCallback(async (text: string) => {
+    if (text.trim().length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    setIsFetchingSuggestions(true);
+    try {
+      const foods = await listFoods({ search: text.trim(), limit: 8 });
+      setSuggestions(foods ?? []);
+      setShowSuggestions((foods?.length ?? 0) > 0);
+    } catch {
+      setSuggestions([]);
+      setShowSuggestions(false);
+    } finally {
+      setIsFetchingSuggestions(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!query.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      fetchSuggestions(query);
+    }, 280);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, fetchSuggestions]);
 
   const handleAnalyze = async (q?: string) => {
     const text = (q ?? query).trim();
     if (!text) return;
+    setShowSuggestions(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
     setResult(null);
@@ -50,6 +103,20 @@ export default function SearchScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } finally {
       setIsAnalyzing(false);
+    }
+  };
+
+  const handleSelectSuggestion = (food: FoodSuggestion) => {
+    const name = food.nameAr;
+    setQuery(name);
+    setShowSuggestions(false);
+    handleAnalyze(name);
+  };
+
+  const handleChangeText = (text: string) => {
+    setQuery(text);
+    if (!text.trim()) {
+      setResult(null);
     }
   };
 
@@ -74,42 +141,82 @@ export default function SearchScreen() {
               أدخل اسم الطعام أو الوجبة أو المنتج
             </Text>
 
-            {/* Search Input */}
-            <View style={[styles.searchRow, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-              <TextInput
-                ref={inputRef}
-                style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
-                placeholder="مثال: بيتزا، شاورما، كنتاكي..."
-                placeholderTextColor={colors.mutedForeground}
-                value={query}
-                onChangeText={setQuery}
-                textAlign="right"
-                returnKeyType="search"
-                onSubmitEditing={() => handleAnalyze()}
-              />
-              <TouchableOpacity
-                style={[styles.searchBtn, { backgroundColor: query.trim() ? colors.primary : colors.border }]}
-                onPress={() => handleAnalyze()}
-                disabled={!query.trim() || isAnalyzing}
-              >
-                <Ionicons name="search" size={20} color={query.trim() ? "#fff" : colors.mutedForeground} />
-              </TouchableOpacity>
+            {/* Search Input + Autocomplete */}
+            <View>
+              <View style={[styles.searchRow, { backgroundColor: colors.muted, borderColor: showSuggestions ? colors.primary : colors.border }]}>
+                <TextInput
+                  ref={inputRef}
+                  style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                  placeholder="مثال: بيتزا، شاورما، كنتاكي..."
+                  placeholderTextColor={colors.mutedForeground}
+                  value={query}
+                  onChangeText={handleChangeText}
+                  textAlign="right"
+                  returnKeyType="search"
+                  onSubmitEditing={() => handleAnalyze()}
+                  onFocus={() => query.trim().length >= 2 && setShowSuggestions(suggestions.length > 0)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                />
+                {query.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.clearBtn}
+                    onPress={() => { setQuery(""); setSuggestions([]); setShowSuggestions(false); setResult(null); }}
+                  >
+                    <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={[styles.searchBtn, { backgroundColor: query.trim() ? colors.primary : colors.border }]}
+                  onPress={() => handleAnalyze()}
+                  disabled={!query.trim() || isAnalyzing}
+                >
+                  <Ionicons name="search" size={20} color={query.trim() ? "#fff" : colors.mutedForeground} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Suggestions dropdown */}
+              {showSuggestions && suggestions.length > 0 && (
+                <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.foreground }]}>
+                  {suggestions.map((food, idx) => (
+                    <TouchableOpacity
+                      key={food.id}
+                      style={[
+                        styles.suggestionRow,
+                        idx < suggestions.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+                      ]}
+                      onPress={() => handleSelectSuggestion(food)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.suggestionLeft}>
+                        <View style={[styles.statusDot, { backgroundColor: STATUS_DOT[food.status] ?? "#94a3b8" }]} />
+                        <View style={styles.suggestionNames}>
+                          <Text style={[styles.suggestionAr, { color: colors.foreground }]}>{food.nameAr}</Text>
+                          <Text style={[styles.suggestionEn, { color: colors.mutedForeground }]}>{food.nameEn}</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.statusLabel, { color: STATUS_COLORS[food.status] ?? colors.mutedForeground }]}>
+                        {food.status === "allowed" ? "حلال" : food.status === "forbidden" ? "محرم" : "مشروط"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
 
           <View style={styles.content}>
-            {/* Suggestions */}
-            {!result && (
+            {/* Quick suggestions */}
+            {!result && !query.trim() && (
               <>
                 <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>اقتراحات سريعة</Text>
                 <View style={styles.suggestionsWrap}>
-                  {SUGGESTIONS.map((s) => (
+                  {QUICK_SUGGESTIONS.map((s) => (
                     <TouchableOpacity
                       key={s}
-                      style={[styles.suggestionChip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
+                      style={[styles.chip, { backgroundColor: colors.secondary, borderColor: colors.border }]}
                       onPress={() => { setQuery(s); handleAnalyze(s); }}
                     >
-                      <Text style={[styles.suggestionText, { color: colors.secondaryForeground }]}>{s}</Text>
+                      <Text style={[styles.chipText, { color: colors.secondaryForeground }]}>{s}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -121,7 +228,7 @@ export default function SearchScreen() {
               <View style={styles.resultContainer}>
                 <View style={styles.resultHeader}>
                   <Text style={[styles.resultLabel, { color: colors.foreground }]}>نتيجة التحليل</Text>
-                  <TouchableOpacity onPress={() => setResult(null)}>
+                  <TouchableOpacity onPress={() => { setResult(null); setQuery(""); }}>
                     <Ionicons name="refresh" size={20} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 </View>
@@ -159,15 +266,20 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
     paddingLeft: 8,
-    overflow: "hidden",
+    overflow: "visible",
   },
   input: {
     flex: 1,
     paddingVertical: 14,
     paddingHorizontal: 10,
     fontSize: 16,
+  },
+  clearBtn: {
+    paddingHorizontal: 6,
+    justifyContent: "center",
+    alignItems: "center",
   },
   searchBtn: {
     width: 48,
@@ -176,6 +288,59 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderRadius: 10,
     margin: 4,
+  },
+  dropdown: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 4,
+    zIndex: 100,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 8,
+    overflow: "hidden",
+  },
+  suggestionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  suggestionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flex: 1,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  suggestionNames: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  suggestionAr: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    textAlign: "right",
+  },
+  suggestionEn: {
+    fontSize: 11,
+    fontFamily: "Inter_400Regular",
+    textAlign: "right",
+    marginTop: 1,
+  },
+  statusLabel: {
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+    marginLeft: 8,
   },
   content: {
     padding: 16,
@@ -192,13 +357,13 @@ const styles = StyleSheet.create({
     gap: 8,
     justifyContent: "flex-end",
   },
-  suggestionChip: {
+  chip: {
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
   },
-  suggestionText: {
+  chipText: {
     fontSize: 14,
     fontFamily: "Inter_500Medium",
   },

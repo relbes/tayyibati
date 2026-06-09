@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   useListFoods,
   useCreateFood,
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -41,6 +42,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import {
   Search,
@@ -54,6 +61,8 @@ import {
   CheckCircle,
   AlertCircle,
   Download,
+  ChevronDown,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -192,11 +201,9 @@ function downloadTemplate() {
 function BulkImportDialog({
   open,
   onClose,
-  onImported,
 }: {
   open: boolean;
   onClose: () => void;
-  onImported: () => void;
 }) {
   const [step, setStep] = useState<"input" | "preview" | "done">("input");
   const [csvText, setCsvText] = useState("");
@@ -213,7 +220,6 @@ function BulkImportDialog({
         setStep("done");
         queryClient.invalidateQueries({ queryKey: getListFoodsQueryKey() });
         queryClient.invalidateQueries({ queryKey: getGetFoodStatsQueryKey() });
-        onImported();
       },
       onError: () => {
         toast({ title: "Import failed", variant: "destructive" });
@@ -529,6 +535,9 @@ function FoodDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{food ? "Edit Food" : "Add New Food"}</DialogTitle>
+          <DialogDescription>
+            {food ? "Update the food's information below." : "Fill in the details to add a new food to the database."}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -624,6 +633,17 @@ function FoodDialog({
   );
 }
 
+async function bulkDeleteFoods(payload: { ids?: number[]; status?: string }) {
+  const base = localStorage.getItem("tayyibati_api_url") || "";
+  const res = await fetch(`${base}/api/foods/bulk`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Bulk delete failed");
+  return res.json() as Promise<{ deleted: number }>;
+}
+
 export default function Foods() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -631,6 +651,9 @@ export default function Foods() {
   const [dialogFood, setDialogFood] = useState<Food | null | "new">(null);
   const [deleteTarget, setDeleteTarget] = useState<Food | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeletePayload, setBulkDeletePayload] = useState<{ ids?: number[]; status?: string } | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -645,6 +668,11 @@ export default function Foods() {
 
   const { data: foods, isLoading } = useListFoods(queryParams);
 
+  // Clear selection when page/filter changes
+  useEffect(() => {
+    setSelectedIds(new Set());
+  }, [offset, search, statusFilter]);
+
   const deleteMutation = useDeleteFood({
     mutation: {
       onSuccess: () => {
@@ -658,6 +686,7 @@ export default function Foods() {
 
   function invalidate() {
     queryClient.invalidateQueries({ queryKey: getListFoodsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: getGetFoodStatsQueryKey() });
   }
 
   function handleSearch(val: string) {
@@ -672,6 +701,51 @@ export default function Foods() {
 
   const hasPrev = offset > 0;
   const hasNext = (foods?.length ?? 0) === PAGE_SIZE;
+
+  // Selection helpers
+  const allPageIds = foods?.map((f) => f.id) ?? [];
+  const allSelected = allPageIds.length > 0 && allPageIds.every((id) => selectedIds.has(id));
+  const someSelected = allPageIds.some((id) => selectedIds.has(id));
+
+  function toggleSelectAll() {
+    if (allSelected) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        allPageIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedIds((prev) => new Set([...prev, ...allPageIds]));
+    }
+  }
+
+  function toggleSelect(id: number) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  async function executeBulkDelete(payload: { ids?: number[]; status?: string }) {
+    setIsBulkDeleting(true);
+    try {
+      const result = await bulkDeleteFoods(payload);
+      toast({ title: `${result.deleted} food${result.deleted !== 1 ? "s" : ""} deleted` });
+      setSelectedIds(new Set());
+      invalidate();
+    } catch {
+      toast({ title: "Bulk delete failed", variant: "destructive" });
+    } finally {
+      setIsBulkDeleting(false);
+      setBulkDeletePayload(null);
+    }
+  }
+
+  const bulkDeleteLabel = bulkDeletePayload?.status
+    ? `Delete all "${STATUS_LABELS[bulkDeletePayload.status]}" foods`
+    : `Delete ${bulkDeletePayload?.ids?.length ?? 0} selected food${(bulkDeletePayload?.ids?.length ?? 0) !== 1 ? "s" : ""}`;
 
   return (
     <div className="p-6 space-y-6">
@@ -718,24 +792,94 @@ export default function Foods() {
         </Select>
       </div>
 
+      {/* Bulk action toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/5 border border-primary/20">
+          <span className="text-sm font-medium text-primary">
+            {selectedIds.size} selected
+          </span>
+          <div className="flex-1" />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            <X className="h-3 w-3 mr-1" />
+            Clear
+          </Button>
+          <Button
+            size="sm"
+            variant="destructive"
+            className="h-7 text-xs"
+            disabled={isBulkDeleting}
+            onClick={() => setBulkDeletePayload({ ids: Array.from(selectedIds) })}
+          >
+            <Trash2 className="h-3 w-3 mr-1.5" />
+            Delete {selectedIds.size} selected
+          </Button>
+        </div>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/30">
+                  <th className="px-3 py-3 w-10">
+                    <Checkbox
+                      checked={allSelected}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all"
+                      className={cn(someSelected && !allSelected && "data-[state=unchecked]:bg-muted")}
+                    />
+                  </th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Arabic</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">English</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Category</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
                   <th className="px-4 py-3 text-left font-medium text-muted-foreground">Reason</th>
-                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">Actions</th>
+                  <th className="px-4 py-3 text-right font-medium text-muted-foreground">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground font-medium gap-1 px-2">
+                          Actions
+                          <ChevronDown className="h-3 w-3" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive text-xs"
+                          onClick={() => setBulkDeletePayload({ status: "forbidden" })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Delete all Forbidden
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive text-xs"
+                          onClick={() => setBulkDeletePayload({ status: "allowed" })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Delete all Allowed
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive text-xs"
+                          onClick={() => setBulkDeletePayload({ status: "conditional" })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5 mr-2" />
+                          Delete all Conditional
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   Array.from({ length: 10 }).map((_, i) => (
                     <tr key={i} className="border-b">
+                      <td className="px-3 py-3"><Skeleton className="h-4 w-4 rounded" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                       <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
@@ -746,13 +890,29 @@ export default function Foods() {
                   ))
                 ) : foods?.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                       No foods found
                     </td>
                   </tr>
                 ) : (
                   foods?.map((food) => (
-                    <tr key={food.id} className="border-b hover:bg-muted/20 transition-colors">
+                    <tr
+                      key={food.id}
+                      className={cn(
+                        "border-b transition-colors cursor-pointer",
+                        selectedIds.has(food.id)
+                          ? "bg-primary/5 hover:bg-primary/8"
+                          : "hover:bg-muted/20",
+                      )}
+                      onClick={() => toggleSelect(food.id)}
+                    >
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(food.id)}
+                          onCheckedChange={() => toggleSelect(food.id)}
+                          aria-label={`Select ${food.nameEn}`}
+                        />
+                      </td>
                       <td className="px-4 py-3 font-medium" dir="rtl">
                         {food.nameAr}
                       </td>
@@ -775,7 +935,7 @@ export default function Foods() {
                           {food.reason ?? "—"}
                         </p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
@@ -832,11 +992,7 @@ export default function Foods() {
         </CardContent>
       </Card>
 
-      <BulkImportDialog
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        onImported={() => {}}
-      />
+      <BulkImportDialog open={bulkOpen} onClose={() => setBulkOpen(false)} />
 
       {dialogFood !== null && (
         <FoodDialog
@@ -847,6 +1003,7 @@ export default function Foods() {
         />
       )}
 
+      {/* Single delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -865,6 +1022,28 @@ export default function Foods() {
               }
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={!!bulkDeletePayload} onOpenChange={(v) => !v && setBulkDeletePayload(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
+            <AlertDialogDescription>
+              {bulkDeleteLabel}. This action is permanent and cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={isBulkDeleting}
+              onClick={() => bulkDeletePayload && executeBulkDelete(bulkDeletePayload)}
+            >
+              {isBulkDeleting ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

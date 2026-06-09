@@ -59,7 +59,11 @@ export default function CameraScreen() {
       setResult(null);
 
       // Get base64
-      const base64 = asset.base64;
+      // Strip any data URL prefix (expo-image-picker can include it on some platforms/versions)
+      let base64 = asset.base64 ?? null;
+      if (base64?.startsWith("data:")) {
+        base64 = base64.split(",")[1] ?? base64;
+      }
 
       if (base64) {
         await runAnalysis(base64, asset.mimeType || "image/jpeg");

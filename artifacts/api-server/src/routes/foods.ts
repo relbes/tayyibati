@@ -110,6 +110,38 @@ router.post("/foods/bulk", async (req, res) => {
   }
 });
 
+router.delete("/foods/bulk", async (req, res) => {
+  try {
+    const { ids, status } = req.body as { ids?: number[]; status?: string };
+
+    if (status) {
+      if (!["allowed", "forbidden", "conditional"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+      const deleted = await db
+        .delete(foodsTable)
+        .where(eq(foodsTable.status, status as any))
+        .returning({ id: foodsTable.id });
+      return res.json({ deleted: deleted.length });
+    }
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "Provide ids array or status string" });
+    }
+
+    const { inArray } = await import("drizzle-orm");
+    const deleted = await db
+      .delete(foodsTable)
+      .where(inArray(foodsTable.id, ids))
+      .returning({ id: foodsTable.id });
+
+    res.json({ deleted: deleted.length });
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk delete foods");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/foods/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
