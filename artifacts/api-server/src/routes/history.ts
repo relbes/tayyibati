@@ -8,7 +8,7 @@ const router = Router();
 router.get("/history", async (req, res) => {
   try {
     const { userId, limit = "20", offset = "0" } = req.query as Record<string, string>;
-    if (!userId) return res.status(400).json({ error: "userId required" });
+    if (!userId) return void res.status(400).json({ error: "userId required" });
 
     const items = await db
       .select()
@@ -32,7 +32,7 @@ router.get("/history/:id", async (req, res) => {
       .select()
       .from(analysisHistoryTable)
       .where(eq(analysisHistoryTable.id, id));
-    if (!item) return res.status(404).json({ error: "Not found" });
+    if (!item) return void res.status(404).json({ error: "Not found" });
     res.json(item);
   } catch (err) {
     req.log.error({ err }, "Failed to get history item");

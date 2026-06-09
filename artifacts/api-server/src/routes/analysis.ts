@@ -2,7 +2,7 @@ import { Router } from "express";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
 import { foodsTable, analysisHistoryTable, userUsageTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 
 const router = Router();
 
@@ -46,121 +46,233 @@ interface IngredientResult {
   reason: string | null;
 }
 
-async function lookupIngredients(ingredients: string[]): Promise<{
+interface AnalysisReport {
+  query: string;
+  compatibilityScore: number;
   allowed: IngredientResult[];
   forbidden: IngredientResult[];
   conditional: IngredientResult[];
   unknown: IngredientResult[];
-  score: number;
-}> {
-  const allFoods = await db.select().from(foodsTable);
+  explanation: string;
+  suggestions: string[];
+  analysisType: "text" | "image" | "label";
+}
 
+type FoodRow = typeof foodsTable.$inferSelect;
+
+function buildCatalog(foods: FoodRow[]): string {
+  return foods
+    .map((f) => `${f.id}|${f.nameEn}|${f.nameAr}|${f.status}`)
+    .join("\n");
+}
+
+function scoreFromResults(
+  allowed: IngredientResult[],
+  forbidden: IngredientResult[],
+  conditional: IngredientResult[],
+  unknown: IngredientResult[],
+): number {
+  const total = allowed.length + forbidden.length + conditional.length + unknown.length;
+  if (total === 0) return 100;
+  const forbiddenPenalty = (forbidden.length / total) * 100;
+  const conditionalPenalty = (conditional.length / total) * 30;
+  const unknownPenalty = (unknown.length / total) * 10;
+  let score = Math.max(0, Math.round(100 - forbiddenPenalty - conditionalPenalty - unknownPenalty));
+  if (forbidden.length > 0) score = Math.min(score, 30);
+  return score;
+}
+
+function buildReport(
+  foods: FoodRow[],
+  matchedIds: number[],
+  additionalFlags: string[],
+  query: string,
+  analysisType: AnalysisReport["analysisType"],
+): AnalysisReport {
   const allowed: IngredientResult[] = [];
   const forbidden: IngredientResult[] = [];
   const conditional: IngredientResult[] = [];
   const unknown: IngredientResult[] = [];
 
-  for (const ingredient of ingredients) {
-    const cleaned = ingredient.trim().toLowerCase();
-    const match = allFoods.find(
-      (f) =>
-        f.nameEn.toLowerCase() === cleaned ||
-        f.nameAr === cleaned ||
-        f.nameEn.toLowerCase().includes(cleaned) ||
-        cleaned.includes(f.nameEn.toLowerCase())
-    );
+  const foodMap = new Map(foods.map((f) => [f.id, f]));
 
-    if (!match) {
-      unknown.push({ name: ingredient, nameAr: ingredient, status: "unknown", reason: null });
-    } else if (match.status === "allowed") {
-      allowed.push({ name: match.nameEn, nameAr: match.nameAr, status: "allowed", reason: match.reason ?? null });
-    } else if (match.status === "forbidden") {
-      forbidden.push({ name: match.nameEn, nameAr: match.nameAr, status: "forbidden", reason: match.reason ?? null });
-    } else {
-      conditional.push({ name: match.nameEn, nameAr: match.nameAr, status: "conditional", reason: match.reason ?? null });
-    }
+  for (const id of matchedIds) {
+    const f = foodMap.get(id);
+    if (!f) continue;
+    const item: IngredientResult = {
+      name: f.nameEn,
+      nameAr: f.nameAr,
+      status: f.status as IngredientResult["status"],
+      reason: f.reason ?? null,
+    };
+    if (f.status === "allowed") allowed.push(item);
+    else if (f.status === "forbidden") forbidden.push(item);
+    else conditional.push(item);
   }
 
-  const total = ingredients.length;
-
-  let score = 100;
-  if (total > 0) {
-    const forbiddenPenalty = (forbidden.length / total) * 100;
-    const conditionalPenalty = (conditional.length / total) * 30;
-    const unknownPenalty = (unknown.length / total) * 10;
-    score = Math.max(0, Math.round(100 - forbiddenPenalty - conditionalPenalty - unknownPenalty));
-    if (forbidden.length > 0) score = Math.min(score, 30);
+  for (const flag of additionalFlags) {
+    unknown.push({ name: flag, nameAr: flag, status: "unknown", reason: null });
   }
 
-  return { allowed, forbidden, conditional, unknown, score };
+  const score = scoreFromResults(allowed, forbidden, conditional, unknown);
+
+  const explanationParts: string[] = [];
+  if (forbidden.length > 0) {
+    explanationParts.push(`تحتوي على مكونات محظورة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
+  }
+  if (conditional.length > 0) {
+    explanationParts.push(`تحتوي على مكونات مشروطة: ${conditional.map((f) => f.nameAr).join("، ")}`);
+  }
+  if (unknown.length > 0) {
+    explanationParts.push(`مكونات تحتاج تحقق: ${unknown.slice(0, 3).map((f) => f.name).join("، ")}${unknown.length > 3 ? "..." : ""}`);
+  }
+  if (forbidden.length === 0 && conditional.length === 0 && (allowed.length > 0 || unknown.length === 0)) {
+    explanationParts.push("جميع المكونات المعروفة مسموح بها");
+  }
+
+  const suggestions = forbidden.map((f) => `استبدل ${f.nameAr} ببديل مسموح به من قاعدة بيانات طيبات`);
+
+  return {
+    query,
+    compatibilityScore: score,
+    allowed,
+    forbidden,
+    conditional,
+    unknown,
+    explanation: explanationParts.join(". ") || "تم تحليل المكونات",
+    suggestions,
+    analysisType,
+  };
+}
+
+/**
+ * Smart text analysis: one AI call that understands user intent AND maps to DB food IDs.
+ * The AI receives the full food catalog so it can match semantically, not just by keyword.
+ */
+async function analyzeTextWithIntent(query: string, allFoods: FoodRow[]): Promise<{ matchedIds: number[]; additionalFlags: string[] }> {
+  const catalog = buildCatalog(allFoods);
+
+  const systemPrompt = `You are a halal food compliance expert with deep knowledge of Islamic dietary laws (Tayyibat system).
+
+Your task:
+1. Understand what the user is asking about — it could be a dish name, brand name, ingredient, product, or meal in ANY language (Arabic, English, or mixed).
+2. Think about ALL the ingredients that would typically be found in that food/product/dish.
+3. From the provided food database, identify which food IDs are relevant — match by concept, not just exact name. For example:
+   - "كنتاكي" → includes chicken, flour, oil, spices, etc.
+   - "KFC" → same as above
+   - "بيتزا" → flour, cheese, tomato sauce, yeast, etc.
+   - "هوت دوج" → pork sausage or beef sausage, bread, etc.
+   - "جيلاتين" → gelatin
+   - A brand name → think about its typical ingredients
+4. Also list any ingredients you know are in this food that are NOT in the database but may be of halal concern (like specific additives, E-numbers, or animal-derived ingredients not listed).
+
+Food database (format: ID|English name|Arabic name|status):
+${catalog}
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "matchedIds": [1, 2, 3],
+  "additionalFlags": ["ingredient not in db that may be concern"]
+}
+
+Rules:
+- matchedIds must only contain integer IDs from the database above
+- Be thorough — if a dish contains an ingredient that's in the DB, include it
+- additionalFlags should only contain ingredients with genuine halal concern
+- If the query is vague or unrecognizable, return empty arrays`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: query },
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 600,
+  });
+
+  try {
+    const parsed = JSON.parse(completion.choices[0].message.content || "{}");
+    const matchedIds: number[] = Array.isArray(parsed.matchedIds)
+      ? parsed.matchedIds.filter((id: unknown) => typeof id === "number")
+      : [];
+    const additionalFlags: string[] = Array.isArray(parsed.additionalFlags)
+      ? parsed.additionalFlags.filter((s: unknown) => typeof s === "string").slice(0, 10)
+      : [];
+    return { matchedIds, additionalFlags };
+  } catch {
+    return { matchedIds: [], additionalFlags: [] };
+  }
+}
+
+/**
+ * Smart ingredient-to-DB mapping: given extracted ingredient strings (from image OCR/vision),
+ * maps them semantically to DB food IDs using AI rather than naive string matching.
+ */
+async function mapIngredientsToIds(ingredients: string[], allFoods: FoodRow[]): Promise<{ matchedIds: number[]; additionalFlags: string[] }> {
+  if (ingredients.length === 0) return { matchedIds: [], additionalFlags: [] };
+
+  const catalog = buildCatalog(allFoods);
+
+  const systemPrompt = `You are a halal food compliance expert. 
+Given a list of extracted ingredients, map each one to the best matching entry in the food database.
+Match semantically — "monosodium glutamate" matches "MSG", "beef fat" matches "beef", "pork gelatin" matches "gelatin" AND "pork", etc.
+
+Food database (format: ID|English name|Arabic name|status):
+${catalog}
+
+Respond ONLY with valid JSON:
+{
+  "matchedIds": [1, 2, 3],
+  "additionalFlags": ["ingredient of halal concern not found in db"]
+}
+
+Rules:
+- matchedIds must only contain integer IDs from the database
+- For each ingredient, find ALL relevant DB entries (e.g., "pork gelatin" → both pork ID and gelatin ID)
+- additionalFlags: ingredients with halal concern that have NO match in the DB
+- Do NOT include benign ingredients (salt, water, sugar, common spices) in additionalFlags unless they're genuinely concerning`;
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Ingredients to map:\n${ingredients.join("\n")}` },
+    ],
+    response_format: { type: "json_object" },
+    max_tokens: 600,
+  });
+
+  try {
+    const parsed = JSON.parse(completion.choices[0].message.content || "{}");
+    const matchedIds: number[] = Array.isArray(parsed.matchedIds)
+      ? parsed.matchedIds.filter((id: unknown) => typeof id === "number")
+      : [];
+    const additionalFlags: string[] = Array.isArray(parsed.additionalFlags)
+      ? parsed.additionalFlags.filter((s: unknown) => typeof s === "string").slice(0, 10)
+      : [];
+    return { matchedIds, additionalFlags };
+  } catch {
+    return { matchedIds: [], additionalFlags: [] };
+  }
 }
 
 router.post("/analysis/text", async (req, res) => {
   try {
     const { query, userId } = req.body as { query: string; userId?: string | null };
-    if (!query) return res.status(400).json({ error: "query is required" });
+    if (!query) return void res.status(400).json({ error: "query is required" });
 
-    const systemPrompt = `You are a food ingredient extractor. Given a food name, meal description, or product, extract ALL ingredients as a JSON object with key "ingredients" containing an array of English ingredient name strings.
-Rules:
-- Extract only ingredient names, no quantities or measurements
-- Be thorough and include all possible sub-ingredients
-- Respond ONLY with JSON like: {"ingredients": ["ingredient1", "ingredient2"]}
-- If you cannot extract ingredients, return {"ingredients": []}`;
+    const allFoods = await db.select().from(foodsTable);
+    const { matchedIds, additionalFlags } = await analyzeTextWithIntent(query, allFoods);
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: query },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 500,
-    });
-
-    let ingredients: string[] = [];
-    try {
-      const parsed = JSON.parse(completion.choices[0].message.content || "{}");
-      ingredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
-    } catch {
-      ingredients = [];
-    }
-
-    const { allowed, forbidden, conditional, unknown, score } = await lookupIngredients(ingredients);
-
-    const explanationParts: string[] = [];
-    if (forbidden.length > 0) {
-      explanationParts.push(`تحتوي على مكونات محظورة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
-    }
-    if (conditional.length > 0) {
-      explanationParts.push(`تحتوي على مكونات مشروطة: ${conditional.map((f) => f.nameAr).join("، ")}`);
-    }
-    if (unknown.length > 0) {
-      explanationParts.push(`مكونات غير موجودة في قاعدة البيانات: ${unknown.slice(0, 3).map((f) => f.name).join("، ")}${unknown.length > 3 ? "..." : ""}`);
-    }
-    if (forbidden.length === 0 && conditional.length === 0) {
-      explanationParts.push("جميع المكونات المعروفة مسموح بها");
-    }
-
-    const suggestions = forbidden.map((f) => `استبدل ${f.nameAr} ببديل مسموح به من قاعدة بيانات طيبات`);
-
-    const report = {
-      query,
-      compatibilityScore: score,
-      allowed,
-      forbidden,
-      conditional,
-      unknown,
-      explanation: explanationParts.join(". ") || "تم تحليل المكونات",
-      suggestions,
-      analysisType: "text" as const,
-    };
+    const report = buildReport(allFoods, matchedIds, additionalFlags, query, "text");
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
         userId,
         query,
         analysisType: "text",
-        compatibilityScore: score,
+        compatibilityScore: report.compatibilityScore,
         report,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
     }
@@ -180,17 +292,23 @@ router.post("/analysis/image", async (req, res) => {
       userId?: string | null;
       analysisType: "food" | "label";
     };
-    if (!imageBase64 || !mimeType) return res.status(400).json({ error: "imageBase64 and mimeType required" });
+    if (!imageBase64 || !mimeType) return void res.status(400).json({ error: "imageBase64 and mimeType required" });
 
     const isLabel = analysisType === "label";
-    const systemPrompt = isLabel
-      ? `You are a food label OCR expert. Extract the ingredients list from the product label image. Return a JSON object: {"ingredients": ["ingredient1", "ingredient2"]}. Extract only ingredient names in English, no additive codes or quantities.`
-      : `You are a food recognition expert. Identify all visible food items and their likely ingredients from the image. Return JSON: {"ingredients": ["ingredient1", "ingredient2"]}. Be thorough.`;
 
-    const completion = await openai.chat.completions.create({
+    // Step 1: Extract raw ingredients from the image via vision
+    const visionPrompt = isLabel
+      ? `You are a food label OCR expert. Extract the complete ingredients list from this product label image.
+Return JSON: {"ingredients": ["ingredient1", "ingredient2"]}
+Rules: Extract only ingredient names in English. No additive codes (E-numbers are ok as names like "sodium benzoate"). No quantities.`
+      : `You are a food recognition expert. Identify all visible food items and their likely ingredients from this image.
+Return JSON: {"ingredients": ["ingredient1", "ingredient2"]}
+Be thorough — include the main foods and their key ingredients.`;
+
+    const visionCompletion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: systemPrompt },
+        { role: "system", content: visionPrompt },
         {
           role: "user",
           content: [
@@ -200,7 +318,9 @@ router.post("/analysis/image", async (req, res) => {
             },
             {
               type: "text",
-              text: isLabel ? "Extract all ingredients from this product label." : "What food items and ingredients do you see?",
+              text: isLabel
+                ? "Extract all ingredients from this product label."
+                : "What food items and ingredients do you see in this image?",
             },
           ],
         },
@@ -209,46 +329,27 @@ router.post("/analysis/image", async (req, res) => {
       max_tokens: 800,
     });
 
-    let ingredients: string[] = [];
+    let extractedIngredients: string[] = [];
     try {
-      const parsed = JSON.parse(completion.choices[0].message.content || "{}");
-      ingredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
+      const parsed = JSON.parse(visionCompletion.choices[0].message.content || "{}");
+      extractedIngredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
     } catch {
-      ingredients = [];
+      extractedIngredients = [];
     }
+
+    // Step 2: Smart semantic mapping to DB food IDs
+    const allFoods = await db.select().from(foodsTable);
+    const { matchedIds, additionalFlags } = await mapIngredientsToIds(extractedIngredients, allFoods);
 
     const query = isLabel ? "مسح ملصق المنتج" : "تحليل صورة الطعام";
-    const { allowed, forbidden, conditional, unknown, score } = await lookupIngredients(ingredients);
-
-    const explanationParts: string[] = [];
-    if (forbidden.length > 0) {
-      explanationParts.push(`تحتوي على مكونات محظورة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
-    }
-    if (conditional.length > 0) {
-      explanationParts.push(`تحتوي على مكونات مشروطة`);
-    }
-    if (forbidden.length === 0 && conditional.length === 0) {
-      explanationParts.push("جميع المكونات المعروفة مسموح بها");
-    }
-
-    const report = {
-      query,
-      compatibilityScore: score,
-      allowed,
-      forbidden,
-      conditional,
-      unknown,
-      explanation: explanationParts.join(". ") || "تم تحليل الصورة",
-      suggestions: forbidden.map((f) => `استبدل ${f.nameAr} ببديل مسموح به`),
-      analysisType: isLabel ? ("label" as const) : ("image" as const),
-    };
+    const report = buildReport(allFoods, matchedIds, additionalFlags, query, isLabel ? "label" : "image");
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
         userId,
         query,
         analysisType: isLabel ? "label" : "image",
-        compatibilityScore: score,
+        compatibilityScore: report.compatibilityScore,
         report,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
     }

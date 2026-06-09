@@ -10,7 +10,7 @@ const router = Router();
 router.get("/users/usage", async (req, res) => {
   try {
     const { userId } = req.query as Record<string, string>;
-    if (!userId) return res.status(400).json({ error: "userId is required" });
+    if (!userId) return void res.status(400).json({ error: "userId is required" });
 
     const today = new Date().toISOString().split("T")[0];
     const [row] = await db

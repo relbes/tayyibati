@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db } from "@workspace/db";
 import { foodsTable } from "@workspace/db";
-import { eq, ilike, and, or, sql } from "drizzle-orm";
+import { eq, ilike, and, or, sql, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -66,7 +66,7 @@ router.post("/foods/bulk", async (req, res) => {
   try {
     const { foods } = req.body as { foods: Array<{ nameAr: string; nameEn: string; category: string; status: string; reason?: string | null; notes?: string | null }> };
     if (!Array.isArray(foods) || foods.length === 0) {
-      return res.status(400).json({ error: "foods array required" });
+      return void res.status(400).json({ error: "foods array required" });
     }
 
     const errors: string[] = [];
@@ -116,20 +116,19 @@ router.delete("/foods/bulk", async (req, res) => {
 
     if (status) {
       if (!["allowed", "forbidden", "conditional"].includes(status)) {
-        return res.status(400).json({ error: "Invalid status" });
+        return void res.status(400).json({ error: "Invalid status" });
       }
       const deleted = await db
         .delete(foodsTable)
         .where(eq(foodsTable.status, status as any))
         .returning({ id: foodsTable.id });
-      return res.json({ deleted: deleted.length });
+      return void res.json({ deleted: deleted.length });
     }
 
     if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ error: "Provide ids array or status string" });
+      return void res.status(400).json({ error: "Provide ids array or status string" });
     }
 
-    const { inArray } = await import("drizzle-orm");
     const deleted = await db
       .delete(foodsTable)
       .where(inArray(foodsTable.id, ids))
@@ -146,7 +145,7 @@ router.get("/foods/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [food] = await db.select().from(foodsTable).where(eq(foodsTable.id, id));
-    if (!food) return res.status(404).json({ error: "Not found" });
+    if (!food) return void res.status(404).json({ error: "Not found" });
     res.json(food);
   } catch (err) {
     req.log.error({ err }, "Failed to get food");
@@ -158,7 +157,7 @@ router.post("/foods", async (req, res) => {
   try {
     const { nameAr, nameEn, category, status, reason, notes } = req.body;
     if (!nameAr || !nameEn || !category || !status) {
-      return res.status(400).json({ error: "Missing required fields" });
+      return void res.status(400).json({ error: "Missing required fields" });
     }
     const [food] = await db
       .insert(foodsTable)
@@ -188,7 +187,7 @@ router.patch("/foods/:id", async (req, res) => {
       .set(updates)
       .where(eq(foodsTable.id, id))
       .returning();
-    if (!food) return res.status(404).json({ error: "Not found" });
+    if (!food) return void res.status(404).json({ error: "Not found" });
     res.json(food);
   } catch (err) {
     req.log.error({ err }, "Failed to update food");
