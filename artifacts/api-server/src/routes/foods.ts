@@ -62,6 +62,54 @@ router.get("/foods", async (req, res) => {
   }
 });
 
+router.post("/foods/bulk", async (req, res) => {
+  try {
+    const { foods } = req.body as { foods: Array<{ nameAr: string; nameEn: string; category: string; status: string; reason?: string | null; notes?: string | null }> };
+    if (!Array.isArray(foods) || foods.length === 0) {
+      return res.status(400).json({ error: "foods array required" });
+    }
+
+    const errors: string[] = [];
+    const valid: typeof foods = [];
+
+    for (let i = 0; i < foods.length; i++) {
+      const f = foods[i];
+      if (!f.nameAr?.trim() || !f.nameEn?.trim() || !f.category?.trim()) {
+        errors.push(`Row ${i + 1}: missing nameAr, nameEn, or category`);
+        continue;
+      }
+      if (!["allowed", "forbidden", "conditional"].includes(f.status)) {
+        errors.push(`Row ${i + 1}: status must be allowed, forbidden, or conditional`);
+        continue;
+      }
+      valid.push(f);
+    }
+
+    let created = 0;
+    if (valid.length > 0) {
+      const inserted = await db
+        .insert(foodsTable)
+        .values(
+          valid.map((f) => ({
+            nameAr: f.nameAr.trim(),
+            nameEn: f.nameEn.trim(),
+            category: f.category.trim(),
+            status: f.status as "allowed" | "forbidden" | "conditional",
+            reason: f.reason?.trim() || null,
+            notes: f.notes?.trim() || null,
+          })),
+        )
+        .returning();
+      created = inserted.length;
+    }
+
+    res.json({ created, skipped: errors.length, errors });
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk create foods");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/foods/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id);

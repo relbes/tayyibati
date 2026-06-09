@@ -58,6 +58,27 @@ export const CreateFoodBody = zod.object({
 
 
 /**
+ * @summary Bulk create food entries (admin)
+ */
+export const BulkCreateFoodsBody = zod.object({
+  "foods": zod.array(zod.object({
+  "nameAr": zod.string(),
+  "nameEn": zod.string(),
+  "category": zod.string(),
+  "status": zod.enum(['allowed', 'forbidden', 'conditional']),
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish()
+}))
+})
+
+export const BulkCreateFoodsResponse = zod.object({
+  "created": zod.number(),
+  "skipped": zod.number(),
+  "errors": zod.array(zod.string())
+})
+
+
+/**
  * @summary Get a food by id
  */
 export const GetFoodParams = zod.object({

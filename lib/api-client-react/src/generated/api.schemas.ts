@@ -167,6 +167,16 @@ export interface UserUsage {
   remainingToday: number;
 }
 
+export interface BulkFoodInput {
+  foods: FoodInput[];
+}
+
+export interface BulkFoodResult {
+  created: number;
+  skipped: number;
+  errors: string[];
+}
+
 export interface DailyAnalysis {
   date: string;
   count: number;

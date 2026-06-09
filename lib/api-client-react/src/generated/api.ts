@@ -22,6 +22,8 @@ import type {
 import type {
   AdminStats,
   AnalysisReport,
+  BulkFoodInput,
+  BulkFoodResult,
   Food,
   FoodInput,
   FoodStats,
@@ -280,6 +282,77 @@ export const useCreateFood = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateFoodMutationOptions(options));
+    }
+
+export const getBulkCreateFoodsUrl = () => {
+
+
+
+
+  return `/api/foods/bulk`
+}
+
+/**
+ * @summary Bulk create food entries (admin)
+ */
+export const bulkCreateFoods = async (bulkFoodInput: BulkFoodInput, options?: RequestInit): Promise<BulkFoodResult> => {
+
+  return customFetch<BulkFoodResult>(getBulkCreateFoodsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkFoodInput,)
+  }
+);}
+
+
+
+
+export const getBulkCreateFoodsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkCreateFoods>>, TError,{data: BodyType<BulkFoodInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkCreateFoods>>, TError,{data: BodyType<BulkFoodInput>}, TContext> => {
+
+const mutationKey = ['bulkCreateFoods'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkCreateFoods>>, {data: BodyType<BulkFoodInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkCreateFoods(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkCreateFoodsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkCreateFoods>>>
+    export type BulkCreateFoodsMutationBody = BodyType<BulkFoodInput>
+    export type BulkCreateFoodsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Bulk create food entries (admin)
+ */
+export const useBulkCreateFoods = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkCreateFoods>>, TError,{data: BodyType<BulkFoodInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkCreateFoods>>,
+        TError,
+        {data: BodyType<BulkFoodInput>},
+        TContext
+      > => {
+      return useMutation(getBulkCreateFoodsMutationOptions(options));
     }
 
 export const getGetFoodUrl = (id: number,) => {
