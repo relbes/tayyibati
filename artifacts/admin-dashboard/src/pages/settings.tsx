@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info } from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles } from "lucide-react";
 
 const STORAGE_KEY = "tayyibati_api_url";
 
@@ -76,6 +76,35 @@ export default function Settings() {
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
   const freeDailyLimit = getConfig("free_daily_limit") || "10";
+
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [apiKeyVisible, setApiKeyVisible] = useState(false);
+  const [apiKeySaved, setApiKeySaved] = useState(false);
+
+  const storedApiKey = getConfig("openai_api_key");
+  const apiKeyMasked = storedApiKey
+    ? storedApiKey.slice(0, 7) + "••••••••••••••••••" + storedApiKey.slice(-4)
+    : "";
+
+  function handleApiKeySave() {
+    if (!apiKeyInput.trim()) return;
+    patchMut.mutate(
+      { key: "openai_api_key", value: apiKeyInput.trim() },
+      {
+        onSuccess: () => {
+          setApiKeyInput("");
+          setApiKeyVisible(false);
+          setApiKeySaved(true);
+          setTimeout(() => setApiKeySaved(false), 3000);
+        },
+      },
+    );
+  }
+
+  function handleApiKeyClear() {
+    patchMut.mutate({ key: "openai_api_key", value: "" });
+    setApiKeyInput("");
+  }
 
   function handleSave() {
     const trimmed = apiUrl.trim();
@@ -164,6 +193,82 @@ export default function Settings() {
                 Test
               </Button>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* OpenAI API Key */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4" />
+            AI / OpenAI API Key
+          </CardTitle>
+          <CardDescription>
+            The key used for ingredient extraction and image analysis. Overrides the server environment variable when set here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {storedApiKey ? (
+            <div className="flex items-center gap-3 rounded-lg border p-3 bg-muted/30">
+              <Key className="h-4 w-4 text-green-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">Current key</p>
+                <p className="font-mono text-sm truncate">{apiKeyMasked}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive shrink-0"
+                onClick={handleApiKeyClear}
+                disabled={patchMut.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-muted-foreground text-sm">
+              <Info className="h-4 w-4 shrink-0" />
+              No key stored — using the <code className="bg-muted px-1 rounded text-xs">OPENAI_API_KEY</code> environment variable
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="openai-key">{storedApiKey ? "Replace key" : "Set key"}</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="openai-key"
+                  type={apiKeyVisible ? "text" : "password"}
+                  placeholder="sk-proj-..."
+                  value={apiKeyInput}
+                  onChange={(e) => setApiKeyInput(e.target.value)}
+                  className="font-mono text-sm pr-10"
+                  onKeyDown={(e) => e.key === "Enter" && handleApiKeySave()}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setApiKeyVisible((v) => !v)}
+                  tabIndex={-1}
+                >
+                  {apiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <Button
+                onClick={handleApiKeySave}
+                disabled={!apiKeyInput.trim() || patchMut.isPending}
+              >
+                {apiKeySaved ? <><CheckCircle className="h-3.5 w-3.5 mr-1.5 text-green-400" />Saved</> : "Save"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The key is stored in the database and never exposed via the public API. Get yours at{" "}
+              <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">
+                platform.openai.com/api-keys
+              </a>
+            </p>
           </div>
         </CardContent>
       </Card>

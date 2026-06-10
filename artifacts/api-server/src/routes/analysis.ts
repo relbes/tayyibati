@@ -1,14 +1,26 @@
 import { Router } from "express";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
-import { foodsTable, analysisHistoryTable, userUsageTable } from "@workspace/db";
-import { eq, and, inArray } from "drizzle-orm";
+import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 
 const router = Router();
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+async function getOpenAIClient(): Promise<OpenAI> {
+  try {
+    const [row] = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.key, "openai_api_key"));
+    const key = row?.value?.trim();
+    if (key && key.length > 10) {
+      return new OpenAI({ apiKey: key });
+    }
+  } catch {
+    // fall through to env var
+  }
+  return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+}
 
 const FREE_DAILY_LIMIT = 10;
 
@@ -181,6 +193,7 @@ Rules:
 - additionalFlags should only contain ingredients with genuine halal concern
 - If the query is vague or unrecognizable, return empty arrays`;
 
+  const openai = await getOpenAIClient();
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
@@ -233,6 +246,7 @@ Rules:
 - additionalFlags: ingredients with halal concern that have NO match in the DB
 - Do NOT include benign ingredients (salt, water, sugar, common spices) in additionalFlags unless they're genuinely concerning`;
 
+  const openai = await getOpenAIClient();
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
