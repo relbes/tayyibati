@@ -1,19 +1,26 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   Platform,
+  TextInput,
+  Animated,
+  Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { getFoodStats } from "@/lib/api";
+import { useAnalysis } from "@/context/AnalysisContext";
+import { analyzeText, analyzeImage, getFoodStats } from "@/lib/api";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 
 interface FoodStats {
   total: number;
@@ -28,248 +35,405 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user } = useAuth();
+  const { isAnalyzing, setIsAnalyzing } = useAnalysis();
+  const [query, setQuery] = useState("");
   const [stats, setStats] = useState<FoodStats | null>(null);
+  const [result, setResult] = useState<any>(null);
+  const inputRef = useRef<TextInput>(null);
+  const cardAnim = useRef(new Animated.Value(0)).current;
+
+  const topPadding = Platform.OS === "web" ? 20 : insets.top;
 
   useEffect(() => {
     getFoodStats().then(setStats).catch(() => {});
   }, []);
 
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  useEffect(() => {
+    if (result) {
+      Animated.spring(cardAnim, { toValue: 1, useNativeDriver: true, tension: 60, friction: 8 }).start();
+    } else {
+      cardAnim.setValue(0);
+    }
+  }, [result]);
 
-  const quickActions = [
-    { icon: "search" as const, label: "بحث بالاسم", desc: "ابحث عن أي طعام أو مكون", route: "/(tabs)/search", color: colors.primary },
-    { icon: "camera" as const, label: "تحليل صورة", desc: "صوّر الطعام أو الملصق", route: "/(tabs)/camera", color: colors.accent },
-    { icon: "time" as const, label: "السجل", desc: "تاريخ تحليلاتك", route: "/(tabs)/history", color: colors.secondary + "DD" },
-  ];
+  const handleSearch = useCallback(async () => {
+    if (!query.trim()) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsAnalyzing(true);
+    setResult(null);
+    try {
+      const report = await analyzeText(query.trim(), user?.id);
+      setResult(report);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [query, user?.id]);
+
+  const handleCameraScan = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      const lib = await ImagePicker.launchImageLibraryAsync({ mediaTypes: "images", quality: 0.7, base64: true });
+      if (!lib.canceled && lib.assets[0]?.base64) {
+        runImageAnalysis(lib.assets[0].base64, lib.assets[0].mimeType || "image/jpeg");
+      }
+      return;
+    }
+    const cam = await ImagePicker.launchCameraAsync({ mediaTypes: "images", quality: 0.7, base64: true });
+    if (!cam.canceled && cam.assets[0]?.base64) {
+      let b64 = cam.assets[0].base64;
+      if (b64?.startsWith("data:")) b64 = b64.split(",")[1] ?? b64;
+      runImageAnalysis(b64, cam.assets[0].mimeType || "image/jpeg");
+    }
+  };
+
+  const runImageAnalysis = async (base64: string, mimeType: string) => {
+    setIsAnalyzing(true);
+    setResult(null);
+    try {
+      const report = await analyzeImage(base64, mimeType, "food", user?.id);
+      setResult(report);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: 100 }}
-        showsVerticalScrollIndicator={false}
+      {isAnalyzing && <LoadingOverlay message="جاري التحليل..." />}
+
+      {/* Header */}
+      <LinearGradient
+        colors={[colors.primary, colors.primary + "E0"]}
+        style={[styles.header, { paddingTop: topPadding + 12 }]}
       >
-        {/* Header */}
-        <LinearGradient
-          colors={[colors.primary, colors.primary + "CC"]}
-          style={[styles.header, { paddingTop: topPadding + 16 }]}
-        >
-          <View style={styles.headerRow}>
-            <View>
-              <Text style={styles.appName}>طيباتي</Text>
-              <Text style={styles.appSubtitle}>Tayyibati</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.profileBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
-              onPress={() => router.push("/(tabs)/profile")}
-            >
-              <Ionicons name={user ? "person" : "person-outline"} size={22} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.headerGreeting}>
-            {user ? `أهلاً، ${user.name}` : "مرحباً بك في طيباتي"}
-          </Text>
-          <Text style={styles.headerDesc}>
-            تحقق من توافق الأطعمة مع نظام الطيبات
-          </Text>
-        </LinearGradient>
-
-        <View style={styles.content}>
-          {/* Quick Actions */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>ابدأ التحليل</Text>
-          <View style={styles.actionsGrid}>
-            {quickActions.map((action) => (
-              <TouchableOpacity
-                key={action.label}
-                style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => router.push(action.route as any)}
-                activeOpacity={0.7}
-              >
-                <View style={[styles.actionIcon, { backgroundColor: action.color + "20" }]}>
-                  <Ionicons name={action.icon} size={26} color={action.color} />
-                </View>
-                <Text style={[styles.actionLabel, { color: colors.foreground }]}>{action.label}</Text>
-                <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>{action.desc}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Database Stats */}
-          {stats && (
-            <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>قاعدة البيانات</Text>
-              <View style={[styles.statsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.statsTitle, { color: colors.foreground }]}>
-                  {stats.total} طعام ومكون
-                </Text>
-                <View style={styles.statsRow}>
-                  {[
-                    { count: stats.allowed, label: "مسموح", color: colors.allowed },
-                    { count: stats.forbidden, label: "محظور", color: colors.forbidden },
-                    { count: stats.conditional, label: "مشروط", color: colors.conditional },
-                    { count: stats.categories, label: "فئة", color: colors.accent },
-                  ].map((s) => (
-                    <View key={s.label} style={styles.statItem}>
-                      <Text style={[styles.statCount, { color: s.color }]}>{s.count}</Text>
-                      <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>{s.label}</Text>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </>
-          )}
-
-          {/* Info Card */}
-          <View style={[styles.infoCard, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "30" }]}>
-            <Ionicons name="shield-checkmark" size={28} color={colors.primary} />
-            <View style={styles.infoText}>
-              <Text style={[styles.infoTitle, { color: colors.foreground }]}>قاعدة بيانات موثوقة</Text>
-              <Text style={[styles.infoDesc, { color: colors.mutedForeground }]}>
-                جميع الأحكام مستندة لقاعدة بيانات طيبات. الذكاء الاصطناعي يُستخدم فقط لتحديد المكونات.
-              </Text>
-            </View>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={[styles.profileBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
+            onPress={() => router.push("/(tabs)/profile")}
+          >
+            <Ionicons name={user ? "person" : "person-outline"} size={20} color="#fff" />
+          </TouchableOpacity>
+          <View style={styles.headerTitle}>
+            <Text style={styles.appName}>طيباتي</Text>
+            <Text style={styles.appSub}>تحقق من توافق أي طعام</Text>
           </View>
         </View>
-      </ScrollView>
+
+        {/* Hero Search Bar */}
+        <View style={[styles.searchBox, { backgroundColor: "#fff" }]}>
+          <TouchableOpacity
+            style={[styles.cameraBtn, { backgroundColor: colors.primary + "18" }]}
+            onPress={handleCameraScan}
+          >
+            <Ionicons name="camera" size={20} color={colors.primary} />
+          </TouchableOpacity>
+          <TextInput
+            ref={inputRef}
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholder="ابحث أو أدخل اسم طعام أو مكوّن..."
+            placeholderTextColor={colors.mutedForeground}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+            textAlign="right"
+            writingDirection="rtl"
+          />
+          <TouchableOpacity
+            style={[styles.searchBtn, { backgroundColor: colors.primary, opacity: query.trim() ? 1 : 0.5 }]}
+            onPress={handleSearch}
+            disabled={!query.trim() || isAnalyzing}
+          >
+            <Ionicons name="search" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick tips row */}
+        <View style={styles.tipsRow}>
+          {["بيتزا", "E471", "جيلاتين", "هوت دوج"].map((tip) => (
+            <Pressable
+              key={tip}
+              style={[styles.tipChip, { backgroundColor: "rgba(255,255,255,0.18)" }]}
+              onPress={() => { setQuery(tip); setResult(null); }}
+            >
+              <Text style={styles.tipText}>{tip}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </LinearGradient>
+
+      {/* Content */}
+      <View style={styles.content}>
+        {result ? (
+          <Animated.ScrollView
+            style={{ transform: [{ scale: cardAnim.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }], opacity: cardAnim }}
+            contentContainerStyle={{ padding: 16, paddingBottom: 120 }}
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.resultHeader}>
+              <TouchableOpacity onPress={() => { setResult(null); setQuery(""); }} style={[styles.clearBtn, { backgroundColor: colors.muted }]}>
+                <Ionicons name="close" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.clearText, { color: colors.mutedForeground }]}>مسح النتيجة</Text>
+              </TouchableOpacity>
+              <Text style={[styles.resultTitle, { color: colors.foreground }]}>نتيجة التحليل</Text>
+            </View>
+            <AnalysisResultCard report={result} />
+          </Animated.ScrollView>
+        ) : (
+          <View style={styles.emptyState}>
+            {/* Action Cards */}
+            <View style={styles.actionRow}>
+              <TouchableOpacity
+                style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={handleCameraScan}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[colors.primary + "20", colors.primary + "08"]}
+                  style={styles.actionGrad}
+                >
+                  <View style={[styles.actionIconWrap, { backgroundColor: colors.primary + "20" }]}>
+                    <Ionicons name="camera" size={28} color={colors.primary} />
+                  </View>
+                  <Text style={[styles.actionLabel, { color: colors.foreground }]}>تحليل صورة</Text>
+                  <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>صوّر الطعام أو الملصق</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => router.push("/(tabs)/camera")}
+                activeOpacity={0.7}
+              >
+                <LinearGradient
+                  colors={[colors.accent + "20", colors.accent + "08"]}
+                  style={styles.actionGrad}
+                >
+                  <View style={[styles.actionIconWrap, { backgroundColor: colors.accent + "20" }]}>
+                    <Ionicons name="barcode" size={28} color={colors.accent} />
+                  </View>
+                  <Text style={[styles.actionLabel, { color: colors.foreground }]}>قراءة ملصق</Text>
+                  <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>مسح ملصق المنتج</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+
+            {/* Stats strip */}
+            {stats && (
+              <View style={[styles.statsStrip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNum, { color: colors.primary }]}>{stats.total}</Text>
+                  <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>مكون</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNum, { color: colors.allowed }]}>{stats.allowed}</Text>
+                  <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>مسموح</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNum, { color: colors.forbidden }]}>{stats.forbidden}</Text>
+                  <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>محظور</Text>
+                </View>
+                <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+                <View style={styles.statItem}>
+                  <Text style={[styles.statNum, { color: colors.conditional }]}>{stats.conditional}</Text>
+                  <Text style={[styles.statLbl, { color: colors.mutedForeground }]}>مشروط</Text>
+                </View>
+              </View>
+            )}
+
+            {/* History shortcut */}
+            <TouchableOpacity
+              style={[styles.historyLink, { backgroundColor: colors.card, borderColor: colors.border }]}
+              onPress={() => router.push("/(tabs)/history")}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
+              <Text style={[styles.historyLinkText, { color: colors.foreground }]}>عرض سجل التحليلات</Text>
+              <Ionicons name="time-outline" size={18} color={colors.primary} />
+            </TouchableOpacity>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  scroll: { flex: 1 },
   header: {
-    paddingHorizontal: 20,
-    paddingBottom: 28,
+    paddingHorizontal: 16,
+    paddingBottom: 20,
+    gap: 14,
   },
-  headerRow: {
+  headerTop: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 16,
+    justifyContent: "space-between",
   },
+  headerTitle: { alignItems: "flex-end", gap: 2 },
   appName: {
-    fontSize: 28,
+    fontSize: 26,
     fontFamily: "Inter_700Bold",
     color: "#fff",
     textAlign: "right",
   },
-  appSubtitle: {
-    fontSize: 13,
+  appSub: {
+    fontSize: 12,
     fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.7)",
+    color: "rgba(255,255,255,0.75)",
     textAlign: "right",
   },
   profileBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
-  headerGreeting: {
-    fontSize: 20,
-    fontFamily: "Inter_600SemiBold",
-    color: "#fff",
-    textAlign: "right",
-    marginBottom: 4,
-  },
-  headerDesc: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-    color: "rgba(255,255,255,0.8)",
-    textAlign: "right",
-  },
-  content: {
-    padding: 16,
-    gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-    textAlign: "right",
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  actionsGrid: {
+  searchBox: {
     flexDirection: "row",
-    gap: 10,
+    alignItems: "center",
+    borderRadius: 16,
+    paddingHorizontal: 6,
+    paddingVertical: 6,
+    gap: 6,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    minHeight: 40,
+  },
+  searchBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tipsRow: {
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "flex-end",
+  },
+  tipChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  tipText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    color: "#fff",
+  },
+  content: { flex: 1 },
+  emptyState: {
+    flex: 1,
+    padding: 16,
+    gap: 12,
+  },
+  actionRow: {
+    flexDirection: "row",
+    gap: 12,
   },
   actionCard: {
     flex: 1,
-    padding: 14,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    alignItems: "center",
-    gap: 8,
+    overflow: "hidden",
   },
-  actionIcon: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
+  actionGrad: {
+    padding: 18,
+    gap: 10,
+    alignItems: "center",
+  },
+  actionIconWrap: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
   },
   actionLabel: {
-    fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontSize: 15,
+    fontFamily: "Inter_700Bold",
     textAlign: "center",
   },
   actionDesc: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-    textAlign: "center",
-    lineHeight: 16,
-  },
-  statsCard: {
-    padding: 16,
-    borderRadius: 14,
-    borderWidth: 1,
-    gap: 12,
-  },
-  statsTitle: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-    textAlign: "right",
-  },
-  statsRow: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-  },
-  statItem: {
-    alignItems: "center",
-    gap: 4,
-  },
-  statCount: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-  },
-  statLabel: {
     fontSize: 12,
     fontFamily: "Inter_400Regular",
+    textAlign: "center",
   },
-  infoCard: {
+  statsStrip: {
     flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
+    alignItems: "center",
+    justifyContent: "space-around",
+  },
+  statItem: { alignItems: "center", gap: 2 },
+  statNum: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  statLbl: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statDivider: { width: 1, height: 32 },
+  historyLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
     borderRadius: 14,
     borderWidth: 1,
-    marginTop: 8,
+    gap: 10,
   },
-  infoText: {
+  historyLinkText: {
     flex: 1,
-    gap: 4,
-  },
-  infoTitle: {
     fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Inter_500Medium",
     textAlign: "right",
   },
-  infoDesc: {
-    fontSize: 13,
-    fontFamily: "Inter_400Regular",
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
+  resultTitle: {
+    fontSize: 17,
+    fontFamily: "Inter_700Bold",
     textAlign: "right",
-    lineHeight: 20,
+  },
+  clearBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
+  clearText: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
   },
 });

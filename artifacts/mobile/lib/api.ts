@@ -109,3 +109,10 @@ export async function deleteFood(id: number) {
   const res = await fetch(`${base}/api/foods/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete food");
 }
+
+export async function getPlans() {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/plans`);
+  if (!res.ok) throw new Error("Failed to fetch plans");
+  return res.json();
+}

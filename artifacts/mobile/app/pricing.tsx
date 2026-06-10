@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -15,24 +16,20 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { getPlans } from "@/lib/api";
 
-const FREE_FEATURES = [
-  "10 تحليلات يومياً",
-  "بحث بالنص",
-  "تحليل الصور",
-  "مسح ملصقات المنتجات",
-  "سجل التحليلات",
-];
-
-const PREMIUM_FEATURES = [
-  "تحليلات غير محدودة",
-  "بحث بالنص",
-  "تحليل الصور",
-  "مسح ملصقات المنتجات",
-  "سجل كامل",
-  "أولوية في المعالجة",
-  "دعم متميز",
-];
+interface Plan {
+  id: number;
+  name: string;
+  nameEn: string;
+  dailyLimit: number;
+  price: string;
+  currency: string;
+  billingCycle: string;
+  features: string;
+  isActive: string;
+  sortOrder: number;
+}
 
 export default function PricingScreen() {
   const colors = useColors();
@@ -40,12 +37,62 @@ export default function PricingScreen() {
   const router = useRouter();
   const { user, updatePremium } = useAuth();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const [plans, setPlans] = useState<Plan[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleUpgrade = () => {
+  useEffect(() => {
+    getPlans()
+      .then((data: Plan[]) => setPlans(data.filter((p) => p.isActive === "true")))
+      .catch(() => {
+        setPlans([
+          {
+            id: 0,
+            name: "مجاني",
+            nameEn: "Free",
+            dailyLimit: 10,
+            price: "0",
+            currency: "SAR",
+            billingCycle: "free",
+            features: JSON.stringify(["10 تحليلات يومياً", "بحث بالنص", "تحليل الصور", "مسح الملصقات", "سجل التحليلات"]),
+            isActive: "true",
+            sortOrder: 0,
+          },
+          {
+            id: -1,
+            name: "بريميوم",
+            nameEn: "Premium",
+            dailyLimit: -1,
+            price: "9.99",
+            currency: "SAR",
+            billingCycle: "monthly",
+            features: JSON.stringify(["تحليلات غير محدودة", "بحث بالنص", "تحليل الصور", "مسح الملصقات", "سجل كامل", "أولوية معالجة", "دعم متميز"]),
+            isActive: "true",
+            sortOrder: 1,
+          },
+        ]);
+      })
+      .finally(() => setLoading(false));
+  }, []);
+
+  const isPremiumPlan = (plan: Plan) => plan.dailyLimit < 0 || plan.dailyLimit > 20;
+
+  const getFeatures = (plan: Plan): string[] => {
+    try {
+      const parsed = JSON.parse(plan.features);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return plan.features ? plan.features.split(",").map((f) => f.trim()) : [];
+    }
+  };
+
+  const handleUpgrade = (plan: Plan) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const price = parseFloat(plan.price) > 0
+      ? `${plan.price} ${plan.currency} / ${plan.billingCycle === "monthly" ? "شهر" : "سنة"}`
+      : "مجاناً";
     Alert.alert(
-      "الترقية لـ Premium",
-      "سيتم الاشتراك في الخطة المميزة مقابل 9.99 ريال / شهر",
+      `الاشتراك في ${plan.name}`,
+      `سيتم الاشتراك في الخطة مقابل ${price}`,
       [
         { text: "إلغاء", style: "cancel" },
         {
@@ -53,7 +100,7 @@ export default function PricingScreen() {
           onPress: () => {
             if (user) updatePremium(true);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("تم الاشتراك", "أصبحت الآن مشتركاً في الخطة المميزة!");
+            Alert.alert("تم الاشتراك ✓", `أصبحت الآن مشتركاً في خطة ${plan.name}!`);
             router.back();
           },
         },
@@ -64,69 +111,107 @@ export default function PricingScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground }]}>الباقات</Text>
-        <View style={{ width: 36 }} />
+        <View style={{ width: 44 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 16 }} showsVerticalScrollIndicator={false}>
-        {/* Free Plan */}
-        <View style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Text style={[styles.planName, { color: colors.foreground }]}>مجاني</Text>
-          <Text style={[styles.planPrice, { color: colors.foreground }]}>
-            <Text style={styles.planAmount}>0</Text>
-            <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> ريال / شهر</Text>
-          </Text>
-          <View style={styles.divider} />
-          {FREE_FEATURES.map((f) => (
-            <View key={f} style={styles.featureRow}>
-              <Text style={[styles.featureText, { color: colors.mutedForeground }]}>{f}</Text>
-              <Ionicons name="checkmark-circle" size={18} color={colors.allowed} />
-            </View>
-          ))}
-          <View style={[styles.currentBadge, { backgroundColor: colors.muted }]}>
-            <Text style={[styles.currentText, { color: colors.mutedForeground }]}>خطتك الحالية</Text>
-          </View>
+      {loading ? (
+        <View style={styles.loadingCenter}>
+          <ActivityIndicator color={colors.primary} size="large" />
         </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 16 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {plans.map((plan, idx) => {
+            const isPremium = isPremiumPlan(plan);
+            const features = getFeatures(plan);
+            const isCurrentPlan = isPremium ? !!user?.isPremium : !user?.isPremium;
+            const priceNum = parseFloat(plan.price);
 
-        {/* Premium Plan */}
-        <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent }]}>
-          <LinearGradient
-            colors={[colors.accent + "22", colors.primary + "11"]}
-            style={StyleSheet.absoluteFill}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-          />
-          <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
-            <Text style={styles.popularText}>الأكثر شيوعاً</Text>
-          </View>
-          <Ionicons name="star" size={32} color={colors.accent} />
-          <Text style={[styles.planName, { color: colors.foreground }]}>Premium</Text>
-          <Text style={[styles.planPrice, { color: colors.foreground }]}>
-            <Text style={[styles.planAmount, { color: colors.accent }]}>9.99</Text>
-            <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> ريال / شهر</Text>
-          </Text>
-          <View style={[styles.divider, { backgroundColor: colors.accent + "30" }]} />
-          {PREMIUM_FEATURES.map((f) => (
-            <View key={f} style={styles.featureRow}>
-              <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
-              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-            </View>
-          ))}
-          {!user?.isPremium && (
-            <TouchableOpacity style={[styles.upgradeBtn, { backgroundColor: colors.accent }]} onPress={handleUpgrade}>
-              <Text style={styles.upgradeBtnText}>اشترك الآن</Text>
-            </TouchableOpacity>
-          )}
-          {user?.isPremium && (
-            <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
-              <Text style={[styles.currentText, { color: colors.accent }]}>خطتك الحالية</Text>
-            </View>
-          )}
-        </View>
-      </ScrollView>
+            return isPremium ? (
+              <View
+                key={plan.id}
+                style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent }]}
+              >
+                <LinearGradient
+                  colors={[colors.accent + "22", colors.primary + "11"]}
+                  style={StyleSheet.absoluteFill}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                />
+                <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
+                  <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
+                </View>
+                <Ionicons name="star" size={32} color={colors.accent} style={{ marginTop: 24 }} />
+                <Text style={[styles.planName, { color: colors.foreground }]}>{plan.name}</Text>
+                {priceNum > 0 ? (
+                  <Text style={[styles.planPrice, { color: colors.foreground }]}>
+                    <Text style={[styles.planAmount, { color: colors.accent }]}>{plan.price}</Text>
+                    <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}>
+                      {" "}{plan.currency} / {plan.billingCycle === "monthly" ? "شهر" : "سنة"}
+                    </Text>
+                  </Text>
+                ) : (
+                  <Text style={[styles.planPrice, { color: colors.mutedForeground }]}>مجاناً</Text>
+                )}
+                <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
+                <Text style={[styles.limitBadge, { color: colors.accent, backgroundColor: colors.accent + "15" }]}>
+                  {plan.dailyLimit < 0 ? "∞ تحليلات غير محدودة" : `${plan.dailyLimit} تحليل يومياً`}
+                </Text>
+                {features.map((f) => (
+                  <View key={f} style={styles.featureRow}>
+                    <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                  </View>
+                ))}
+                {isCurrentPlan ? (
+                  <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
+                    <Text style={[styles.currentText, { color: colors.accent }]}>✓ خطتك الحالية</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => handleUpgrade(plan)}
+                  >
+                    <Text style={styles.upgradeBtnText}>اشترك الآن</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <View
+                key={plan.id}
+                style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              >
+                <Text style={[styles.planName, { color: colors.foreground }]}>{plan.name}</Text>
+                <Text style={[styles.planPrice, { color: colors.foreground }]}>
+                  <Text style={styles.planAmount}>0</Text>
+                  <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> ريال / شهر</Text>
+                </Text>
+                <View style={styles.divider} />
+                <Text style={[styles.limitBadge, { color: colors.primary, backgroundColor: colors.primary + "15" }]}>
+                  {plan.dailyLimit} تحليل يومياً
+                </Text>
+                {features.map((f) => (
+                  <View key={f} style={styles.featureRow}>
+                    <Text style={[styles.featureText, { color: colors.mutedForeground }]}>{f}</Text>
+                    <Ionicons name="checkmark-circle" size={18} color={colors.allowed} />
+                  </View>
+                ))}
+                {isCurrentPlan && (
+                  <View style={[styles.currentBadge, { backgroundColor: colors.muted }]}>
+                    <Text style={[styles.currentText, { color: colors.mutedForeground }]}>✓ خطتك الحالية</Text>
+                  </View>
+                )}
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
     </View>
   );
 }
@@ -141,7 +226,9 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
+  backBtn: { width: 44, alignItems: "flex-start" },
   title: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
+  loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
   planCard: {
     padding: 20,
     borderRadius: 20,
@@ -161,32 +248,20 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  popularText: {
-    color: "#fff",
-    fontSize: 11,
+  popularText: { color: "#fff", fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  planName: { fontSize: 22, fontFamily: "Inter_700Bold", textAlign: "right", marginTop: 8 },
+  planPrice: { textAlign: "right" },
+  planAmount: { fontSize: 36, fontFamily: "Inter_700Bold" },
+  planCurrency: { fontSize: 14, fontFamily: "Inter_400Regular" },
+  divider: { height: 1, backgroundColor: "#e5e5e5", marginVertical: 4 },
+  limitBadge: {
+    fontSize: 13,
     fontFamily: "Inter_600SemiBold",
-  },
-  planName: {
-    fontSize: 22,
-    fontFamily: "Inter_700Bold",
-    textAlign: "right",
-    marginTop: 8,
-  },
-  planPrice: {
-    textAlign: "right",
-  },
-  planAmount: {
-    fontSize: 36,
-    fontFamily: "Inter_700Bold",
-  },
-  planCurrency: {
-    fontSize: 14,
-    fontFamily: "Inter_400Regular",
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#e5e5e5",
-    marginVertical: 4,
+    textAlign: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    overflow: "hidden",
   },
   featureRow: {
     flexDirection: "row",
@@ -206,19 +281,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
   },
-  currentText: {
-    fontSize: 13,
-    fontFamily: "Inter_500Medium",
-  },
+  currentText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   upgradeBtn: {
     padding: 14,
     borderRadius: 14,
     alignItems: "center",
     marginTop: 4,
   },
-  upgradeBtnText: {
-    color: "#fff",
-    fontFamily: "Inter_700Bold",
-    fontSize: 16,
-  },
+  upgradeBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },
 });

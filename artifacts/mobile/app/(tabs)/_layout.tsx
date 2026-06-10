@@ -1,40 +1,11 @@
 import { Tabs } from "expo-router";
-import { isLiquidGlassAvailable } from "expo-glass-effect";
-import { Icon, Label, NativeTabs } from "expo-router/unstable-native-tabs";
-import { BlurView } from "expo-blur";
 import { Ionicons } from "@expo/vector-icons";
 import React from "react";
-import { Platform, StyleSheet, View, useColorScheme } from "react-native";
+import { Platform, StyleSheet, useColorScheme } from "react-native";
+import { BlurView } from "expo-blur";
 import { useColors } from "@/hooks/useColors";
 
-function NativeTabLayout() {
-  return (
-    <NativeTabs>
-      <NativeTabs.Trigger name="index">
-        <Icon sf={{ default: "house", selected: "house.fill" }} />
-        <Label>الرئيسية</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="search">
-        <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
-        <Label>بحث</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="camera">
-        <Icon sf={{ default: "camera", selected: "camera.fill" }} />
-        <Label>كاميرا</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="history">
-        <Icon sf={{ default: "clock", selected: "clock.fill" }} />
-        <Label>السجل</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="profile">
-        <Icon sf={{ default: "person", selected: "person.fill" }} />
-        <Label>حسابي</Label>
-      </NativeTabs.Trigger>
-    </NativeTabs>
-  );
-}
-
-function ClassicTabLayout() {
+export default function TabLayout() {
   const colors = useColors();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
@@ -53,8 +24,9 @@ function ClassicTabLayout() {
           borderTopWidth: 1,
           borderTopColor: colors.border,
           elevation: 0,
-          height: isWeb ? 84 : 60,
-          paddingBottom: isWeb ? 34 : 8,
+          height: isWeb ? 84 : 64,
+          paddingBottom: isWeb ? 34 : 10,
+          paddingTop: 6,
         },
         tabBarLabelStyle: {
           fontFamily: "Inter_500Medium",
@@ -70,30 +42,13 @@ function ClassicTabLayout() {
           ) : null,
       }}
     >
+      {/* RTL: declare in reverse so home appears rightmost */}
       <Tabs.Screen
-        name="index"
+        name="profile"
         options={{
-          title: "الرئيسية",
+          title: "حسابي",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="search"
-        options={{
-          title: "بحث",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "search" : "search-outline"} size={22} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="camera"
-        options={{
-          title: "كاميرا",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "camera" : "camera-outline"} size={22} color={color} />
+            <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
           ),
         }}
       />
@@ -107,21 +62,32 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="camera"
         options={{
-          title: "حسابي",
+          title: "كاميرا",
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "person" : "person-outline"} size={22} color={color} />
+            <Ionicons name={focused ? "camera" : "camera-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="search"
+        options={{
+          title: "بحث",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "search" : "search-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: "الرئيسية",
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? "home" : "home-outline"} size={22} color={color} />
           ),
         }}
       />
     </Tabs>
   );
-}
-
-export default function TabLayout() {
-  if (isLiquidGlassAvailable()) {
-    return <NativeTabLayout />;
-  }
-  return <ClassicTabLayout />;
 }
