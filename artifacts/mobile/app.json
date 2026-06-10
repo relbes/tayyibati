@@ -66,8 +66,12 @@
     },
     "extra": {
       "eas": {
-        "projectId": "tayyibati-app"
+        "projectId": "your-eas-project-id"
       }
+    },
+    "notification": {
+      "icon": "./assets/images/icon.png",
+      "color": "#1B7A5E"
     }
   }
 }

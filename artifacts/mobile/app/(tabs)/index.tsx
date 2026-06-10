@@ -167,7 +167,6 @@ export default function HomeScreen() {
             onSubmitEditing={handleSearch}
             returnKeyType="search"
             textAlign="right"
-            writingDirection="rtl"
           />
           <TouchableOpacity
             style={[styles.searchBtn, { backgroundColor: colors.primary, opacity: query.trim() ? 1 : 0.5 }]}
