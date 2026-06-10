@@ -20,14 +20,11 @@ import { analyzeImage } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 
-type AnalysisMode = "food" | "label";
-
 export default function CameraScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { isAnalyzing, setIsAnalyzing } = useAnalysis();
-  const [mode, setMode] = useState<AnalysisMode>("food");
   const [pickedImage, setPickedImage] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -75,7 +72,7 @@ export default function CameraScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
     try {
-      const report = await analyzeImage(base64, mimeType, mode, user?.id);
+      const report = await analyzeImage(base64, mimeType, "food", user?.id);
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch {
@@ -88,7 +85,7 @@ export default function CameraScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {isAnalyzing && <LoadingOverlay message={mode === "label" ? "جاري قراءة الملصق..." : "جاري تحليل الصورة..."} />}
+      {isAnalyzing && <LoadingOverlay message="جاري تحليل الصورة..." />}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: 120 }}
@@ -97,28 +94,6 @@ export default function CameraScreen() {
         {/* Header */}
         <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
           <Text style={[styles.title, { color: colors.foreground }]}>تحليل بالصورة</Text>
-
-          {/* Mode Toggle */}
-          <View style={[styles.modeToggle, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            {([
-              { key: "food", label: "صورة طعام", icon: "restaurant" },
-              { key: "label", label: "ملصق منتج", icon: "barcode" },
-            ] as const).map((m) => (
-              <TouchableOpacity
-                key={m.key}
-                style={[
-                  styles.modeBtn,
-                  mode === m.key && { backgroundColor: colors.primary },
-                ]}
-                onPress={() => { setMode(m.key); setResult(null); setPickedImage(null); }}
-              >
-                <Ionicons name={m.icon} size={16} color={mode === m.key ? "#fff" : colors.mutedForeground} />
-                <Text style={[styles.modeBtnText, { color: mode === m.key ? "#fff" : colors.mutedForeground }]}>
-                  {m.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
         </View>
 
         <View style={styles.content}>
@@ -126,17 +101,15 @@ export default function CameraScreen() {
           {!pickedImage ? (
             <View style={[styles.pickArea, { borderColor: colors.border, backgroundColor: colors.card }]}>
               <Ionicons
-                name={mode === "label" ? "barcode-outline" : "image-outline"}
+                name="image-outline"
                 size={56}
                 color={colors.mutedForeground}
               />
               <Text style={[styles.pickTitle, { color: colors.foreground }]}>
-                {mode === "label" ? "صوّر ملصق المنتج" : "صوّر الطعام أو الوجبة"}
+                صوّر الطعام أو الوجبة
               </Text>
               <Text style={[styles.pickDesc, { color: colors.mutedForeground }]}>
-                {mode === "label"
-                  ? "سيتم استخراج قائمة المكونات تلقائياً"
-                  : "سيتم تحديد المكونات وفحصها"}
+                سيتم تحديد المكونات وفحصها
               </Text>
               <View style={styles.pickBtns}>
                 <TouchableOpacity
@@ -189,26 +162,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
     textAlign: "right",
-  },
-  modeToggle: {
-    flexDirection: "row",
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 4,
-    gap: 4,
-  },
-  modeBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  modeBtnText: {
-    fontSize: 13,
-    fontFamily: "Tajawal_700Bold",
   },
   content: {
     padding: 16,

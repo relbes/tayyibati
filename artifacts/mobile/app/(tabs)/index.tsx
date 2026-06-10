@@ -206,24 +206,7 @@ export default function HomeScreen() {
                     <Ionicons name="camera" size={28} color={colors.primary} />
                   </View>
                   <Text style={[styles.actionLabel, { color: colors.foreground }]}>تحليل صورة</Text>
-                  <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>صوّر الطعام أو الملصق</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-                onPress={() => router.push("/(tabs)/camera")}
-                activeOpacity={0.7}
-              >
-                <LinearGradient
-                  colors={[colors.accent + "20", colors.accent + "08"]}
-                  style={styles.actionGrad}
-                >
-                  <View style={[styles.actionIconWrap, { backgroundColor: colors.accent + "20" }]}>
-                    <Ionicons name="barcode" size={28} color={colors.accent} />
-                  </View>
-                  <Text style={[styles.actionLabel, { color: colors.foreground }]}>قراءة ملصق</Text>
-                  <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>مسح ملصق المنتج</Text>
+                  <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>صوّر الطعام لفحص مكوناته</Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
