@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "5UEcqc-nxJnEaRUfBO-dN"
@@ -12,3 +11,9 @@ id = "AZ4GFHYUjTC2Jb9z8ciWM"
 uri = "file://artifacts/mobile/assets/images/splash.png"
 type = "image"
 title = "tayyibati splash screen"
+
+[[outputs]]
+id = "NTSzJ5uDWbd-KzxOKmj-d"
+uri = "file://tayyibati-source-code.tar.gz"
+type = "unspecified"
+title = "Tayyibati Full Source Code (tar.gz)"
