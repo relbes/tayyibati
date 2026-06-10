@@ -1,2 +1,3 @@
 - [Tayyibati App Architecture](tayyibati-arch.md) — AI classifies every ingredient via embedded Tayyibat rulebook; DB is override only; notFound only when no food detected; seed via psql.
 - [Expo Auth Session Setup](expo-auth-session.md) — providers/google subpath breaks Metro in pnpm workspace; use base expo-auth-session with manual Google discovery instead.
+- [Expo dev server on Replit](expo-replit-dev-server.md) — Expo Go times out because login prompt blocks Metro; fix with EXPO_OFFLINE=1 (NOT CI=1) in the dev script.
