@@ -205,3 +205,25 @@ export async function getPublicConfig(): Promise<Record<string, string>> {
   if (!res.ok) throw new Error("Failed to fetch config");
   return res.json();
 }
+
+export async function forgotPassword(email: string) {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  if (!res.ok) return parseAuthError(res, "تعذّر إرسال رمز التحقق");
+  return res.json();
+}
+
+export async function resetPasswordWithCode(email: string, code: string, newPassword: string) {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/reset-password-with-code`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code, newPassword }),
+  });
+  if (!res.ok) return parseAuthError(res, "تعذّر إعادة تعيين كلمة المرور");
+  return res.json();
+}

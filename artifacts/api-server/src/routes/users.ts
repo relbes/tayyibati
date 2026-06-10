@@ -1,8 +1,9 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { db } from "@workspace/db";
-import { userUsageTable, usersTable, subscriptionPlansTable, appConfigTable } from "@workspace/db";
-import { eq, and, ilike, or, desc } from "drizzle-orm";
+import { userUsageTable, usersTable, subscriptionPlansTable, appConfigTable, passwordResetsTable } from "@workspace/db";
+import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
+import { sendPasswordResetEmail } from "../lib/email";
 
 const FREE_DAILY_LIMIT = 10;
 
@@ -184,6 +185,89 @@ router.post("/users/login", async (req, res) => {
     res.json(toPublicUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to login user");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Forgot / reset password (self-service via emailed code)
+// ---------------------------------------------------------------------------
+
+function generateResetCode(): string {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+router.post("/users/forgot-password", async (req, res) => {
+  try {
+    const { email } = req.body ?? {};
+    if (!email || typeof email !== "string") {
+      return void res.status(400).json({ error: "email is required" });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // Always respond 200 to avoid leaking which emails are registered.
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
+    if (!user) return void res.json({ ok: true });
+
+    const code = generateResetCode();
+    const codeHash = await bcrypt.hash(code, 10);
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+
+    // Invalidate any previous outstanding codes for this user.
+    await db.delete(passwordResetsTable).where(eq(passwordResetsTable.userId, user.id));
+    await db.insert(passwordResetsTable).values({ userId: user.id, codeHash, expiresAt });
+
+    try {
+      await sendPasswordResetEmail(normalizedEmail, code);
+    } catch (err) {
+      req.log.error({ err }, "Failed to send reset email");
+      return void res.status(502).json({ error: "Could not send reset email. Try again later." });
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to start password reset");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/users/reset-password-with-code", async (req, res) => {
+  try {
+    const { email, code, newPassword } = req.body ?? {};
+    if (!email || typeof email !== "string") {
+      return void res.status(400).json({ error: "email is required" });
+    }
+    if (!code || typeof code !== "string") {
+      return void res.status(400).json({ error: "code is required" });
+    }
+    if (!newPassword || typeof newPassword !== "string" || newPassword.length < 4) {
+      return void res.status(400).json({ error: "Password must be at least 4 characters" });
+    }
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
+    if (!user) return void res.status(400).json({ error: "Invalid code" });
+
+    const [reset] = await db
+      .select()
+      .from(passwordResetsTable)
+      .where(and(eq(passwordResetsTable.userId, user.id), isNull(passwordResetsTable.usedAt)))
+      .orderBy(desc(passwordResetsTable.createdAt));
+
+    if (!reset || reset.expiresAt.getTime() < Date.now()) {
+      return void res.status(400).json({ error: "Code expired or invalid. Request a new one." });
+    }
+
+    const ok = await bcrypt.compare(String(code), reset.codeHash);
+    if (!ok) return void res.status(400).json({ error: "Invalid code" });
+
+    const passwordHash = await bcrypt.hash(String(newPassword), 10);
+    await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
+    await db.update(passwordResetsTable).set({ usedAt: new Date() }).where(eq(passwordResetsTable.id, reset.id));
+
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to reset password with code");
     res.status(500).json({ error: "Internal server error" });
   }
 });

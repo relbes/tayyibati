@@ -287,6 +287,12 @@ export default function AuthScreen() {
             </View>
           </View>
 
+          {tab === "login" ? (
+            <TouchableOpacity onPress={() => router.push("/forgot-password")}>
+              <Text style={[styles.forgotText, { color: colors.primary }]}>نسيت كلمة المرور؟</Text>
+            </TouchableOpacity>
+          ) : null}
+
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
@@ -416,6 +422,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 16 },
+  forgotText: {
+    fontSize: 14,
+    fontFamily: "Tajawal_500Medium",
+    textAlign: "left",
+    marginTop: -4,
+  },
   privacyNote: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
