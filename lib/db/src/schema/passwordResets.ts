@@ -1,9 +1,10 @@
-import { pgTable, text, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
 
 export const passwordResetsTable = pgTable("password_resets", {
   id: serial("id").primaryKey(),
   userId: text("user_id").notNull(),
   codeHash: text("code_hash").notNull(),
+  attempts: integer("attempts").notNull().default(0),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   usedAt: timestamp("used_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

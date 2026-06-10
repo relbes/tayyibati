@@ -11,6 +11,7 @@ Arabic-first mobile app that checks food/ingredient compatibility with the Tayyi
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
 - Required env: `DATABASE_URL` — Postgres connection string (auto-configured in Replit)
 - Required env: `OPENAI_API_KEY` — used by API server for ingredient extraction only
+- Optional env: `RESEND_FROM_EMAIL` — sender for password-reset emails (e.g. `Tayyibati <noreply@yourdomain.com>`). Defaults to Resend's shared `onboarding@resend.dev`, which can ONLY deliver to the Resend account owner's own address until a domain is verified at resend.com/domains.
 
 ## Seeding the database
 
@@ -32,7 +33,8 @@ PGPASSWORD=password psql -h helium -U postgres heliumdb -c "INSERT INTO foods ..
 
 ## Where things live
 
-- `lib/db/src/schema/` — DB schema: `foods.ts`, `analysisHistory.ts`, `userUsage.ts`
+- `lib/db/src/schema/` — DB schema: `foods.ts`, `analysisHistory.ts`, `userUsage.ts`, `users.ts`, `passwordResets.ts`
+- `artifacts/api-server/src/lib/email.ts` — password-reset email sender; `resendClient.ts` — Resend connector client (via `@replit/connectors-sdk` proxy)
 - `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth)
 - `artifacts/api-server/src/routes/` — API route handlers
 - `artifacts/mobile/app/` — Expo Router screens
@@ -55,7 +57,7 @@ PGPASSWORD=password psql -h helium -U postgres heliumdb -c "INSERT INTO foods ..
 - History screen: saved analyses per user
 - Profile screen: usage meter, premium upgrade prompt
 - Admin screen: CRUD interface for the foods database
-- Auth screen: simple email-based sign-in (local, no password)
+- Auth screen: simple email-based sign-in (local, no password). Includes "forgot password" → emailed 6-digit code → reset (`app/forgot-password.tsx`)
 - Pricing screen: freemium / premium plan comparison
 
 ## User preferences
@@ -69,6 +71,7 @@ _Populate as you build — explicit user instructions worth remembering across s
 - OpenAI model is `gpt-4o-mini` not `gpt-5-mini`
 - Scripts package cannot import workspace-local packages via `@workspace/` — use psql for seeding
 - DB `is_premium` column is text "true"/"false" not boolean (Drizzle ORM limitation with text column type)
+- Password reset emails go through Resend via `@replit/connectors-sdk` (`connectors.proxy("resend", "/emails", ...)`). With the default `onboarding@resend.dev` sender, Resend returns 403 for any recipient except the account owner's verified email — set `RESEND_FROM_EMAIL` to a verified-domain address to email real users. In dev, if Resend is unreachable the reset code is logged (NODE_ENV !== production); in production an unconfigured provider throws.
 
 ## Pointers
 

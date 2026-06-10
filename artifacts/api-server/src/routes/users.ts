@@ -245,8 +245,13 @@ router.post("/users/reset-password-with-code", async (req, res) => {
     }
     const normalizedEmail = email.trim().toLowerCase();
 
+    // Single generic message for all failure modes to avoid leaking account
+    // state or signalling code-guessing progress.
+    const INVALID = "Invalid or expired code. Request a new one.";
+    const MAX_ATTEMPTS = 5;
+
     const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
-    if (!user) return void res.status(400).json({ error: "Invalid code" });
+    if (!user) return void res.status(400).json({ error: INVALID });
 
     const [reset] = await db
       .select()
@@ -254,12 +259,23 @@ router.post("/users/reset-password-with-code", async (req, res) => {
       .where(and(eq(passwordResetsTable.userId, user.id), isNull(passwordResetsTable.usedAt)))
       .orderBy(desc(passwordResetsTable.createdAt));
 
-    if (!reset || reset.expiresAt.getTime() < Date.now()) {
-      return void res.status(400).json({ error: "Code expired or invalid. Request a new one." });
+    if (!reset || reset.expiresAt.getTime() < Date.now() || reset.attempts >= MAX_ATTEMPTS) {
+      return void res.status(400).json({ error: INVALID });
     }
 
     const ok = await bcrypt.compare(String(code), reset.codeHash);
-    if (!ok) return void res.status(400).json({ error: "Invalid code" });
+    if (!ok) {
+      // Count the failed guess; burn the code once too many wrong tries occur.
+      const nextAttempts = reset.attempts + 1;
+      await db
+        .update(passwordResetsTable)
+        .set({
+          attempts: nextAttempts,
+          usedAt: nextAttempts >= MAX_ATTEMPTS ? new Date() : reset.usedAt,
+        })
+        .where(eq(passwordResetsTable.id, reset.id));
+      return void res.status(400).json({ error: INVALID });
+    }
 
     const passwordHash = await bcrypt.hash(String(newPassword), 10);
     await db.update(usersTable).set({ passwordHash }).where(eq(usersTable.id, user.id));
