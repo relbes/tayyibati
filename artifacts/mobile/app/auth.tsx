@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,14 +8,38 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
+import * as AuthSession from "expo-auth-session";
+import * as Google from "expo-auth-session/providers/google";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+
+WebBrowser.maybeCompleteAuthSession();
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
+const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID;
+
+const domain = process.env.EXPO_PUBLIC_DOMAIN;
+
+async function fetchGoogleLoginEnabled(): Promise<boolean> {
+  try {
+    const base = domain ? `https://${domain}` : "";
+    const res = await fetch(`${base}/api/config/public`);
+    if (!res.ok) return false;
+    const config = await res.json();
+    return config.google_login_enabled === "true";
+  } catch {
+    return false;
+  }
+}
 
 export default function AuthScreen() {
   const colors = useColors();
@@ -26,17 +50,75 @@ export default function AuthScreen() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleEnabled, setGoogleEnabled] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  const [, googleResponse, googlePrompt] = Google.useAuthRequest({
+    clientId: GOOGLE_WEB_CLIENT_ID || "not-configured",
+    iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+  });
+
+  useEffect(() => {
+    fetchGoogleLoginEnabled().then(setGoogleEnabled);
+  }, []);
+
+  useEffect(() => {
+    if (googleResponse?.type === "success") {
+      handleGoogleSuccess(googleResponse.authentication?.accessToken ?? "");
+    } else if (googleResponse?.type === "error") {
+      setGoogleLoading(false);
+      setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
+    }
+  }, [googleResponse]);
+
+  const handleGoogleSuccess = async (accessToken: string) => {
+    if (!accessToken) { setGoogleLoading(false); return; }
+    try {
+      const userRes = await fetch("https://www.googleapis.com/userinfo/v2/me", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!userRes.ok) throw new Error("Failed to fetch Google profile");
+      const profile = await userRes.json();
+      await signIn(profile.email, profile.name ?? profile.email.split("@")[0], {
+        provider: "google",
+        avatar: profile.picture,
+        id: "google_" + profile.id,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch {
+      setError("حدث خطأ أثناء تسجيل الدخول بـ Google.");
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
+  const handleGooglePress = async () => {
+    if (!GOOGLE_WEB_CLIENT_ID) {
+      setError("Google Sign-In is not configured. Please contact the app administrator.");
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setGoogleLoading(true);
+    setError("");
+    await googlePrompt();
+  };
 
   const handleSubmit = async () => {
     setError("");
-    if (!email.trim()) { setError("البريد الإلكتروني مطلوب"); return; }
-    if (tab === "register" && !name.trim()) { setError("الاسم مطلوب"); return; }
+    const emailTrimmed = email.trim();
+    const nameTrimmed = name.trim();
+    if (!emailTrimmed) { setError("البريد الإلكتروني مطلوب"); return; }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailTrimmed)) { setError("البريد الإلكتروني غير صحيح"); return; }
+    if (tab === "register" && !nameTrimmed) { setError("الاسم مطلوب"); return; }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await signIn(email.trim(), name.trim() || email.split("@")[0]);
+      await signIn(emailTrimmed, nameTrimmed || emailTrimmed.split("@")[0]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch {
@@ -45,6 +127,8 @@ export default function AuthScreen() {
       setLoading(false);
     }
   };
+
+  const showGoogleBtn = googleEnabled && !!GOOGLE_WEB_CLIENT_ID;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -67,7 +151,6 @@ export default function AuthScreen() {
           contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Tab Toggle */}
           <View style={[styles.tabToggle, { backgroundColor: colors.muted, borderColor: colors.border }]}>
             {(["login", "register"] as const).map((t) => (
               <TouchableOpacity
@@ -90,6 +173,35 @@ export default function AuthScreen() {
               ? "سجّل دخولك للوصول لتحليلاتك المحفوظة"
               : "أنشئ حساباً لحفظ تحليلاتك"}
           </Text>
+
+          {/* Google Sign-In */}
+          {showGoogleBtn && (
+            <>
+              <TouchableOpacity
+                style={[styles.googleBtn, {
+                  backgroundColor: colors.card,
+                  borderColor: colors.border,
+                  opacity: googleLoading ? 0.6 : 1,
+                }]}
+                onPress={handleGooglePress}
+                disabled={googleLoading || loading}
+                activeOpacity={0.75}
+              >
+                <View style={styles.googleIcon}>
+                  <Text style={styles.googleG}>G</Text>
+                </View>
+                <Text style={[styles.googleText, { color: colors.foreground }]}>
+                  {googleLoading ? "جاري التحقق..." : "تسجيل الدخول بـ Google"}
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.dividerRow}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+                <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>أو</Text>
+                <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+              </View>
+            </>
+          )}
 
           {tab === "register" && (
             <View style={styles.fieldGroup}>
@@ -121,6 +233,8 @@ export default function AuthScreen() {
                 textAlign="right"
                 keyboardType="email-address"
                 autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
               />
               <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
             </View>
@@ -136,12 +250,19 @@ export default function AuthScreen() {
           <TouchableOpacity
             style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]}
             onPress={handleSubmit}
-            disabled={loading}
+            disabled={loading || googleLoading}
           >
             <Text style={styles.submitText}>
               {loading ? "جاري..." : tab === "login" ? "دخول" : "إنشاء الحساب"}
             </Text>
           </TouchableOpacity>
+
+          <Text style={[styles.privacyNote, { color: colors.mutedForeground }]}>
+            بالاستمرار، توافق على{" "}
+            <Text style={{ color: colors.primary }}>سياسة الخصوصية</Text>
+            {" "}و{" "}
+            <Text style={{ color: colors.primary }}>شروط الاستخدام</Text>
+          </Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -157,21 +278,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 16,
   },
-  closeBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  topTitle: {
-    fontSize: 20,
-    fontFamily: "Inter_700Bold",
-    color: "#fff",
-  },
-  form: {
-    padding: 24,
-    gap: 16,
-  },
+  closeBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
+  topTitle: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff" },
+  form: { padding: 24, gap: 16 },
   tabToggle: {
     flexDirection: "row",
     borderRadius: 12,
@@ -185,10 +294,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
   },
-  tabText: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  tabText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   welcomeText: {
     fontSize: 24,
     fontFamily: "Inter_700Bold",
@@ -201,12 +307,44 @@ const styles = StyleSheet.create({
     textAlign: "right",
     lineHeight: 22,
   },
-  fieldGroup: { gap: 6 },
-  label: {
-    fontSize: 14,
-    fontFamily: "Inter_500Medium",
-    textAlign: "right",
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    gap: 12,
   },
+  googleIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e5e5e5",
+  },
+  googleG: {
+    fontSize: 14,
+    fontFamily: "Inter_700Bold",
+    color: "#4285F4",
+  },
+  googleText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
+  fieldGroup: { gap: 6 },
+  label: { fontSize: 14, fontFamily: "Inter_500Medium", textAlign: "right" },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -241,9 +379,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 8,
   },
-  submitText: {
-    color: "#fff",
-    fontFamily: "Inter_700Bold",
-    fontSize: 16,
+  submitText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },
+  privacyNote: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 20,
   },
 });

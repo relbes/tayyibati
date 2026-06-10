@@ -6,10 +6,12 @@ import historyRouter from "./history";
 import usersRouter from "./users";
 import adminRouter from "./admin";
 import plansRouter from "./plans";
+import configRouter from "./config";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(configRouter);
 router.use(plansRouter);
 router.use(foodsRouter);
 router.use(analysisRouter);

@@ -1,14 +1,54 @@
 import { useState, useEffect } from "react";
 import { setBaseUrl, useHealthCheck } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, XCircle, RefreshCw, Globe, Trash2 } from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info } from "lucide-react";
 
 const STORAGE_KEY = "tayyibati_api_url";
+
+const API_BASE = () => localStorage.getItem(STORAGE_KEY) || "";
+
+interface ConfigRow { id: number; key: string; value: string; description: string | null; isPublic: string; }
+
+async function fetchConfig(): Promise<ConfigRow[]> {
+  const res = await fetch(`${API_BASE()}/api/config`);
+  if (!res.ok) throw new Error("Failed to fetch config");
+  return res.json();
+}
+
+async function patchConfig(key: string, value: string): Promise<ConfigRow> {
+  const res = await fetch(`${API_BASE()}/api/config/${key}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ value }),
+  });
+  if (!res.ok) throw new Error("Failed to update config");
+  return res.json();
+}
+
+function Toggle({ enabled, onChange, label, desc }: { enabled: boolean; onChange: (v: boolean) => void; label: string; desc?: string; }) {
+  return (
+    <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+      <div className="flex-1">
+        <p className="text-sm font-medium">{label}</p>
+        {desc && <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>}
+      </div>
+      <button
+        role="switch"
+        aria-checked={enabled}
+        onClick={() => onChange(!enabled)}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${enabled ? "bg-primary" : "bg-muted"}`}
+      >
+        <span className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`} />
+      </button>
+    </div>
+  );
+}
 
 export default function Settings() {
   const [apiUrl, setApiUrl] = useState("");
@@ -23,6 +63,19 @@ export default function Settings() {
   }, []);
 
   const { data: health, isLoading: checking, refetch, isError } = useHealthCheck();
+  const { data: configRows = [] } = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
+
+  const patchMut = useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) => patchConfig(key, value),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["config"] }); toast({ title: "Setting saved" }); },
+    onError: () => toast({ title: "Failed to save setting", variant: "destructive" }),
+  });
+
+  const getConfig = (key: string) => configRows.find((r) => r.key === key)?.value ?? "";
+  const setConfig = (key: string, value: string) => patchMut.mutate({ key, value });
+
+  const googleEnabled = getConfig("google_login_enabled") === "true";
+  const freeDailyLimit = getConfig("free_daily_limit") || "10";
 
   function handleSave() {
     const trimmed = apiUrl.trim();
@@ -35,7 +88,7 @@ export default function Settings() {
     }
     setSaved(!!trimmed);
     queryClient.clear();
-    toast({ title: "Settings saved", description: "API URL updated. Queries reset." });
+    toast({ title: "Settings saved", description: "API URL updated." });
     setTimeout(() => refetch(), 300);
   }
 
@@ -54,11 +107,10 @@ export default function Settings() {
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
         <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">
-          Configure how the dashboard connects to the Tayyibati API
-        </p>
+        <p className="text-muted-foreground text-sm mt-0.5">Configure the Tayyibati API and app features</p>
       </div>
 
+      {/* API Connection */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -66,10 +118,7 @@ export default function Settings() {
             API Connection
           </CardTitle>
           <CardDescription>
-            By default the dashboard connects to the Tayyibati API running on the same
-            server (relative path <code className="text-xs font-mono">/api</code>). If
-            you're self-hosting the dashboard separately, enter your API server's full
-            base URL below.
+            By default the dashboard connects to the API on the same server. If self-hosting separately, enter your API server's full base URL.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -91,9 +140,7 @@ export default function Settings() {
               )}
             </div>
             <p className="text-xs text-muted-foreground">
-              {saved
-                ? `Custom API URL active: ${localStorage.getItem(STORAGE_KEY)}`
-                : "Using default relative /api path"}
+              {saved ? `Custom API URL: ${localStorage.getItem(STORAGE_KEY)}` : "Using default relative /api path"}
             </p>
           </div>
 
@@ -101,11 +148,7 @@ export default function Settings() {
             <div className="flex-1">
               <p className="text-sm font-medium">Connection Status</p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {checking
-                  ? "Checking…"
-                  : isConnected
-                    ? "API server is reachable"
-                    : "Unable to reach API server"}
+                {checking ? "Checking…" : isConnected ? "API server is reachable" : "Unable to reach API server"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -116,12 +159,7 @@ export default function Settings() {
               ) : (
                 <XCircle className="h-5 w-5 text-destructive" />
               )}
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => refetch()}
-                disabled={checking}
-              >
+              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={checking}>
                 <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
                 Test
               </Button>
@@ -130,35 +168,99 @@ export default function Settings() {
         </CardContent>
       </Card>
 
+      {/* Authentication Features */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-base">Self-Hosting Instructions</CardTitle>
-          <CardDescription>
-            Deploy the admin dashboard on your own server
-          </CardDescription>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Shield className="h-4 w-4" />
+            Authentication
+          </CardTitle>
+          <CardDescription>Control which sign-in methods are available in the mobile app.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <ol className="space-y-2 list-decimal list-inside">
-            <li>
-              Build the dashboard:{" "}
-              <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">
-                pnpm --filter @workspace/admin-dashboard run build
-              </code>
-            </li>
-            <li>
-              Copy the <code className="text-xs font-mono bg-muted px-1 py-0.5 rounded">dist/</code> folder to your web server (nginx, Caddy, etc.)
-            </li>
-            <li>
-              Make sure your API server has CORS enabled for the dashboard's origin
-            </li>
-            <li>
-              Enter your API server URL in the field above and click Save
-            </li>
-          </ol>
-          <p className="text-xs pt-1">
-            The dashboard is a fully static SPA — no server-side rendering required.
-            All API calls happen from the browser.
-          </p>
+        <CardContent className="space-y-3">
+          <Toggle
+            enabled={googleEnabled}
+            onChange={(v) => setConfig("google_login_enabled", v ? "true" : "false")}
+            label="Google Sign-In"
+            desc='Show "تسجيل الدخول بـ Google" button on the login screen'
+          />
+          <div className="rounded-lg bg-muted/40 border p-4 space-y-2">
+            <div className="flex items-start gap-2">
+              <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+              <div className="text-xs text-muted-foreground space-y-1">
+                <p className="font-medium text-foreground">To activate Google Sign-In, set these environment secrets in Replit:</p>
+                <ul className="space-y-1 font-mono">
+                  <li><code className="bg-muted px-1 rounded">EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB</code> — Web client ID</li>
+                  <li><code className="bg-muted px-1 rounded">EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS</code> — iOS client ID</li>
+                  <li><code className="bg-muted px-1 rounded">EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID</code> — Android client ID</li>
+                </ul>
+                <p className="mt-2">Get these from <strong>console.cloud.google.com</strong> → APIs &amp; Services → Credentials → OAuth 2.0 Client IDs.</p>
+                <p>Authorized redirect URI: <code className="bg-muted px-1 rounded">https://auth.expo.io/@your-expo-username/tayyibati</code></p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* App Limits */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Usage Limits</CardTitle>
+          <CardDescription>Control free-tier analysis limits.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="space-y-1.5">
+            <Label>Free Daily Analysis Limit</Label>
+            <div className="flex gap-2 items-center">
+              <Input
+                type="number"
+                className="w-32"
+                value={freeDailyLimit}
+                onChange={(e) => setConfig("free_daily_limit", e.target.value)}
+                min={1}
+                max={100}
+              />
+              <span className="text-sm text-muted-foreground">analyses / day</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Store Submission Guide */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">App Store Submission Checklist</CardTitle>
+          <CardDescription>Steps to publish on Apple App Store & Google Play</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 text-sm">
+          <div>
+            <p className="font-semibold mb-2 flex items-center gap-2">🍎 Apple App Store</p>
+            <ol className="space-y-1.5 list-decimal list-inside text-muted-foreground">
+              <li>Enroll in Apple Developer Program ($99/year) at <strong>developer.apple.com</strong></li>
+              <li>Create an App ID with bundle ID: <code className="bg-muted px-1 rounded text-xs">com.tayyibati.app</code></li>
+              <li>Run <code className="bg-muted px-1 rounded text-xs">eas build --platform ios</code> to create an IPA</li>
+              <li>Upload via Transporter or Xcode to App Store Connect</li>
+              <li>Fill in Arabic + English metadata, screenshots (6.7" required), privacy policy URL</li>
+              <li>Set age rating — likely 4+ (no mature content)</li>
+              <li>Privacy policy URL required — create a simple page disclosing camera/photo access</li>
+            </ol>
+          </div>
+          <div>
+            <p className="font-semibold mb-2 flex items-center gap-2">🤖 Google Play</p>
+            <ol className="space-y-1.5 list-decimal list-inside text-muted-foreground">
+              <li>Pay one-time $25 registration at <strong>play.google.com/console</strong></li>
+              <li>Run <code className="bg-muted px-1 rounded text-xs">eas build --platform android</code> to create an AAB</li>
+              <li>Upload AAB to Play Console → Internal Testing first</li>
+              <li>Complete the Data Safety section — disclose camera/photos, no data sold to third parties</li>
+              <li>Provide privacy policy URL</li>
+              <li>Fill Arabic store listing (title, description, screenshots)</li>
+              <li>Submit for review (~1–3 days)</li>
+            </ol>
+          </div>
+          <div className="rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
+            <strong>EAS build command:</strong>
+            <pre className="mt-1 font-mono">npx eas-cli build --platform all --profile production</pre>
+          </div>
         </CardContent>
       </Card>
     </div>
