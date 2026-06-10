@@ -55,10 +55,12 @@ export default function AuthScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn } = useAuth();
+  const { signIn, registerWithPassword, loginWithPassword } = useAuth();
   const [tab, setTab] = useState<"login" | "register">("login");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
@@ -132,14 +134,20 @@ export default function AuthScreen() {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailTrimmed)) { setError("البريد الإلكتروني غير صحيح"); return; }
     if (tab === "register" && !nameTrimmed) { setError("الاسم مطلوب"); return; }
+    if (!password) { setError("كلمة المرور مطلوبة"); return; }
+    if (password.length < 4) { setError("كلمة المرور يجب أن تكون 4 أحرف على الأقل"); return; }
     setLoading(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      await signIn(emailTrimmed, nameTrimmed || emailTrimmed.split("@")[0]);
+      if (tab === "register") {
+        await registerWithPassword(emailTrimmed, nameTrimmed || emailTrimmed.split("@")[0], password);
+      } else {
+        await loginWithPassword(emailTrimmed, password);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } catch {
-      setError("حدث خطأ. حاول مجدداً.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "حدث خطأ. حاول مجدداً.");
     } finally {
       setLoading(false);
     }
@@ -253,6 +261,29 @@ export default function AuthScreen() {
                 autoComplete="email"
               />
               <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+            </View>
+          </View>
+
+          <View style={styles.fieldGroup}>
+            <Text style={[styles.label, { color: colors.foreground }]}>كلمة المرور</Text>
+            <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
+                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              <TextInput
+                style={[styles.input, { color: colors.foreground }]}
+                placeholder="••••••••"
+                placeholderTextColor={colors.mutedForeground}
+                value={password}
+                onChangeText={setPassword}
+                textAlign="right"
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete={tab === "login" ? "current-password" : "new-password"}
+                onSubmitEditing={handleSubmit}
+              />
+              <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
             </View>
           </View>
 

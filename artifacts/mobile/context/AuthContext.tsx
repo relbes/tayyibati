@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { registerUser, loginUser, getUser } from "@/lib/api";
 
 interface User {
   id: string;
@@ -8,19 +9,45 @@ interface User {
   isPremium: boolean;
   provider?: "email" | "google";
   avatar?: string;
+  planId?: number | null;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   signIn: (email: string, name: string, opts?: { provider?: "email" | "google"; avatar?: string; id?: string }) => Promise<void>;
+  registerWithPassword: (email: string, name: string, password: string) => Promise<void>;
+  loginWithPassword: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   updatePremium: (isPremium: boolean) => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const USER_KEY = "tayyibati_user_v2";
+
+interface ApiUser {
+  id: string;
+  email: string;
+  name: string;
+  isPremium: string;
+  provider?: "email" | "google";
+  avatar?: string | null;
+  planId?: number | null;
+}
+
+function toUser(api: ApiUser): User {
+  return {
+    id: api.id,
+    email: api.email,
+    name: api.name,
+    isPremium: api.isPremium === "true",
+    provider: api.provider ?? "email",
+    ...(api.avatar ? { avatar: api.avatar } : {}),
+    planId: api.planId ?? null,
+  };
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -40,24 +67,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
+  const persist = useCallback(async (u: User) => {
+    await AsyncStorage.setItem(USER_KEY, JSON.stringify(u));
+    setUser(u);
+  }, []);
+
   const signIn = useCallback(async (
     email: string,
     name: string,
     opts?: { provider?: "email" | "google"; avatar?: string; id?: string }
   ) => {
-    const stableId = opts?.id ??
-      "user_" + Buffer.from(email.toLowerCase()).toString("base64").replace(/[^a-z0-9]/gi, "").slice(0, 16);
-    const newUser: User = {
-      id: stableId,
+    const api = await registerUser({
       email,
       name,
-      isPremium: false,
       provider: opts?.provider ?? "email",
-      ...(opts?.avatar ? { avatar: opts.avatar } : {}),
-    };
-    await AsyncStorage.setItem(USER_KEY, JSON.stringify(newUser));
-    setUser(newUser);
-  }, []);
+      avatar: opts?.avatar,
+      id: opts?.id,
+    });
+    await persist(toUser(api));
+  }, [persist]);
+
+  const registerWithPassword = useCallback(async (email: string, name: string, password: string) => {
+    const api = await registerUser({ email, name, password });
+    await persist(toUser(api));
+  }, [persist]);
+
+  const loginWithPassword = useCallback(async (email: string, password: string) => {
+    const api = await loginUser({ email, password });
+    await persist(toUser(api));
+  }, [persist]);
 
   const signOut = useCallback(async () => {
     await AsyncStorage.removeItem(USER_KEY);
@@ -71,8 +109,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
   }, [user]);
 
+  const refreshUser = useCallback(async () => {
+    if (!user) return;
+    try {
+      const api = await getUser(user.id);
+      await persist(toUser(api));
+    } catch {
+      // keep current state on failure
+    }
+  }, [user, persist]);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, signOut, updatePremium }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, registerWithPassword, loginWithPassword, signOut, updatePremium, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

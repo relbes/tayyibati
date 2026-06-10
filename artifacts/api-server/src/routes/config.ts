@@ -33,10 +33,11 @@ router.get("/config", async (req, res) => {
 router.patch("/config/:key", async (req, res) => {
   try {
     const { key } = req.params;
-    const { value } = req.body;
+    const { value, isPublic } = req.body;
     if (value === undefined || value === null) {
       return void res.status(400).json({ error: "value is required" });
     }
+    const publicFlag = isPublic === undefined ? undefined : isPublic === true || isPublic === "true" ? "true" : "false";
     const [existing] = await db
       .select()
       .from(appConfigTable)
@@ -45,14 +46,14 @@ router.patch("/config/:key", async (req, res) => {
     if (existing) {
       const [updated] = await db
         .update(appConfigTable)
-        .set({ value: String(value) })
+        .set({ value: String(value), ...(publicFlag !== undefined ? { isPublic: publicFlag } : {}) })
         .where(eq(appConfigTable.key, key))
         .returning();
       res.json(updated);
     } else {
       const [created] = await db
         .insert(appConfigTable)
-        .values({ key, value: String(value), isPublic: "false" })
+        .values({ key, value: String(value), isPublic: publicFlag ?? "false" })
         .returning();
       res.status(201).json(created);
     }

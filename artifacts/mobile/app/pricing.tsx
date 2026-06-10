@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { getPlans } from "@/lib/api";
+import { getPlans, enrollUserPlan } from "@/lib/api";
 
 interface Plan {
   id: number;
@@ -35,7 +35,7 @@ export default function PricingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, updatePremium } = useAuth();
+  const { user, updatePremium, refreshUser } = useAuth();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,6 +87,17 @@ export default function PricingScreen() {
 
   const handleUpgrade = (plan: Plan) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (!user) {
+      Alert.alert(
+        "تسجيل الدخول مطلوب",
+        "يجب تسجيل الدخول أولاً للاشتراك في باقة بريميوم",
+        [
+          { text: "إلغاء", style: "cancel" },
+          { text: "تسجيل الدخول", onPress: () => router.push("/auth") },
+        ]
+      );
+      return;
+    }
     const price = parseFloat(plan.price) > 0
       ? `${plan.price} ${plan.currency} / ${plan.billingCycle === "monthly" ? "شهر" : "سنة"}`
       : "مجاناً";
@@ -97,8 +108,14 @@ export default function PricingScreen() {
         { text: "إلغاء", style: "cancel" },
         {
           text: "اشترك الآن",
-          onPress: () => {
-            if (user) updatePremium(true);
+          onPress: async () => {
+            updatePremium(true);
+            try {
+              await enrollUserPlan(user.id, plan.id, true);
+              await refreshUser();
+            } catch {
+              // local premium still applied; backend sync can retry later
+            }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             Alert.alert("تم الاشتراك ✓", `أصبحت الآن مشتركاً في خطة ${plan.name}!`);
             router.back();

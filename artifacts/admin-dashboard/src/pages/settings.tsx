@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles } from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles, Palette } from "lucide-react";
 
 const STORAGE_KEY = "tayyibati_api_url";
 
@@ -76,6 +76,26 @@ export default function Settings() {
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
   const freeDailyLimit = getConfig("free_daily_limit") || "10";
+
+  const [branding, setBranding] = useState({ app_name: "", app_description: "", app_logo_url: "" });
+  const [brandingLoaded, setBrandingLoaded] = useState(false);
+  useEffect(() => {
+    if (!brandingLoaded && configRows.length > 0) {
+      setBranding({
+        app_name: getConfig("app_name"),
+        app_description: getConfig("app_description"),
+        app_logo_url: getConfig("app_logo_url"),
+      });
+      setBrandingLoaded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [configRows, brandingLoaded]);
+
+  function handleBrandingSave() {
+    setConfig("app_name", branding.app_name.trim());
+    setConfig("app_description", branding.app_description.trim());
+    setConfig("app_logo_url", branding.app_logo_url.trim());
+  }
 
   const [apiKeyInput, setApiKeyInput] = useState("");
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
@@ -328,6 +348,49 @@ export default function Settings() {
               <span className="text-sm text-muted-foreground">analyses / day</span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* App Branding */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Palette className="h-4 w-4" />
+            App Branding
+          </CardTitle>
+          <CardDescription>Customize the name, tagline, and logo shown on the mobile app home screen.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>App Name (Arabic)</Label>
+            <Input
+              dir="rtl"
+              value={branding.app_name}
+              onChange={(e) => setBranding({ ...branding, app_name: e.target.value })}
+              placeholder="طيباتي"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Tagline (Arabic)</Label>
+            <Input
+              dir="rtl"
+              value={branding.app_description}
+              onChange={(e) => setBranding({ ...branding, app_description: e.target.value })}
+              placeholder="تحقق من توافق أي طعام"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Logo URL (optional)</Label>
+            <Input
+              value={branding.app_logo_url}
+              onChange={(e) => setBranding({ ...branding, app_logo_url: e.target.value })}
+              placeholder="https://…/logo.png"
+              className="font-mono text-sm"
+            />
+          </div>
+          <Button onClick={handleBrandingSave} disabled={patchMut.isPending}>
+            Save Branding
+          </Button>
         </CardContent>
       </Card>
 

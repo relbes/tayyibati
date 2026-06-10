@@ -5,6 +5,30 @@ if (domain) {
   setBaseUrl(`https://${domain}`);
 }
 
+export class AnalysisError extends Error {
+  status: number;
+  limitReached: boolean;
+  constructor(message: string, status: number, limitReached = false) {
+    super(message);
+    this.name = "AnalysisError";
+    this.status = status;
+    this.limitReached = limitReached;
+  }
+}
+
+async function readAnalysisError(res: Response, fallback: string): Promise<AnalysisError> {
+  let message = fallback;
+  let limitReached = res.status === 429;
+  try {
+    const body = await res.json();
+    if (body?.message) message = body.message;
+    if (body?.error === "limit_reached") limitReached = true;
+  } catch {
+    // ignore non-JSON bodies
+  }
+  return new AnalysisError(message, res.status, limitReached);
+}
+
 export async function analyzeText(query: string, userId?: string | null) {
   const base = domain ? `https://${domain}` : "";
   const res = await fetch(`${base}/api/analysis/text`, {
@@ -12,7 +36,7 @@ export async function analyzeText(query: string, userId?: string | null) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query, userId: userId ?? null }),
   });
-  if (!res.ok) throw new Error(`Analysis failed: ${res.status}`);
+  if (!res.ok) throw await readAnalysisError(res, `Analysis failed: ${res.status}`);
   return res.json();
 }
 
@@ -28,7 +52,7 @@ export async function analyzeImage(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ imageBase64, mimeType, analysisType, userId: userId ?? null }),
   });
-  if (!res.ok) throw new Error(`Image analysis failed: ${res.status}`);
+  if (!res.ok) throw await readAnalysisError(res, `Image analysis failed: ${res.status}`);
   return res.json();
 }
 
@@ -114,5 +138,70 @@ export async function getPlans() {
   const base = domain ? `https://${domain}` : "";
   const res = await fetch(`${base}/api/plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
+  return res.json();
+}
+
+async function parseAuthError(res: Response, fallback: string): Promise<never> {
+  let message = fallback;
+  try {
+    const data = await res.json();
+    if (data?.error) message = data.error;
+  } catch {
+    // ignore parse failure, use fallback
+  }
+  throw new Error(message);
+}
+
+export async function registerUser(payload: {
+  email: string;
+  name?: string;
+  password?: string;
+  provider?: "email" | "google";
+  avatar?: string;
+  id?: string;
+}) {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) return parseAuthError(res, "تعذّر إنشاء الحساب");
+  return res.json();
+}
+
+export async function loginUser(payload: { email: string; password?: string }) {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) return parseAuthError(res, "تعذّر تسجيل الدخول");
+  return res.json();
+}
+
+export async function getUser(id: string) {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/${id}`);
+  if (!res.ok) throw new Error("Failed to fetch user");
+  return res.json();
+}
+
+export async function enrollUserPlan(id: string, planId: number, isPremium: boolean) {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/${id}/plan`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ planId, isPremium }),
+  });
+  if (!res.ok) throw new Error("Failed to enroll plan");
+  return res.json();
+}
+
+export async function getPublicConfig(): Promise<Record<string, string>> {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/config/public`);
+  if (!res.ok) throw new Error("Failed to fetch config");
   return res.json();
 }

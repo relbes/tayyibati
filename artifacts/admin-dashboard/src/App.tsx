@@ -10,12 +10,14 @@ import Foods from "@/pages/foods";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
+import Users from "@/pages/users";
 import {
   LayoutDashboard,
   UtensilsCrossed,
   History as HistoryIcon,
   Settings as SettingsIcon,
   Star,
+  Users as UsersIcon,
   Menu,
   X,
 } from "lucide-react";
@@ -34,6 +36,7 @@ const NAV_ITEMS = [
   { path: "/", label: "Overview", icon: LayoutDashboard },
   { path: "/foods", label: "Foods Database", icon: UtensilsCrossed },
   { path: "/history", label: "Analysis History", icon: HistoryIcon },
+  { path: "/users", label: "Users", icon: UsersIcon },
   { path: "/plans", label: "Subscription Plans", icon: Star },
   { path: "/settings", label: "Settings", icon: SettingsIcon },
 ];
@@ -131,6 +134,7 @@ function Layout() {
             <Route path="/" component={Overview} />
             <Route path="/foods" component={Foods} />
             <Route path="/history" component={History} />
+            <Route path="/users" component={Users} />
             <Route path="/plans" component={Plans} />
             <Route path="/settings" component={Settings} />
             <Route component={NotFound} />

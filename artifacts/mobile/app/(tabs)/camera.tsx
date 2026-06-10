@@ -10,19 +10,21 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { analyzeImage } from "@/lib/api";
+import { analyzeImage, AnalysisError } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 
 export default function CameraScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const { isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [pickedImage, setPickedImage] = useState<string | null>(null);
@@ -75,9 +77,16 @@ export default function CameraScreen() {
       const report = await analyzeImage(base64, mimeType, "food", user?.id);
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      Alert.alert("خطأ", "فشل تحليل الصورة. حاول مجدداً.");
+      if (err instanceof AnalysisError && err.limitReached) {
+        Alert.alert("انتهى الحد المجاني", err.message, [
+          { text: "لاحقاً", style: "cancel" },
+          { text: "الترقية", onPress: () => router.push("/pricing") },
+        ]);
+      } else {
+        Alert.alert("خطأ", "فشل تحليل الصورة. حاول مجدداً.");
+      }
     } finally {
       setIsAnalyzing(false);
     }

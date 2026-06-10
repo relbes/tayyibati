@@ -8,6 +8,7 @@ import {
   TextInput,
   Animated,
   Pressable,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -18,7 +19,7 @@ import * as ImagePicker from "expo-image-picker";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { analyzeText, analyzeImage, getFoodStats } from "@/lib/api";
+import { analyzeText, analyzeImage, getFoodStats, getPublicConfig, AnalysisError } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 
@@ -39,6 +40,8 @@ export default function HomeScreen() {
   const [query, setQuery] = useState("");
   const [stats, setStats] = useState<FoodStats | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [appName, setAppName] = useState("طيباتي");
+  const [appSub, setAppSub] = useState("تحقق من توافق أي طعام");
   const inputRef = useRef<TextInput>(null);
   const cardAnim = useRef(new Animated.Value(0)).current;
 
@@ -46,6 +49,12 @@ export default function HomeScreen() {
 
   useEffect(() => {
     getFoodStats().then(setStats).catch(() => {});
+    getPublicConfig()
+      .then((cfg) => {
+        if (cfg.app_name) setAppName(cfg.app_name);
+        if (cfg.app_description) setAppSub(cfg.app_description);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -65,12 +74,25 @@ export default function HomeScreen() {
       const report = await analyzeText(query.trim(), user?.id);
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      handleAnalysisError(err);
     } finally {
       setIsAnalyzing(false);
     }
   }, [query, user?.id]);
+
+  const handleAnalysisError = useCallback(
+    (err: unknown) => {
+      if (err instanceof AnalysisError && err.limitReached) {
+        Alert.alert("انتهى الحد المجاني", err.message, [
+          { text: "لاحقاً", style: "cancel" },
+          { text: "الترقية", onPress: () => router.push("/pricing") },
+        ]);
+      }
+    },
+    [router]
+  );
 
   const handleCameraScan = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -97,8 +119,9 @@ export default function HomeScreen() {
       const report = await analyzeImage(base64, mimeType, "food", user?.id);
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      handleAnalysisError(err);
     } finally {
       setIsAnalyzing(false);
     }
@@ -121,8 +144,8 @@ export default function HomeScreen() {
             <Ionicons name={user ? "person" : "person-outline"} size={20} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerTitle}>
-            <Text style={styles.appName}>طيباتي</Text>
-            <Text style={styles.appSub}>تحقق من توافق أي طعام</Text>
+            <Text style={styles.appName}>{appName}</Text>
+            <Text style={styles.appSub}>{appSub}</Text>
           </View>
         </View>
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
-import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable } from "@workspace/db";
+import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 
 const router = Router();
@@ -33,9 +33,19 @@ async function getFreeDailyLimit(): Promise<number> {
   }
 }
 
+async function isUserPremium(userId: string): Promise<boolean> {
+  try {
+    const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    return account?.isPremium === "true";
+  } catch {
+    return false;
+  }
+}
+
 async function checkAndIncrementUsage(userId: string): Promise<{ allowed: boolean; dailyCount: number }> {
   const today = new Date().toISOString().split("T")[0];
   const limit = await getFreeDailyLimit();
+  const premium = await isUserPremium(userId);
 
   const existing = await db
     .select()
@@ -43,12 +53,12 @@ async function checkAndIncrementUsage(userId: string): Promise<{ allowed: boolea
     .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
 
   if (existing.length === 0) {
-    await db.insert(userUsageTable).values({ userId, date: today, count: 1, isPremium: "false" });
+    await db.insert(userUsageTable).values({ userId, date: today, count: 1, isPremium: premium ? "true" : "false" });
     return { allowed: true, dailyCount: 1 };
   }
 
   const row = existing[0];
-  if (row.isPremium === "true") {
+  if (premium || row.isPremium === "true") {
     await db.update(userUsageTable).set({ count: row.count + 1 }).where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
     return { allowed: true, dailyCount: row.count + 1 };
   }
@@ -358,6 +368,16 @@ router.post("/analysis/text", async (req, res) => {
     const { query, userId } = req.body as { query: string; userId?: string | null };
     if (!query?.trim()) return void res.status(400).json({ error: "query is required" });
 
+    if (userId) {
+      const usage = await checkAndIncrementUsage(userId);
+      if (!usage.allowed) {
+        return void res.status(429).json({
+          error: "limit_reached",
+          message: "لقد وصلت إلى الحد اليومي المجاني للتحليلات. قم بالترقية إلى بريميوم للمتابعة.",
+        });
+      }
+    }
+
     const allFoods = await db.select().from(foodsTable);
     const openai = await getOpenAIClient();
 
@@ -406,6 +426,16 @@ router.post("/analysis/image", async (req, res) => {
       analysisType: "food" | "label";
     };
     if (!imageBase64 || !mimeType) return void res.status(400).json({ error: "imageBase64 and mimeType required" });
+
+    if (userId) {
+      const usage = await checkAndIncrementUsage(userId);
+      if (!usage.allowed) {
+        return void res.status(429).json({
+          error: "limit_reached",
+          message: "لقد وصلت إلى الحد اليومي المجاني للتحليلات. قم بالترقية إلى بريميوم للمتابعة.",
+        });
+      }
+    }
 
     const isLabel = analysisType === "label";
     const mode = isLabel ? "label" : "image";

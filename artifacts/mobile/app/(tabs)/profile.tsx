@@ -135,6 +135,7 @@ export default function ProfileScreen() {
 
           {/* Menu Items */}
           {[
+            { icon: "star-outline" as const, label: "الباقات", route: "/pricing" },
             { icon: "time-outline" as const, label: "سجل التحليلات", route: "/(tabs)/history" },
             { icon: "shield-checkmark-outline" as const, label: "الخصوصية والأمان", route: null },
             { icon: "information-circle-outline" as const, label: "عن التطبيق", route: null },
