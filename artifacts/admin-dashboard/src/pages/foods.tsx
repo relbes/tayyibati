@@ -107,7 +107,7 @@ const CATEGORIES = [
 
 const CSV_TEMPLATE = `nameAr,nameEn,category,status,reason,notes
 لحم الضأن,Lamb,Meat & Poultry,allowed,حلال بشرط الذبح الشرعي,
-الكحول,Alcohol,Alcohol & Intoxicants,forbidden,محرم شرعاً,
+الكحول,Alcohol,Alcohol & Intoxicants,forbidden,ممنوع شرعاً,
 الجيلاتين,Gelatin,Additives & Preservatives,conditional,يعتمد على المصدر,يجب التحقق من المصدر`;
 
 type ParsedRow = FoodInput & { _rowIndex: number; _error?: string };
@@ -310,7 +310,7 @@ function BulkImportDialog({
             <div className="space-y-1.5">
               <Label>Paste CSV Data</Label>
               <Textarea
-                placeholder={`nameAr,nameEn,category,status,reason,notes\nلحم الضأن,Lamb,Meat & Poultry,allowed,,\nالكحول,Alcohol,Alcohol & Intoxicants,forbidden,محرم شرعاً,`}
+                placeholder={`nameAr,nameEn,category,status,reason,notes\nلحم الضأن,Lamb,Meat & Poultry,allowed,,\nالكحول,Alcohol,Alcohol & Intoxicants,forbidden,ممنوع شرعاً,`}
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
                 rows={10}

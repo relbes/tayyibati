@@ -3,18 +3,18 @@ import { foodsTable } from "@workspace/db";
 
 const foods = [
   // === FORBIDDEN ===
-  { nameAr: "لحم الخنزير", nameEn: "pork", category: "لحوم", status: "forbidden" as const, reason: "محرم شرعاً - من أصل الخنزير" },
+  { nameAr: "لحم الخنزير", nameEn: "pork", category: "لحوم", status: "forbidden" as const, reason: "ممنوع شرعاً - من أصل الخنزير" },
   { nameAr: "لحم الخنزير المقدد", nameEn: "bacon", category: "لحوم", status: "forbidden" as const, reason: "من لحم الخنزير" },
   { nameAr: "هام الخنزير", nameEn: "ham", category: "لحوم", status: "forbidden" as const, reason: "من لحم الخنزير" },
   { nameAr: "السجق الخنزير", nameEn: "pork sausage", category: "لحوم", status: "forbidden" as const, reason: "من لحم الخنزير" },
-  { nameAr: "الكحول", nameEn: "alcohol", category: "مواد كيميائية", status: "forbidden" as const, reason: "مسكر محرم" },
+  { nameAr: "الكحول", nameEn: "alcohol", category: "مواد كيميائية", status: "forbidden" as const, reason: "مسكر ممنوع" },
   { nameAr: "النبيذ", nameEn: "wine", category: "مشروبات", status: "forbidden" as const, reason: "مسكر" },
   { nameAr: "البيرة", nameEn: "beer", category: "مشروبات", status: "forbidden" as const, reason: "مسكر" },
   { nameAr: "شحم الخنزير", nameEn: "lard", category: "دهون", status: "forbidden" as const, reason: "من الخنزير" },
   { nameAr: "جيلاتين الخنزير", nameEn: "pork gelatin", category: "إضافات", status: "forbidden" as const, reason: "من الخنزير" },
-  { nameAr: "الخمر", nameEn: "spirits", category: "مشروبات", status: "forbidden" as const, reason: "مسكر محرم" },
+  { nameAr: "الخمر", nameEn: "spirits", category: "مشروبات", status: "forbidden" as const, reason: "مسكر ممنوع" },
   { nameAr: "دم الحيوانات", nameEn: "animal blood", category: "أخرى", status: "forbidden" as const, reason: "الدم نجس" },
-  { nameAr: "لحوم الميتة", nameEn: "carrion", category: "لحوم", status: "forbidden" as const, reason: "ميتة محرمة" },
+  { nameAr: "لحوم الميتة", nameEn: "carrion", category: "لحوم", status: "forbidden" as const, reason: "ميتة ممنوعة" },
   { nameAr: "ريتشارد ستيبرات", nameEn: "rennet pork", category: "إضافات", status: "forbidden" as const, reason: "من الخنزير" },
 
   // === CONDITIONAL ===
