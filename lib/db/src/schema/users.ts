@@ -11,6 +11,8 @@ export const usersTable = pgTable("users", {
   avatar: text("avatar"),
   isPremium: text("is_premium").notNull().default("false"),
   planId: integer("plan_id"),
+  failedLoginAttempts: integer("failed_login_attempts").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

@@ -6,6 +6,8 @@ import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../lib/email";
 
 const FREE_DAILY_LIMIT = 10;
+const MAX_FAILED_LOGIN_ATTEMPTS = 10;
+const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
 const router = Router();
 
@@ -29,10 +31,10 @@ async function getFreeDailyLimit(): Promise<number> {
   }
 }
 
-type PublicUser = Omit<typeof usersTable.$inferSelect, "passwordHash"> & { hasPassword: boolean };
+type PublicUser = Omit<typeof usersTable.$inferSelect, "passwordHash" | "failedLoginAttempts" | "lockedUntil"> & { hasPassword: boolean };
 
 function toPublicUser(row: typeof usersTable.$inferSelect): PublicUser {
-  const { passwordHash, ...rest } = row;
+  const { passwordHash, failedLoginAttempts: _fa, lockedUntil: _lu, ...rest } = row;
   return { ...rest, hasPassword: !!passwordHash };
 }
 
@@ -116,25 +118,51 @@ router.post("/users/register", async (req, res) => {
         if (!password) {
           return void res.status(401).json({ error: "Account exists. Sign in with your password." });
         }
+        // Enforce lockout before comparing the password.
+        if (existing.lockedUntil && existing.lockedUntil.getTime() > Date.now()) {
+          const secondsLeft = Math.ceil((existing.lockedUntil.getTime() - Date.now()) / 1000);
+          return void res.status(423).json({
+            error: "Account temporarily locked due to too many failed login attempts. Try again later.",
+            lockedUntil: existing.lockedUntil.toISOString(),
+            secondsLeft,
+          });
+        }
         const ok = await bcrypt.compare(String(password), existing.passwordHash);
-        if (!ok) return void res.status(401).json({ error: "Account exists. Wrong password." });
+        if (!ok) {
+          const nextAttempts = existing.failedLoginAttempts + 1;
+          const shouldLock = nextAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+          await db
+            .update(usersTable)
+            .set({
+              failedLoginAttempts: nextAttempts,
+              lockedUntil: shouldLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : existing.lockedUntil,
+            })
+            .where(eq(usersTable.id, existing.id));
+          if (shouldLock) {
+            return void res.status(423).json({
+              error: "Account temporarily locked due to too many failed login attempts. Try again later.",
+              lockedUntil: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString(),
+              secondsLeft: Math.ceil(LOCKOUT_DURATION_MS / 1000),
+            });
+          }
+          return void res.status(401).json({ error: "Account exists. Wrong password." });
+        }
       }
-      const updates: Record<string, unknown> = {};
+      const updates: Record<string, unknown> = {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      };
       if (!existing.passwordHash && password) {
         updates.passwordHash = await bcrypt.hash(String(password), 10);
       }
       if (name && !existing.name) updates.name = String(name);
       if (avatar) updates.avatar = String(avatar);
-      let row = existing;
-      if (Object.keys(updates).length > 0) {
-        const [updated] = await db
-          .update(usersTable)
-          .set(updates)
-          .where(eq(usersTable.id, existing.id))
-          .returning();
-        row = updated;
-      }
-      return void res.json(toPublicUser(row));
+      const [updated] = await db
+        .update(usersTable)
+        .set(updates)
+        .where(eq(usersTable.id, existing.id))
+        .returning();
+      return void res.json(toPublicUser(updated));
     }
 
     const userId = id ?? stableIdFromEmail(normalizedEmail);
@@ -167,22 +195,56 @@ router.post("/users/login", async (req, res) => {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
     if (!user) return void res.status(401).json({ error: "Invalid email or password" });
 
+    // Check account lockout before any password work.
+    if (user.lockedUntil && user.lockedUntil.getTime() > Date.now()) {
+      const secondsLeft = Math.ceil((user.lockedUntil.getTime() - Date.now()) / 1000);
+      return void res.status(423).json({
+        error: "Account temporarily locked due to too many failed login attempts. Try again later.",
+        lockedUntil: user.lockedUntil.toISOString(),
+        secondsLeft,
+      });
+    }
+
     if (user.passwordHash) {
       if (!password) return void res.status(400).json({ error: "Password is required" });
       const ok = await bcrypt.compare(String(password), user.passwordHash);
-      if (!ok) return void res.status(401).json({ error: "Invalid email or password" });
+      if (!ok) {
+        const nextAttempts = user.failedLoginAttempts + 1;
+        const shouldLock = nextAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+        await db
+          .update(usersTable)
+          .set({
+            failedLoginAttempts: nextAttempts,
+            lockedUntil: shouldLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : user.lockedUntil,
+          })
+          .where(eq(usersTable.id, user.id));
+        if (shouldLock) {
+          return void res.status(423).json({
+            error: "Account temporarily locked due to too many failed login attempts. Try again later.",
+            lockedUntil: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString(),
+            secondsLeft: Math.ceil(LOCKOUT_DURATION_MS / 1000),
+          });
+        }
+        return void res.status(401).json({ error: "Invalid email or password" });
+      }
     } else if (password) {
       // Legacy account with no password set — set it on first login.
       const hash = await bcrypt.hash(String(password), 10);
       const [updated] = await db
         .update(usersTable)
-        .set({ passwordHash: hash })
+        .set({ passwordHash: hash, failedLoginAttempts: 0, lockedUntil: null })
         .where(eq(usersTable.id, user.id))
         .returning();
       return void res.json(toPublicUser(updated));
     }
 
-    res.json(toPublicUser(user));
+    // Successful login — reset failure counter and any expired lock.
+    const [loggedIn] = await db
+      .update(usersTable)
+      .set({ failedLoginAttempts: 0, lockedUntil: null })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+    res.json(toPublicUser(loggedIn));
   } catch (err) {
     req.log.error({ err }, "Failed to login user");
     res.status(500).json({ error: "Internal server error" });
