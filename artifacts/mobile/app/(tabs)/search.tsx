@@ -226,13 +226,18 @@ export default function SearchScreen() {
             {/* Result */}
             {result && (
               <View style={styles.resultContainer}>
-                <View style={styles.resultHeader}>
-                  <Text style={[styles.resultLabel, { color: colors.foreground }]}>نتيجة التحليل</Text>
-                  <TouchableOpacity onPress={() => { setResult(null); setQuery(""); }}>
-                    <Ionicons name="refresh" size={20} color={colors.mutedForeground} />
-                  </TouchableOpacity>
-                </View>
-                <AnalysisResultCard report={result} />
+                {!result.notFound && (
+                  <View style={styles.resultHeader}>
+                    <Text style={[styles.resultLabel, { color: colors.foreground }]}>نتيجة التحليل</Text>
+                    <TouchableOpacity onPress={() => { setResult(null); setQuery(""); }}>
+                      <Ionicons name="refresh" size={20} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <AnalysisResultCard
+                  report={result}
+                  onRetry={() => { setResult(null); setQuery(""); }}
+                />
               </View>
             )}
           </View>

@@ -479,6 +479,9 @@ components:
         analysisType:
           type: string
           enum: [text, image, label]
+        notFound:
+          type: boolean
+          description: True when the query was not recognized as a food item in the database
       required:
         - query
         - compatibilityScore

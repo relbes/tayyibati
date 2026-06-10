@@ -182,7 +182,8 @@ export const AnalyzeTextResponse = zod.object({
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
-  "analysisType": zod.enum(['text', 'image', 'label'])
+  "analysisType": zod.enum(['text', 'image', 'label']),
+  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
 })
 
 
@@ -225,7 +226,8 @@ export const AnalyzeImageResponse = zod.object({
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
-  "analysisType": zod.enum(['text', 'image', 'label'])
+  "analysisType": zod.enum(['text', 'image', 'label']),
+  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
 })
 
 
@@ -276,7 +278,8 @@ export const ListHistoryResponseItem = zod.object({
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
-  "analysisType": zod.enum(['text', 'image', 'label'])
+  "analysisType": zod.enum(['text', 'image', 'label']),
+  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
 }),
   "createdAt": zod.string()
 })
@@ -329,7 +332,8 @@ export const ListAdminHistoryResponseItem = zod.object({
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
-  "analysisType": zod.enum(['text', 'image', 'label'])
+  "analysisType": zod.enum(['text', 'image', 'label']),
+  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
 }),
   "createdAt": zod.string()
 })
@@ -399,7 +403,8 @@ export const GetHistoryItemResponse = zod.object({
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
-  "analysisType": zod.enum(['text', 'image', 'label'])
+  "analysisType": zod.enum(['text', 'image', 'label']),
+  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
 }),
   "createdAt": zod.string()
 })

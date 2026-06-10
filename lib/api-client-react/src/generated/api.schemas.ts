@@ -116,6 +116,8 @@ export interface AnalysisReport {
   explanation: string;
   suggestions: string[];
   analysisType: AnalysisReportAnalysisType;
+  /** True when the query was not recognized as a food item in the database */
+  notFound?: boolean;
 }
 
 export interface TextAnalysisInput {

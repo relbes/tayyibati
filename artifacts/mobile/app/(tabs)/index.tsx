@@ -184,7 +184,10 @@ export default function HomeScreen() {
               </TouchableOpacity>
               <Text style={[styles.resultTitle, { color: colors.foreground }]}>نتيجة التحليل</Text>
             </View>
-            <AnalysisResultCard report={result} />
+            <AnalysisResultCard
+              report={result}
+              onRetry={() => { setResult(null); setQuery(""); }}
+            />
           </Animated.ScrollView>
         ) : (
           <View style={styles.emptyState}>

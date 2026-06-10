@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useColors } from "@/hooks/useColors";
 import { ScoreRing } from "./ScoreRing";
@@ -8,11 +8,40 @@ import type { AnalysisReport } from "@/context/AnalysisContext";
 
 interface AnalysisResultCardProps {
   report: AnalysisReport;
+  onRetry?: () => void;
 }
 
-export function AnalysisResultCard({ report }: AnalysisResultCardProps) {
+export function AnalysisResultCard({ report, onRetry }: AnalysisResultCardProps) {
   const colors = useColors();
   const [expanded, setExpanded] = useState<string | null>("forbidden");
+
+  if (report.notFound) {
+    return (
+      <View style={[styles.card, styles.notFoundCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.notFoundIconWrap, { backgroundColor: colors.muted }]}>
+          <Ionicons name="search-outline" size={36} color={colors.mutedForeground} />
+        </View>
+        <Text style={[styles.notFoundTitle, { color: colors.foreground }]}>
+          لم يُعثر على نتائج
+        </Text>
+        <Text style={[styles.notFoundQuery, { color: colors.mutedForeground }]}>
+          "{report.query}"
+        </Text>
+        <Text style={[styles.notFoundDesc, { color: colors.mutedForeground }]}>
+          هذا المصطلح غير موجود في قاعدة بيانات طيبات.{"\n"}حاول البحث بمصطلح مختلف أو اكتب اسم المكوّن بشكل أكثر تحديداً.
+        </Text>
+        {onRetry && (
+          <TouchableOpacity
+            style={[styles.retryBtn, { backgroundColor: colors.primary }]}
+            onPress={onRetry}
+          >
+            <Ionicons name="refresh-outline" size={16} color="#fff" />
+            <Text style={styles.retryText}>حاول مجدداً</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  }
 
   const sections = [
     { key: "forbidden", label: "محظور", color: colors.forbidden, items: report.forbidden, icon: "close-circle" as const },
@@ -100,6 +129,49 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     overflow: "hidden",
   },
+  notFoundCard: {
+    alignItems: "center",
+    padding: 32,
+    gap: 12,
+  },
+  notFoundIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  notFoundTitle: {
+    fontSize: 20,
+    fontFamily: "Inter_700Bold",
+    textAlign: "center",
+  },
+  notFoundQuery: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    textAlign: "center",
+  },
+  notFoundDesc: {
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 4,
+  },
+  retryText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
   scoreRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -126,17 +198,9 @@ const styles = StyleSheet.create({
     gap: 12,
     justifyContent: "flex-end",
   },
-  stat: {
-    alignItems: "center",
-  },
-  statCount: {
-    fontSize: 18,
-    fontFamily: "Inter_700Bold",
-  },
-  statLabel: {
-    fontSize: 11,
-    fontFamily: "Inter_400Regular",
-  },
+  stat: { alignItems: "center" },
+  statCount: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
   section: {
     borderTopWidth: 1,
     paddingHorizontal: 16,
@@ -152,10 +216,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontFamily: "Inter_600SemiBold",
-  },
+  sectionTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   chipContainer: {
     flexDirection: "row",
     flexWrap: "wrap",

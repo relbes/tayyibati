@@ -17,6 +17,7 @@ export interface AnalysisReport {
   explanation: string;
   suggestions: string[];
   analysisType: "text" | "image" | "label";
+  notFound?: boolean;
 }
 
 interface AnalysisContextType {
