@@ -70,16 +70,16 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   emptyText: {
     fontSize: 16,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
   },
   backLink: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     marginTop: 12,
   },
 });

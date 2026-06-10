@@ -146,7 +146,7 @@ export default function SearchScreen() {
               <View style={[styles.searchRow, { backgroundColor: colors.muted, borderColor: showSuggestions ? colors.primary : colors.border }]}>
                 <TextInput
                   ref={inputRef}
-                  style={[styles.input, { color: colors.foreground, fontFamily: "Inter_400Regular" }]}
+                  style={[styles.input, { color: colors.foreground, fontFamily: "Tajawal_400Regular" }]}
                   placeholder="مثال: بيتزا، شاورما، كنتاكي..."
                   placeholderTextColor={colors.mutedForeground}
                   value={query}
@@ -258,12 +258,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   subtitle: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "right",
     marginBottom: 8,
   },
@@ -333,18 +333,18 @@ const styles = StyleSheet.create({
   },
   suggestionAr: {
     fontSize: 14,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     textAlign: "right",
   },
   suggestionEn: {
     fontSize: 11,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "right",
     marginTop: 1,
   },
   statusLabel: {
     fontSize: 11,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     marginLeft: 8,
   },
   content: {
@@ -353,7 +353,7 @@ const styles = StyleSheet.create({
   },
   sectionLabel: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     textAlign: "right",
   },
   suggestionsWrap: {
@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 14,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
   },
   resultContainer: {
     gap: 10,
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   },
   resultLabel: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
 });

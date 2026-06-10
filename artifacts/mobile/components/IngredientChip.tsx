@@ -58,7 +58,7 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
   },
   freqBadge: {
     paddingHorizontal: 6,
@@ -67,6 +67,6 @@ const styles = StyleSheet.create({
   },
   freqText: {
     fontSize: 10,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
   },
 });

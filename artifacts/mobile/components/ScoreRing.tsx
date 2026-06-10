@@ -65,11 +65,11 @@ const styles = StyleSheet.create({
   },
   score: {
     fontSize: 28,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
   },
   label: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     marginTop: 2,
   },
 });

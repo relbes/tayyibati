@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   profileHeader: {
@@ -197,17 +197,17 @@ const styles = StyleSheet.create({
   },
   avatarInitial: {
     fontSize: 32,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     color: "#fff",
   },
   userName: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     color: "#fff",
   },
   userEmail: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
   },
   premiumBadge: {
@@ -222,7 +222,7 @@ const styles = StyleSheet.create({
   },
   premiumText: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
   },
   guestCenter: {
     flex: 1,
@@ -233,12 +233,12 @@ const styles = StyleSheet.create({
   },
   guestTitle: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   guestDesc: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "center",
     lineHeight: 22,
   },
@@ -250,7 +250,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: "#fff",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     fontSize: 15,
   },
   content: {
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
   },
   usageRow: {
     flexDirection: "row",
@@ -281,11 +281,11 @@ const styles = StyleSheet.create({
   },
   usageCount: {
     fontSize: 24,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
   },
   usageLabel: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
   },
   progressTrack: {
     height: 6,
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
   },
   usageRemaining: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "right",
   },
   upgradeCard: {
@@ -314,12 +314,12 @@ const styles = StyleSheet.create({
   },
   upgradeTitle: {
     fontSize: 16,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   upgradeDesc: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "right",
   },
   menuItem: {
@@ -340,7 +340,7 @@ const styles = StyleSheet.create({
   menuLabel: {
     flex: 1,
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     textAlign: "right",
   },
 });

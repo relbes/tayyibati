@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   modeToggle: {
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   modeBtnText: {
     fontSize: 13,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
   },
   content: {
     padding: 16,
@@ -225,12 +225,12 @@ const styles = StyleSheet.create({
   },
   pickTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   pickDesc: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "center",
     lineHeight: 20,
   },
@@ -249,7 +249,7 @@ const styles = StyleSheet.create({
   },
   pickBtnText: {
     color: "#fff",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     fontSize: 14,
   },
   imageContainer: {
@@ -272,6 +272,6 @@ const styles = StyleSheet.create({
   },
   retakeText: {
     fontSize: 13,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
   },
 });

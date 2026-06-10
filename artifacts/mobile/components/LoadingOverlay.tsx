@@ -70,12 +70,12 @@ const styles = StyleSheet.create({
   },
   text: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   sub: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "center",
     lineHeight: 20,
   },

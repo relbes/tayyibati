@@ -285,13 +285,13 @@ const styles = StyleSheet.create({
   headerTitle: { alignItems: "flex-end", gap: 2 },
   appName: {
     fontSize: 26,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     color: "#fff",
     textAlign: "right",
   },
   appSub: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
     textAlign: "right",
   },
@@ -318,7 +318,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 15,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     paddingHorizontal: 8,
     paddingVertical: 8,
     minHeight: 40,
@@ -349,7 +349,7 @@ const styles = StyleSheet.create({
   },
   tipText: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     color: "#fff",
   },
   content: { flex: 1 },
@@ -382,12 +382,12 @@ const styles = StyleSheet.create({
   },
   actionLabel: {
     fontSize: 15,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   actionDesc: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "center",
   },
   statsStrip: {
@@ -399,8 +399,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-around",
   },
   statItem: { alignItems: "center", gap: 2 },
-  statNum: { fontSize: 20, fontFamily: "Inter_700Bold" },
-  statLbl: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statNum: { fontSize: 20, fontFamily: "Tajawal_700Bold" },
+  statLbl: { fontSize: 11, fontFamily: "Tajawal_400Regular" },
   statDivider: { width: 1, height: 32 },
   historyLink: {
     flexDirection: "row",
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   historyLinkText: {
     flex: 1,
     fontSize: 14,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     textAlign: "right",
   },
   resultHeader: {
@@ -424,7 +424,7 @@ const styles = StyleSheet.create({
   },
   resultTitle: {
     fontSize: 17,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   clearBtn: {
@@ -437,6 +437,6 @@ const styles = StyleSheet.create({
   },
   clearText: {
     fontSize: 12,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
   },
 });

@@ -144,17 +144,17 @@ const styles = StyleSheet.create({
   },
   notFoundTitle: {
     fontSize: 20,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   notFoundQuery: {
     fontSize: 15,
-    fontFamily: "Inter_500Medium",
+    fontFamily: "Tajawal_500Medium",
     textAlign: "center",
   },
   notFoundDesc: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "center",
     lineHeight: 22,
   },
@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   retryText: {
     color: "#fff",
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
   },
   scoreRow: {
     flexDirection: "row",
@@ -184,12 +184,12 @@ const styles = StyleSheet.create({
   },
   queryText: {
     fontSize: 16,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   explainText: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "right",
     lineHeight: 20,
   },
@@ -199,8 +199,8 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   stat: { alignItems: "center" },
-  statCount: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  statLabel: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statCount: { fontSize: 18, fontFamily: "Tajawal_700Bold" },
+  statLabel: { fontSize: 11, fontFamily: "Tajawal_400Regular" },
   section: {
     borderTopWidth: 1,
     paddingHorizontal: 16,
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
-  sectionTitle: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  sectionTitle: { fontSize: 14, fontFamily: "Tajawal_700Bold" },
   chipContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -224,7 +224,7 @@ const styles = StyleSheet.create({
   },
   suggestion: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     marginTop: 6,
     textAlign: "right",
     lineHeight: 20,

@@ -155,12 +155,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 22,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   subtitle: {
     fontSize: 13,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "right",
   },
   item: {
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
   },
   scoreText: {
     fontSize: 16,
-    fontFamily: "Inter_700Bold",
+    fontFamily: "Tajawal_700Bold",
   },
   itemInfo: {
     flex: 1,
@@ -189,7 +189,7 @@ const styles = StyleSheet.create({
   },
   itemQuery: {
     fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   itemMeta: {
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
   },
   itemDate: {
     fontSize: 12,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
   },
   deleteBtn: {
     padding: 6,
@@ -214,12 +214,12 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   emptyDesc: {
     fontSize: 14,
-    fontFamily: "Inter_400Regular",
+    fontFamily: "Tajawal_400Regular",
     textAlign: "center",
     lineHeight: 22,
   },
@@ -231,7 +231,7 @@ const styles = StyleSheet.create({
   },
   loginBtnText: {
     color: "#fff",
-    fontFamily: "Inter_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
     fontSize: 15,
   },
 });
