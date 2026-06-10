@@ -71,8 +71,19 @@ const authLimiter = rateLimit({
   skip: () => isDev,
 });
 
+// Registration limiter — 5 new accounts per IP per hour to curb bot sign-ups.
+const registerLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many accounts created from this IP. Please try again later." },
+  skip: () => isDev,
+});
+
 app.use(globalLimiter);
 app.use("/api/analysis", analysisLimiter);
+app.use("/api/users/register", registerLimiter);
 app.use("/api/users/login", authLimiter);
 app.use("/api/users/forgot-password", authLimiter);
 app.use("/api/users/reset-password-with-code", authLimiter);
