@@ -41,7 +41,7 @@ PGPASSWORD=password psql -h helium -U postgres heliumdb -c "INSERT INTO foods ..
 
 ## Architecture decisions
 
-- **DB is source of truth**: All halal/haram rulings come from the `foods` table. OpenAI only extracts ingredient names.
+- **AI classifies every ingredient; DB is an override**: The Tayyibat system rules are embedded in the analysis prompt (`TAYYIBAT_SYSTEM` in `analysis.ts`). The AI extracts AND classifies every ingredient (allowed/forbidden/conditional/unknown) with a `frequency` (basic/daily/weekly/occasional) and Arabic reason. The `foods` table is an authoritative override: `applyDbOverride` rewrites status/reason for items whose normalized name exactly matches a curated DB row. `notFound` triggers ONLY when no food is detected at all (e.g. a non-food photo), never just because items aren't in the DB.
 - **RTL first**: `I18nManager.forceRTL(true)` in `_layout.tsx`. All UI is Arabic-primary.
 - **Auth is local**: User identity stored in AsyncStorage (no backend auth). Enables history/usage tracking without OAuth.
 - **Freemium model**: 10 analyses/day free (tracked via `user_usage` table by `userId + date`). Premium flag stored as text "true"/"false" in DB.

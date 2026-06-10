@@ -22,13 +22,13 @@ export function AnalysisResultCard({ report, onRetry }: AnalysisResultCardProps)
           <Ionicons name="search-outline" size={36} color={colors.mutedForeground} />
         </View>
         <Text style={[styles.notFoundTitle, { color: colors.foreground }]}>
-          لم يُعثر على نتائج
+          لم يتم التعرف على طعام
         </Text>
         <Text style={[styles.notFoundQuery, { color: colors.mutedForeground }]}>
           "{report.query}"
         </Text>
         <Text style={[styles.notFoundDesc, { color: colors.mutedForeground }]}>
-          هذا المصطلح غير موجود في قاعدة بيانات طيبات.{"\n"}حاول البحث بمصطلح مختلف أو اكتب اسم المكوّن بشكل أكثر تحديداً.
+          لم نتمكن من اكتشاف طعام في هذا الإدخال.{"\n"}جرّب صورة أوضح للطعام أو الملصق، أو اكتب اسم الطعام بشكل أكثر تحديداً.
         </Text>
         {onRetry && (
           <TouchableOpacity

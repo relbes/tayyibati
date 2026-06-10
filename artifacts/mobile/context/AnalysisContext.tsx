@@ -1,9 +1,12 @@
 import React, { createContext, useContext, useState } from "react";
 
+export type IngredientFrequency = "basic" | "daily" | "weekly" | "occasional" | null;
+
 export interface IngredientResult {
   name: string;
   nameAr: string;
   status: "allowed" | "forbidden" | "conditional" | "unknown";
+  frequency?: IngredientFrequency;
   reason?: string | null;
 }
 

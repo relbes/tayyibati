@@ -89,10 +89,29 @@ export const IngredientResultStatus = {
   unknown: 'unknown',
 } as const;
 
+/**
+ * Recommended consumption frequency for allowed items (Tayyibat repetition index)
+ * @nullable
+ */
+export type IngredientResultFrequency = typeof IngredientResultFrequency[keyof typeof IngredientResultFrequency] | null;
+
+
+export const IngredientResultFrequency = {
+  basic: 'basic',
+  daily: 'daily',
+  weekly: 'weekly',
+  occasional: 'occasional',
+} as const;
+
 export interface IngredientResult {
   name: string;
   nameAr: string;
   status: IngredientResultStatus;
+  /**
+     * Recommended consumption frequency for allowed items (Tayyibat repetition index)
+     * @nullable
+     */
+  frequency?: IngredientResultFrequency;
   /** @nullable */
   reason?: string | null;
 }
@@ -116,7 +135,7 @@ export interface AnalysisReport {
   explanation: string;
   suggestions: string[];
   analysisType: AnalysisReportAnalysisType;
-  /** True when the query was not recognized as a food item in the database */
+  /** True only when no food was detected in the input at all (e.g. a non-food image or query) */
   notFound?: boolean;
 }
 

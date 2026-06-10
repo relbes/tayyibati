@@ -20,10 +20,26 @@ export function IngredientChip({ ingredient }: IngredientChipProps) {
 
   const c = config[ingredient.status];
 
+  const frequencyLabels: Record<string, string> = {
+    basic: "أساسي",
+    daily: "يوميًا",
+    weekly: "أسبوعيًا",
+    occasional: "أحيانًا",
+  };
+  const freqLabel =
+    ingredient.status === "allowed" && ingredient.frequency
+      ? frequencyLabels[ingredient.frequency]
+      : null;
+
   return (
     <View style={[styles.chip, { backgroundColor: c.bg, borderColor: c.border }]}>
       <Ionicons name={c.icon} size={14} color={c.text} />
       <Text style={[styles.text, { color: c.text }]}>{ingredient.nameAr || ingredient.name}</Text>
+      {freqLabel && (
+        <View style={[styles.freqBadge, { backgroundColor: c.text + "22" }]}>
+          <Text style={[styles.freqText, { color: c.text }]}>{freqLabel}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -43,5 +59,14 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 13,
     fontFamily: "Inter_500Medium",
+  },
+  freqBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  freqText: {
+    fontSize: 10,
+    fontFamily: "Inter_600SemiBold",
   },
 });

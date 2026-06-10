@@ -5,12 +5,18 @@
  * Tayyibati API specification
  * OpenAPI spec version: 0.1.0
  */
+import type { IngredientResultFrequency } from './ingredientResultFrequency';
 import type { IngredientResultStatus } from './ingredientResultStatus';
 
 export interface IngredientResult {
   name: string;
   nameAr: string;
   status: IngredientResultStatus;
+  /**
+     * Recommended consumption frequency for allowed items (Tayyibat repetition index)
+     * @nullable
+     */
+  frequency?: IngredientResultFrequency;
   /** @nullable */
   reason?: string | null;
 }

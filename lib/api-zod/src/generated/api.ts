@@ -160,30 +160,34 @@ export const AnalyzeTextResponse = zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
   "analysisType": zod.enum(['text', 'image', 'label']),
-  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
+  "notFound": zod.boolean().optional().describe('True only when no food was detected in the input at all (e.g. a non-food image or query)')
 })
 
 
@@ -204,30 +208,34 @@ export const AnalyzeImageResponse = zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
   "analysisType": zod.enum(['text', 'image', 'label']),
-  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
+  "notFound": zod.boolean().optional().describe('True only when no food was detected in the input at all (e.g. a non-food image or query)')
 })
 
 
@@ -256,30 +264,34 @@ export const ListHistoryResponseItem = zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
   "analysisType": zod.enum(['text', 'image', 'label']),
-  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
+  "notFound": zod.boolean().optional().describe('True only when no food was detected in the input at all (e.g. a non-food image or query)')
 }),
   "createdAt": zod.string()
 })
@@ -310,30 +322,34 @@ export const ListAdminHistoryResponseItem = zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
   "analysisType": zod.enum(['text', 'image', 'label']),
-  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
+  "notFound": zod.boolean().optional().describe('True only when no food was detected in the input at all (e.g. a non-food image or query)')
 }),
   "createdAt": zod.string()
 })
@@ -381,30 +397,34 @@ export const GetHistoryItemResponse = zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
+  "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
   "reason": zod.string().nullish()
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
   "analysisType": zod.enum(['text', 'image', 'label']),
-  "notFound": zod.boolean().optional().describe('True when the query was not recognized as a food item in the database')
+  "notFound": zod.boolean().optional().describe('True only when no food was detected in the input at all (e.g. a non-food image or query)')
 }),
   "createdAt": zod.string()
 })

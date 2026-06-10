@@ -26,6 +26,7 @@ export * from './historyItemAnalysisType';
 export * from './imageAnalysisInput';
 export * from './imageAnalysisInputAnalysisType';
 export * from './ingredientResult';
+export * from './ingredientResultFrequency';
 export * from './ingredientResultStatus';
 export * from './listAdminHistoryParams';
 export * from './listFoodsParams';

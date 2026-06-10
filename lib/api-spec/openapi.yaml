@@ -440,6 +440,10 @@ components:
         status:
           type: string
           enum: [allowed, forbidden, conditional, unknown]
+        frequency:
+          type: ["string", "null"]
+          enum: [basic, daily, weekly, occasional, null]
+          description: Recommended consumption frequency for allowed items (Tayyibat repetition index)
         reason:
           type: ["string", "null"]
       required:
@@ -481,7 +485,7 @@ components:
           enum: [text, image, label]
         notFound:
           type: boolean
-          description: True when the query was not recognized as a food item in the database
+          description: True only when no food was detected in the input at all (e.g. a non-food image or query)
       required:
         - query
         - compatibilityScore

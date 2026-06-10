@@ -3,8 +3,9 @@ name: Tayyibati App Architecture
 description: Key architectural decisions and gotchas for the Tayyibati Expo + Express app.
 ---
 
-## Core rule
-OpenAI (`gpt-4o-mini`) is used ONLY for ingredient extraction from text/images. All halal/haram rulings come from the `foods` DB table — never from AI.
+## Core rule (changed June 2026)
+OpenAI (`gpt-4o-mini`) both extracts AND classifies every ingredient against the embedded Tayyibat rulebook (`TAYYIBAT_SYSTEM` constant in `analysis.ts`): natural/طيّب = allowed, processed/modified = forbidden. Each item gets a `status` + `frequency` (basic/daily/weekly/occasional) + Arabic `reason`. The `foods` DB table is an authoritative OVERRIDE only — `applyDbOverride` rewrites status/reason for exact normalized-name matches. `notFound` fires ONLY when no food is detected at all (non-food photo/query), never because items are missing from the DB.
+**Why:** the old "DB is source of truth, AI extracts names only" design returned "لم يُعثر على نتائج" for any ingredient outside the tiny ~88-item DB — useless for real meal photos. Users want every ingredient classified by the book's principle, not gated on DB membership.
 
 ## Seeding the DB
 `scripts` package cannot import `@workspace/db` (it's not in npm registry, only workspace-local). Seed via `psql` directly:

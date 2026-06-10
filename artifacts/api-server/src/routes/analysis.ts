@@ -59,10 +59,14 @@ async function checkAndIncrementUsage(userId: string): Promise<{ allowed: boolea
   return { allowed: true, dailyCount: row.count + 1 };
 }
 
+export type IngredientStatus = "allowed" | "forbidden" | "conditional" | "unknown";
+export type IngredientFrequency = "basic" | "daily" | "weekly" | "occasional" | null;
+
 export interface IngredientResult {
   name: string;
   nameAr: string;
-  status: "allowed" | "forbidden" | "conditional" | "unknown";
+  status: IngredientStatus;
+  frequency?: IngredientFrequency;
   reason: string | null;
 }
 
@@ -81,8 +85,201 @@ export interface AnalysisReport {
 
 type FoodRow = typeof foodsTable.$inferSelect;
 
+/**
+ * The Tayyibat dietary system, distilled from Dr. Diaa Al-Awadi's book.
+ * The AI classifies EVERY ingredient against these rules — the small DB is only
+ * an authoritative override for specific items the admin has curated.
+ */
+const TAYYIBAT_SYSTEM = `نظام الطيبات — للدكتور ضياء العوضي رحمه الله.
+
+المبدأ الجوهري للتصنيف:
+• الطعام الطبيعي كما خلقه الله (طيّب) = مسموح. الطعام المصنّع أو المعدّل صناعياً أو المهرمن = ممنوع.
+• «الطعام الطيب هو ما خرج من الأرض كما خلقه الله، فإذا تدخّل فيه الإنسان أفسده».
+• عند الشك في صنف غير مذكور صراحةً: طبّق المبدأ — هل هو طبيعي بسيط (مسموح) أم مصنّع/مكرر/مهرمن (ممنوع)؟
+
+مؤشر التكرار (frequency) للأصناف المسموحة:
+• basic (أساسي): يؤكل بلا قيود في معظم الوجبات — أرز، تمر، سمن بلدي، بطاطا، سكر طبيعي، زبدة بلدي، زيت زيتون، قشطة، عسل.
+• daily (يوميًا): مرة في اليوم — عسل، تمر، توست، جبنة مطبوخة، زيتون، مكسرات، نوتيلا.
+• weekly (أسبوعيًا): اللحوم بالتناوب، السمك، الفواكه، الطيور المسموحة، الأجبان المطبوخة.
+• occasional (أحيانًا): شوكولاتة داكنة، مربيات، محشي خضار، جوافة.
+
+═══ المسموحات (status=allowed) ═══
+الأساسيات: الأرز بكل أنواعه (أبيض/بسمتي/بني/بالشعيرية)، زيت الزيتون البكر، الزبدة البلدي، السمن البلدي، السكر الطبيعي (حتى 15 ملعقة)، القشطة الطبيعية، الطحينة، البطاطس والبطاطا الحلوة (مهروسة/مسلوقة/مقلية/مشوية/شيبسي طبيعي)، توست القمح الكامل، فشار الذرة الطبيعي، الذرة المشوية.
+الفواكه: العنب، الرمان، التفاح المقشّر (بدون قشر)، الموز، الكرز، الفراولة، المشمش، البرقوق، الجوافة بدون بذر، التين، التمر، الزبيب والفواكه المجففة، العصائر المعلّبة الطبيعية (المبستر).
+اللحوم (أسبوعيًا بالتناوب): لحم البتلو/الكندوز/البقري/الجاموسي، لحم الإبل، الضأن، الماعز، الأرانب، الكبدة (ما عدا الدجاج)، الممبار.
+الأسماك (بحرية فقط): السردين، الماكريل، التونة الطبيعية، السمك الذي يأكل السمك. (أسماك المزارع ممنوعة).
+الطيور المسموحة: الحمام، السمان، الطيور المهاجرة فقط.
+العسل ومنتجات النحل: عسل النحل، العسل الأسود (الدبس)، شمع العسل، غذاء الملكات، حبوب اللقاح.
+الزيوت والخل: الزيوت الطبيعية المعصورة على البارد، الخل الطبيعي.
+المشروبات الساخنة: القهوة التركية، الشاي الأخضر، الأعشاب (زعتر).
+الأجبان المطبوخة المختمرة: شيدر، جودة، موتزاريلا، فلمنك، رومي، ريكفورد، كشكفال.
+الحلويات الطبيعية: حلاوة الطحينية، نوتيلا، شوكولاتة داكنة 70%+، المكسرات (لوز/كاجو/فول سوداني/فستق/عين جمل)، اللبان الذكر، المستكة، محشي الكوسا/الباذنجان بالأرز.
+
+═══ الممنوعات (status=forbidden) ═══
+الدواجن والبيض: الدجاج/الفراخ، البيض بجميع أنواعه وطرق طهيه، البط والأوز، الديك الرومي.
+الألبان الحديثة ومشتقاتها: اللبن بجميع أنواعه، الزبادي، اللبنة والكريمة، اللبن البودرة.
+الأجبان الطازجة غير المطبوخة: الجبنة البيضاء، جبن القريش، الجبن الكريمي والمنتشر.
+الدقيق والمخبوزات: الدقيق الأبيض ومشتقاته، المكرونة بأنواعها، العيش البلدي/الشامي/الفينو، الكرواسون والمعجنات، البسكويت والكوكيز والكحك.
+النشويات المصنّعة: الحلويات الشرقية (كنافة/زلابيا)، البيتزا والفطائر، الكسكسي والكينوا، بسكويت الشوفان والدايجستف.
+المشروبات الصناعية: المياه الغازية والكولا، مشروبات الطاقة، الشاي الأحمر/الأسود، المياه القلوية المحسّنة، مشروبات الشعير والبيرة. (كل المشروبات الصناعية ممنوعة).
+البقوليات والورقيات: الفول والعدس والحمص والفاصوليا، الورقيات (جرجير/خس/بقدونس)، ورق العنب والكرنب والسبانخ، السلطات بأنواعها (الخضروات النيئة).
+الفواكه والخضروات الممنوعة: البطيخ والشمام، الموالح (البرتقال/الكيوي/الليمون)، الأفوكادو والبابايا، البصل والثوم النيء، الخيار والكوسة والجزر.
+الأدوية والمواد الصناعية: الأدوية الكيميائية والمكملات، المضادات الحيوية، البذور المركزة (سيليوم/كتان/شيا)، الزيوت المهدرجة، المحسّنات والمواد الحافظة والألوان الصناعية، النكهات الصناعية، الجلوتامات أحادية الصوديوم (MSG).
+
+═══ المشروط (status=conditional) ═══
+استخدمه للأصناف المسموحة بشرط: التفاح بشرط التقشير، اللحم بشرط السلق التام، الخضار بشرط الطبخ والحشو بالأرز. اذكر الشرط في reason.
+
+═══ غير معروف (status=unknown) ═══
+فقط للمكونات التي لا يمكن تصنيفها إطلاقاً حسب المبدأ (نادر جداً). حاول دائماً التصنيف حسب المبدأ الجوهري أولاً.`;
+
 function buildCatalog(foods: FoodRow[]): string {
-  return foods.map((f) => `${f.id}|${f.nameEn}|${f.nameAr}|${f.status}`).join("\n");
+  if (foods.length === 0) return "(لا توجد عناصر مخصصة)";
+  return foods.map((f) => `${f.nameEn} | ${f.nameAr} | ${f.status}${f.reason ? " | " + f.reason : ""}`).join("\n");
+}
+
+function buildClassificationPrompt(allFoods: FoodRow[], mode: "text" | "image" | "label"): string {
+  const catalog = buildCatalog(allFoods);
+
+  const extractionInstr =
+    mode === "label"
+      ? `استخرج قائمة المكونات الكاملة من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). ترجم كل مكوّن للعربية.`
+      : mode === "image"
+        ? `حلّل الصورة بالكامل: حدّد الطبق وكل مكوّناته الظاهرة والمكوّنات الضمنية المعتادة لهذا الطبق (مثلاً برجر = خبز أبيض، لحم/دجاج، جبنة، صوص). كن دقيقاً في نوع اللحم.`
+        : `حلّل نص المستخدم: حدّد الطبق/الصنف وكل مكوّناته (الظاهرة والضمنية). تعامل مع جميع اللهجات العربية وأخطاء الإملاء وأسماء العلامات التجارية (كنتاكي/KFC = دجاج، دقيق، زيت، بهارات؛ ماكدونالدز = لحم، خبز، جبنة، صوص؛ بيتزا هت = دقيق، جبنة، صوص).`;
+
+  return `أنت خبير في نظام الطيبات الغذائي. مهمتك: ${extractionInstr}
+
+ثم صنّف كل مكوّن حسب نظام الطيبات أدناه. صنّف كل المكونات — لا تتجاهل أي مكوّن.
+
+${TAYYIBAT_SYSTEM}
+
+═══ قاعدة بيانات مخصصة (لها الأولوية المطلقة) ═══
+إذا تطابق مكوّن مع عنصر في هذه القائمة، استخدم تصنيفها هي وليس استنتاجك:
+${catalog}
+
+═══ صيغة الإخراج ═══
+أعِد JSON صالحاً فقط بهذا الشكل:
+{
+  "isFood": true,
+  "dishName": "اسم الطبق أو الصنف بالعربية",
+  "items": [
+    {
+      "nameAr": "الاسم بالعربية",
+      "nameEn": "English name",
+      "status": "allowed | forbidden | conditional | unknown",
+      "frequency": "basic | daily | weekly | occasional | null",
+      "reason": "سبب مختصر بالعربية حسب نظام الطيبات"
+    }
+  ],
+  "summary": "ملخص قصير بالعربية لحكم الطبق إجمالاً",
+  "suggestions": ["بدائل عملية بالعربية للمكونات الممنوعة، من النظام نفسه"]
+}
+
+قواعد:
+• isFood=false فقط إذا لم تكن الصورة/النص متعلقة بطعام إطلاقاً (سيارة، شخص، كلام عشوائي). عندها أعِد items فارغة.
+• frequency تُملأ للأصناف allowed فقط؛ للممنوع والمشروط وغير المعروف ضع null.
+• reason إلزامي لكل مكوّن: لماذا مسموح/ممنوع حسب النظام.
+• suggestions: لكل مكوّن ممنوع اقترح بديلاً من النظام (مثلاً: استبدل الدجاج بالحمام أو السمك؛ استبدل الخبز الأبيض بتوست القمح الكامل أو الأرز؛ استبدل اللبن بالزبدة البلدي).
+• كن شاملاً: الوجبة المركّبة تحتوي عدة مكونات، اذكرها كلها.`;
+}
+
+const FREQUENCIES: ReadonlyArray<NonNullable<IngredientFrequency>> = ["basic", "daily", "weekly", "occasional"];
+
+function normalizeFrequency(raw: unknown): IngredientFrequency {
+  if (typeof raw === "string" && (FREQUENCIES as readonly string[]).includes(raw)) {
+    return raw as IngredientFrequency;
+  }
+  return null;
+}
+
+function normalizeStatus(raw: unknown): IngredientStatus {
+  if (raw === "allowed" || raw === "forbidden" || raw === "conditional" || raw === "unknown") return raw;
+  return "unknown";
+}
+
+interface ClassificationResult {
+  isFood: boolean;
+  dishName: string;
+  items: IngredientResult[];
+  summary: string;
+  suggestions: string[];
+}
+
+function parseClassification(content: string): ClassificationResult {
+  let parsed: Record<string, unknown> = {};
+  try {
+    parsed = JSON.parse(content || "{}");
+  } catch {
+    return { isFood: false, dishName: "", items: [], summary: "", suggestions: [] };
+  }
+
+  const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
+  const items: IngredientResult[] = rawItems
+    .map((it: unknown): IngredientResult | null => {
+      if (typeof it !== "object" || it === null) return null;
+      const o = it as Record<string, unknown>;
+      const nameAr = typeof o.nameAr === "string" ? o.nameAr.trim() : "";
+      const nameEn = typeof o.nameEn === "string" ? o.nameEn.trim() : "";
+      if (!nameAr && !nameEn) return null;
+      const status = normalizeStatus(o.status);
+      return {
+        name: nameEn || nameAr,
+        nameAr: nameAr || nameEn,
+        status,
+        frequency: status === "allowed" ? normalizeFrequency(o.frequency) : null,
+        reason: typeof o.reason === "string" && o.reason.trim() ? o.reason.trim() : null,
+      };
+    })
+    .filter((x): x is IngredientResult => x !== null);
+
+  const suggestions = Array.isArray(parsed.suggestions)
+    ? parsed.suggestions.filter((s: unknown): s is string => typeof s === "string" && s.trim().length > 0).slice(0, 6)
+    : [];
+
+  return {
+    isFood: parsed.isFood !== false,
+    dishName: typeof parsed.dishName === "string" ? parsed.dishName.trim() : "",
+    items,
+    summary: typeof parsed.summary === "string" ? parsed.summary.trim() : "",
+    suggestions,
+  };
+}
+
+/** Normalize an Arabic/English food name for exact-match comparison against the DB. */
+function normalizeName(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/[\u064B-\u0652\u0670]/g, "") // strip Arabic diacritics
+    .replace(/[أإآ]/g, "ا")
+    .replace(/ى/g, "ي")
+    .replace(/ة/g, "ه")
+    .replace(/[ـ]/g, "") // tatweel
+    .replace(/\s+/g, " ");
+}
+
+/**
+ * Authoritative DB override: if a classified item exactly matches a curated DB
+ * entry (by normalized Arabic or English name), the DB ruling wins over the AI.
+ */
+function applyDbOverride(items: IngredientResult[], allFoods: FoodRow[]): IngredientResult[] {
+  if (allFoods.length === 0) return items;
+  const byName = new Map<string, FoodRow>();
+  for (const f of allFoods) {
+    byName.set(normalizeName(f.nameAr), f);
+    byName.set(normalizeName(f.nameEn), f);
+  }
+  return items.map((item) => {
+    const match = byName.get(normalizeName(item.nameAr)) ?? byName.get(normalizeName(item.name));
+    if (!match) return item;
+    const status = match.status as IngredientStatus;
+    return {
+      ...item,
+      status,
+      frequency: status === "allowed" ? item.frequency ?? null : null,
+      reason: match.reason ?? item.reason,
+    };
+  });
 }
 
 function scoreFromResults(
@@ -101,65 +298,42 @@ function scoreFromResults(
   return score;
 }
 
-function buildReport(
-  foods: FoodRow[],
-  matchedIds: number[],
-  additionalFlags: string[],
+function buildReportFromClassification(
+  result: ClassificationResult,
   query: string,
   analysisType: AnalysisReport["analysisType"],
+  allFoods: FoodRow[],
 ): AnalysisReport {
-  const allowed: IngredientResult[] = [];
-  const forbidden: IngredientResult[] = [];
-  const conditional: IngredientResult[] = [];
-  const unknown: IngredientResult[] = [];
-
-  const foodMap = new Map(foods.map((f) => [f.id, f]));
-
-  for (const id of matchedIds) {
-    const f = foodMap.get(id);
-    if (!f) continue;
-    const item: IngredientResult = {
-      name: f.nameEn,
-      nameAr: f.nameAr,
-      status: f.status as IngredientResult["status"],
-      reason: f.reason ?? null,
-    };
-    if (f.status === "allowed") allowed.push(item);
-    else if (f.status === "forbidden") forbidden.push(item);
-    else conditional.push(item);
-  }
-
-  for (const flag of additionalFlags) {
-    unknown.push({ name: flag, nameAr: flag, status: "unknown", reason: null });
-  }
+  const items = applyDbOverride(result.items, allFoods);
+  const allowed = items.filter((i) => i.status === "allowed");
+  const forbidden = items.filter((i) => i.status === "forbidden");
+  const conditional = items.filter((i) => i.status === "conditional");
+  const unknown = items.filter((i) => i.status === "unknown");
 
   const score = scoreFromResults(allowed, forbidden, conditional, unknown);
 
-  const explanationParts: string[] = [];
-  if (forbidden.length > 0) {
-    explanationParts.push(`تحتوي على مكونات محظورة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
-  }
-  if (conditional.length > 0) {
-    explanationParts.push(`تحتوي على مكونات مشروطة: ${conditional.map((f) => f.nameAr).join("، ")}`);
-  }
-  if (unknown.length > 0) {
-    explanationParts.push(`مكونات تحتاج تحقق: ${unknown.slice(0, 3).map((f) => f.name).join("، ")}${unknown.length > 3 ? "..." : ""}`);
-  }
-  if (forbidden.length === 0 && conditional.length === 0 && (allowed.length > 0 || unknown.length === 0)) {
-    explanationParts.push("جميع المكونات المعروفة مسموح بها");
+  let explanation = result.summary;
+  if (!explanation) {
+    const parts: string[] = [];
+    if (forbidden.length > 0) parts.push(`يحتوي على مكونات ممنوعة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
+    if (conditional.length > 0) parts.push(`مكونات مشروطة: ${conditional.map((f) => f.nameAr).join("، ")}`);
+    if (forbidden.length === 0 && conditional.length === 0 && allowed.length > 0) {
+      parts.push("جميع المكونات مسموح بها في نظام الطيبات");
+    }
+    explanation = parts.join(". ") || "تم تحليل المكونات";
   }
 
-  const suggestions = forbidden.map((f) => `استبدل ${f.nameAr} ببديل مسموح به من قاعدة بيانات طيبات`);
+  const queryLabel = result.dishName || query;
 
   return {
-    query,
+    query: queryLabel,
     compatibilityScore: score,
     allowed,
     forbidden,
     conditional,
     unknown,
-    explanation: explanationParts.join(". ") || "تم تحليل المكونات",
-    suggestions,
+    explanation,
+    suggestions: result.suggestions,
     analysisType,
   };
 }
@@ -172,191 +346,11 @@ function buildNotFoundReport(query: string, analysisType: AnalysisReport["analys
     forbidden: [],
     conditional: [],
     unknown: [],
-    explanation: "لم يتم التعرف على هذا البحث في قاعدة بيانات طيبات.",
+    explanation: "لم يتم التعرف على طعام في هذا الإدخال. حاول بصورة أوضح أو اكتب اسم الطعام.",
     suggestions: [],
     analysisType,
     notFound: true,
   };
-}
-
-/**
- * Analyzes a text query with semantic Arabic-aware AI matching.
- * Returns notFound=true if the AI cannot identify this as a food item.
- */
-async function analyzeTextWithIntent(
-  query: string,
-  allFoods: FoodRow[],
-): Promise<{ matchedIds: number[]; additionalFlags: string[]; recognized: boolean }> {
-  const catalog = buildCatalog(allFoods);
-
-  const systemPrompt = `You are a halal food compliance expert specializing in the Tayyibat dietary system with deep knowledge of Arabic food culture, dialects, and terminology.
-
-TASK: Identify which foods/ingredients in the provided database are present in or implied by the user's query.
-
-═══ ARABIC LANGUAGE HANDLING (CRITICAL) ═══
-
-The query may use ANY Arabic dialect or spelling. You MUST handle:
-
-1. SPELLING NORMALIZATION (treat these as identical):
-   • Hamza variants: أ / إ / آ / ا → same letter
-   • Ta marbuta: ة / ه → same ending  
-   • Alef maqsura: ى / ي → same letter
-   • Ignore all tashkeel (harakat/diacritics)
-   • "جيلاتين" = "جلاتين" = "جيلاتين" (gelatin)
-   • "كيتشب" = "كاتشب" = "كيتشاب" (ketchup)
-
-2. ARABIC DIALECT AWARENESS:
-   • Gulf/Saudi: فروج = دجاج (chicken), حلوف = خنزير (pork)
-   • Egyptian: عيش = خبز (bread), بطاطس (potatoes)
-   • Levantine: بندورة = طماطم (tomato), شنكليش (cheese)
-   • All dialects are valid — do NOT reject a query for using dialect terms
-
-3. BRAND NAMES → map to their ingredients:
-   • كنتاكي / كي اف سي / KFC → chicken, flour, oil, spices, MSG
-   • ماكدونالدز / ماكدونالد / ماك / McDonald's → beef, bread, cheese, sauce
-   • هاردي / هارديز / Hardee's → beef, bread, cheese, oil
-   • برجر كنج / Burger King → beef, bread, oil
-   • بيتزا هت / Pizza Hut / دومينوز → flour, cheese, tomato sauce, yeast
-   • ريد بول / Red Bull → caffeine, sugars
-   • Any fast food chain → enumerate ALL typical ingredients
-
-4. IMPLICIT INGREDIENT KNOWLEDGE:
-   • Dishes contain multiple ingredients — list them all
-   • "شاورما" → chicken/beef/lamb, bread, sauce, vegetables, spices
-   • "بيتزا" → flour, yeast, cheese, tomato sauce, oil
-   • "هوت دوج" → sausage (pork OR beef — flag BOTH), bread, mustard, ketchup
-   • "كيك" / "حلويات" → flour, eggs, butter, sugar, may contain gelatin or lard
-   • "مارشميلو" → gelatin (usually pork-derived), sugar
-   • "جيلي" / "جلي" → gelatin, sugar, food coloring
-   • "ايس كريم" → milk, cream, sugar, may contain emulsifiers (E471, E472)
-   • E-numbers → identify what they are (E120=carmine, E441=gelatin, E471=mono/diglycerides)
-
-═══ RECOGNITION CHECK ═══
-
-Set "recognized": true for:
-• Any food, dish, meal, snack, beverage, ingredient, food brand, additive, E-number
-• Even if you're uncertain — if there's ANY chance it's food-related, recognize it
-• Partial/misspelled food names should still be recognized
-
-Set "recognized": false ONLY for:
-• Clearly non-food: cars, countries, people's names, random numbers, abstract concepts
-• Pure gibberish with zero food meaning
-• When in doubt → recognize it (set true)
-
-═══ FOOD DATABASE ═══
-Format: ID|English name|Arabic name|status
-${catalog}
-
-═══ RESPONSE FORMAT ═══
-Return ONLY valid JSON:
-{
-  "recognized": true,
-  "matchedIds": [1, 2, 3],
-  "additionalFlags": ["ingredient with halal concern not in DB"]
-}
-
-Rules:
-• matchedIds: integer IDs from the database ONLY — semantic matches, not just exact names
-• Be thorough — if a dish likely contains an ingredient from the DB, include it
-• additionalFlags: ONLY ingredients with genuine halal concern not found in DB (pork derivatives, alcohol, blood products, uncertain E-numbers, etc.)
-• Do NOT include water, salt, sugar, common spices, harmless vegetables in additionalFlags
-• If recognized=false, return empty arrays for matchedIds and additionalFlags`;
-
-  const openai = await getOpenAIClient();
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: query },
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 700,
-    temperature: 0.1,
-  });
-
-  try {
-    const parsed = JSON.parse(completion.choices[0].message.content || "{}");
-    const recognized: boolean = parsed.recognized !== false;
-    const matchedIds: number[] = Array.isArray(parsed.matchedIds)
-      ? parsed.matchedIds.filter((id: unknown) => typeof id === "number")
-      : [];
-    const additionalFlags: string[] = Array.isArray(parsed.additionalFlags)
-      ? parsed.additionalFlags.filter((s: unknown) => typeof s === "string").slice(0, 10)
-      : [];
-    return { matchedIds, additionalFlags, recognized };
-  } catch {
-    return { matchedIds: [], additionalFlags: [], recognized: false };
-  }
-}
-
-/**
- * Maps extracted ingredients (from image OCR / vision) to DB food IDs.
- * Uses semantic Arabic-aware matching.
- */
-async function mapIngredientsToIds(
-  ingredients: string[],
-  allFoods: FoodRow[],
-): Promise<{ matchedIds: number[]; additionalFlags: string[]; recognized: boolean }> {
-  if (ingredients.length === 0) return { matchedIds: [], additionalFlags: [], recognized: false };
-
-  const catalog = buildCatalog(allFoods);
-
-  const systemPrompt = `You are a halal food compliance expert specializing in the Tayyibat dietary system.
-Given a list of ingredients extracted from a food product label or image, map each to the food database.
-
-SEMANTIC MATCHING RULES:
-• Match by CONCEPT, not exact name — "monosodium glutamate" = MSG, "beef fat" → beef, "pork gelatin" → gelatin + pork
-• For E-numbers: identify what they are (E120=carmine from insects, E441=gelatin, E471=mono/diglycerides from animal/plant, E472=DATEM, E481=sodium stearoyl-2-lactylate)
-• Arabic ingredient names: normalize spelling before matching (ة=ه, ى=ي, ignore diacritics)
-• OCR errors: "gelat1n" likely means "gelatin", "p0rk" means "pork" — be tolerant of OCR artifacts
-• "shortening" or "lard" → likely pork fat — match to lard/pork if in DB
-• "rennet" → may be animal-derived — flag it
-• "carmine" / "E120" → insect-derived food coloring — flag it
-• "vanilla extract" may contain alcohol — flag if alcohol is in DB
-• Brand-specific ingredients: identify their halal concerns
-
-FOOD DATABASE (format: ID|English name|Arabic name|status):
-${catalog}
-
-Return ONLY valid JSON:
-{
-  "recognized": true,
-  "matchedIds": [1, 2, 3],
-  "additionalFlags": ["ingredient with halal concern not in DB"]
-}
-
-Rules:
-• recognized: false only if the ingredient list is empty or clearly not food
-• matchedIds: DB IDs only, semantic matches
-• For each ingredient, find ALL relevant DB entries (e.g. "pork gelatin" → match both pork ID AND gelatin ID if both exist)
-• additionalFlags: only ingredients with GENUINE halal concern that have NO match in DB
-• Do NOT flag salt, water, sugar, citric acid, vitamin C, natural colors from plants, harmless spices`;
-
-  const openai = await getOpenAIClient();
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: `Ingredients to analyze:\n${ingredients.join("\n")}` },
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 700,
-    temperature: 0.1,
-  });
-
-  try {
-    const parsed = JSON.parse(completion.choices[0].message.content || "{}");
-    const recognized: boolean = parsed.recognized !== false;
-    const matchedIds: number[] = Array.isArray(parsed.matchedIds)
-      ? parsed.matchedIds.filter((id: unknown) => typeof id === "number")
-      : [];
-    const additionalFlags: string[] = Array.isArray(parsed.additionalFlags)
-      ? parsed.additionalFlags.filter((s: unknown) => typeof s === "string").slice(0, 10)
-      : [];
-    return { matchedIds, additionalFlags, recognized };
-  } catch {
-    return { matchedIds: [], additionalFlags: [], recognized: false };
-  }
 }
 
 router.post("/analysis/text", async (req, res) => {
@@ -365,21 +359,31 @@ router.post("/analysis/text", async (req, res) => {
     if (!query?.trim()) return void res.status(400).json({ error: "query is required" });
 
     const allFoods = await db.select().from(foodsTable);
-    const { matchedIds, additionalFlags, recognized } = await analyzeTextWithIntent(query.trim(), allFoods);
+    const openai = await getOpenAIClient();
 
-    // If AI didn't recognize this as food, or found nothing at all → not found
-    const totalFound = matchedIds.length + additionalFlags.length;
-    if (!recognized || totalFound === 0) {
-      const report = buildNotFoundReport(query.trim(), "text");
-      return void res.json(report);
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: buildClassificationPrompt(allFoods, "text") },
+        { role: "user", content: query.trim() },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 1500,
+      temperature: 0.1,
+    });
+
+    const result = parseClassification(completion.choices[0].message.content || "{}");
+
+    if (!result.isFood || result.items.length === 0) {
+      return void res.json(buildNotFoundReport(query.trim(), "text"));
     }
 
-    const report = buildReport(allFoods, matchedIds, additionalFlags, query.trim(), "text");
+    const report = buildReportFromClassification(result, query.trim(), "text", allFoods);
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
         userId,
-        query: query.trim(),
+        query: report.query,
         analysisType: "text",
         compatibilityScore: report.compatibilityScore,
         report,
@@ -404,27 +408,17 @@ router.post("/analysis/image", async (req, res) => {
     if (!imageBase64 || !mimeType) return void res.status(400).json({ error: "imageBase64 and mimeType required" });
 
     const isLabel = analysisType === "label";
+    const mode = isLabel ? "label" : "image";
+    const imageAnalysisType = isLabel ? "label" : "image";
+    const queryLabel = isLabel ? "مسح ملصق المنتج" : "تحليل صورة الطعام";
 
-    const visionPrompt = isLabel
-      ? `You are a food label OCR expert. Extract the COMPLETE ingredients list from this product label.
-Return JSON: {"ingredients": ["ingredient1", "ingredient2"], "found_ingredients": true}
-Rules:
-• Extract only ingredient names in English (translate if Arabic/other language)
-• Include E-numbers as full names when possible (E471 = "mono and diglycerides")
-• Include ALL ingredients — even minor ones like emulsifiers, preservatives, colorings
-• If no ingredients list is visible, return {"ingredients": [], "found_ingredients": false}`
-      : `You are a food recognition expert. Identify all food items and their key ingredients visible in this image.
-Return JSON: {"ingredients": ["ingredient1", "ingredient2"], "found_ingredients": true}
-Rules:
-• Include the main food items AND their typical ingredients
-• Be specific about meat types (beef, pork, chicken, lamb)
-• If the image contains no recognizable food, return {"ingredients": [], "found_ingredients": false}`;
-
+    const allFoods = await db.select().from(foodsTable);
     const openai = await getOpenAIClient();
-    const visionCompletion = await openai.chat.completions.create({
+
+    const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: visionPrompt },
+        { role: "system", content: buildClassificationPrompt(allFoods, mode) },
         {
           role: "user",
           content: [
@@ -432,48 +426,29 @@ Rules:
             {
               type: "text",
               text: isLabel
-                ? "Extract all ingredients from this product label."
-                : "What food items and ingredients are in this image?",
+                ? "استخرج كل المكونات من ملصق المنتج وصنّفها حسب نظام الطيبات."
+                : "ما الأطعمة والمكونات في هذه الصورة؟ صنّفها كلها حسب نظام الطيبات.",
             },
           ],
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 900,
+      max_tokens: 1500,
       temperature: 0.1,
     });
 
-    let extractedIngredients: string[] = [];
-    let foundIngredients = true;
-    try {
-      const parsed = JSON.parse(visionCompletion.choices[0].message.content || "{}");
-      extractedIngredients = Array.isArray(parsed.ingredients) ? parsed.ingredients : [];
-      foundIngredients = parsed.found_ingredients !== false;
-    } catch {
-      extractedIngredients = [];
-      foundIngredients = false;
-    }
+    const result = parseClassification(completion.choices[0].message.content || "{}");
 
-    const imageAnalysisType = isLabel ? "label" : "image";
-    const queryLabel = isLabel ? "مسح ملصق المنتج" : "تحليل صورة الطعام";
-
-    if (!foundIngredients || extractedIngredients.length === 0) {
+    if (!result.isFood || result.items.length === 0) {
       return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
     }
 
-    const allFoods = await db.select().from(foodsTable);
-    const { matchedIds, additionalFlags, recognized } = await mapIngredientsToIds(extractedIngredients, allFoods);
-
-    if (!recognized || (matchedIds.length === 0 && additionalFlags.length === 0)) {
-      return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
-    }
-
-    const report = buildReport(allFoods, matchedIds, additionalFlags, queryLabel, imageAnalysisType);
+    const report = buildReportFromClassification(result, queryLabel, imageAnalysisType, allFoods);
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
         userId,
-        query: queryLabel,
+        query: report.query,
         analysisType: imageAnalysisType,
         compatibilityScore: report.compatibilityScore,
         report,

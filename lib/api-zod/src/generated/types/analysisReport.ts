@@ -18,6 +18,6 @@ export interface AnalysisReport {
   explanation: string;
   suggestions: string[];
   analysisType: AnalysisReportAnalysisType;
-  /** True when the query was not recognized as a food item in the database */
+  /** True only when no food was detected in the input at all (e.g. a non-food image or query) */
   notFound?: boolean;
 }

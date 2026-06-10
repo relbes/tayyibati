@@ -1,2 +1,2 @@
-- [Tayyibati App Architecture](tayyibati-arch.md) — key decisions: OpenAI for extraction only, DB is source of truth, seeding via psql not scripts package.
+- [Tayyibati App Architecture](tayyibati-arch.md) — AI classifies every ingredient via embedded Tayyibat rulebook; DB is override only; notFound only when no food detected; seed via psql.
 - [Expo Auth Session Setup](expo-auth-session.md) — providers/google subpath breaks Metro in pnpm workspace; use base expo-auth-session with manual Google discovery instead.
