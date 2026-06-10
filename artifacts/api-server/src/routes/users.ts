@@ -165,12 +165,12 @@ router.post("/users/login", async (req, res) => {
     }
     const normalizedEmail = email.trim().toLowerCase();
     const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
-    if (!user) return void res.status(404).json({ error: "No account found for this email" });
+    if (!user) return void res.status(401).json({ error: "Invalid email or password" });
 
     if (user.passwordHash) {
       if (!password) return void res.status(400).json({ error: "Password is required" });
       const ok = await bcrypt.compare(String(password), user.passwordHash);
-      if (!ok) return void res.status(401).json({ error: "Incorrect password" });
+      if (!ok) return void res.status(401).json({ error: "Invalid email or password" });
     } else if (password) {
       // Legacy account with no password set — set it on first login.
       const hash = await bcrypt.hash(String(password), 10);

@@ -61,8 +61,21 @@ const analysisLimiter = rateLimit({
   skip: () => isDev,
 });
 
+// Tight limit for auth endpoints — 10 attempts per 15 minutes per IP.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please try again later." },
+  skip: () => isDev,
+});
+
 app.use(globalLimiter);
 app.use("/api/analysis", analysisLimiter);
+app.use("/api/users/login", authLimiter);
+app.use("/api/users/forgot-password", authLimiter);
+app.use("/api/users/reset-password-with-code", authLimiter);
 
 app.use(
   pinoHttp({
