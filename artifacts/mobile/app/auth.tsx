@@ -8,7 +8,6 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
-  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -17,7 +16,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
-import * as Google from "expo-auth-session/providers/google";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 
@@ -26,6 +24,12 @@ WebBrowser.maybeCompleteAuthSession();
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID;
+
+const GOOGLE_DISCOVERY = {
+  authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+  tokenEndpoint: "https://oauth2.googleapis.com/token",
+  revocationEndpoint: "https://oauth2.googleapis.com/revoke",
+};
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
 
@@ -39,6 +43,12 @@ async function fetchGoogleLoginEnabled(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+function getGoogleClientId(): string {
+  if (Platform.OS === "ios" && GOOGLE_IOS_CLIENT_ID) return GOOGLE_IOS_CLIENT_ID;
+  if (Platform.OS === "android" && GOOGLE_ANDROID_CLIENT_ID) return GOOGLE_ANDROID_CLIENT_ID;
+  return GOOGLE_WEB_CLIENT_ID || "not-configured";
 }
 
 export default function AuthScreen() {
@@ -55,24 +65,31 @@ export default function AuthScreen() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const [, googleResponse, googlePrompt] = Google.useAuthRequest({
-    clientId: GOOGLE_WEB_CLIENT_ID || "not-configured",
-    iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
-  });
+  const redirectUri = AuthSession.makeRedirectUri({ scheme: "tayyibati", path: "auth" });
+
+  const [request, response, promptAsync] = AuthSession.useAuthRequest(
+    {
+      clientId: getGoogleClientId(),
+      redirectUri,
+      scopes: ["openid", "profile", "email"],
+      responseType: AuthSession.ResponseType.Token,
+    },
+    GOOGLE_DISCOVERY,
+  );
 
   useEffect(() => {
     fetchGoogleLoginEnabled().then(setGoogleEnabled);
   }, []);
 
   useEffect(() => {
-    if (googleResponse?.type === "success") {
-      handleGoogleSuccess(googleResponse.authentication?.accessToken ?? "");
-    } else if (googleResponse?.type === "error") {
+    if (response?.type === "success") {
+      const accessToken = (response.params as Record<string, string>).access_token ?? "";
+      handleGoogleSuccess(accessToken);
+    } else if (response?.type === "error") {
       setGoogleLoading(false);
       setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
     }
-  }, [googleResponse]);
+  }, [response]);
 
   const handleGoogleSuccess = async (accessToken: string) => {
     if (!accessToken) { setGoogleLoading(false); return; }
@@ -98,13 +115,13 @@ export default function AuthScreen() {
 
   const handleGooglePress = async () => {
     if (!GOOGLE_WEB_CLIENT_ID) {
-      setError("Google Sign-In is not configured. Please contact the app administrator.");
+      setError("Google Sign-In is not configured.");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGoogleLoading(true);
     setError("");
-    await googlePrompt();
+    await promptAsync();
   };
 
   const handleSubmit = async () => {
@@ -174,7 +191,6 @@ export default function AuthScreen() {
               : "أنشئ حساباً لحفظ تحليلاتك"}
           </Text>
 
-          {/* Google Sign-In */}
           {showGoogleBtn && (
             <>
               <TouchableOpacity
@@ -184,7 +200,7 @@ export default function AuthScreen() {
                   opacity: googleLoading ? 0.6 : 1,
                 }]}
                 onPress={handleGooglePress}
-                disabled={googleLoading || loading}
+                disabled={googleLoading || loading || !request}
                 activeOpacity={0.75}
               >
                 <View style={styles.googleIcon}>
@@ -327,20 +343,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#e5e5e5",
   },
-  googleG: {
-    fontSize: 14,
-    fontFamily: "Inter_700Bold",
-    color: "#4285F4",
-  },
-  googleText: {
-    fontSize: 15,
-    fontFamily: "Inter_600SemiBold",
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-  },
+  googleG: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#4285F4" },
+  googleText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 13, fontFamily: "Inter_400Regular" },
   fieldGroup: { gap: 6 },

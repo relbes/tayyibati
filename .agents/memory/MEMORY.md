@@ -1,1 +1,2 @@
 - [Tayyibati App Architecture](tayyibati-arch.md) — key decisions: OpenAI for extraction only, DB is source of truth, seeding via psql not scripts package.
+- [Expo Auth Session Setup](expo-auth-session.md) — providers/google subpath breaks Metro in pnpm workspace; use base expo-auth-session with manual Google discovery instead.
