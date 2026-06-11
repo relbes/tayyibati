@@ -141,15 +141,40 @@ export async function getPlans() {
   return res.json();
 }
 
+export class AuthError extends Error {
+  status: number;
+  remainingAttempts?: number;
+  lockedUntil?: string;
+  secondsLeft?: number;
+  constructor(
+    message: string,
+    status: number,
+    opts?: { remainingAttempts?: number; lockedUntil?: string; secondsLeft?: number },
+  ) {
+    super(message);
+    this.name = "AuthError";
+    this.status = status;
+    this.remainingAttempts = opts?.remainingAttempts;
+    this.lockedUntil = opts?.lockedUntil;
+    this.secondsLeft = opts?.secondsLeft;
+  }
+}
+
 async function parseAuthError(res: Response, fallback: string): Promise<never> {
   let message = fallback;
+  let remainingAttempts: number | undefined;
+  let lockedUntil: string | undefined;
+  let secondsLeft: number | undefined;
   try {
     const data = await res.json();
     if (data?.error) message = data.error;
+    if (typeof data?.remainingAttempts === "number") remainingAttempts = data.remainingAttempts;
+    if (typeof data?.lockedUntil === "string") lockedUntil = data.lockedUntil;
+    if (typeof data?.secondsLeft === "number") secondsLeft = data.secondsLeft;
   } catch {
     // ignore parse failure, use fallback
   }
-  throw new Error(message);
+  throw new AuthError(message, res.status, { remainingAttempts, lockedUntil, secondsLeft });
 }
 
 export async function registerUser(payload: {

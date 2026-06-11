@@ -145,7 +145,10 @@ router.post("/users/register", async (req, res) => {
               secondsLeft: Math.ceil(LOCKOUT_DURATION_MS / 1000),
             });
           }
-          return void res.status(401).json({ error: "Account exists. Wrong password." });
+          return void res.status(401).json({
+            error: "Account exists. Wrong password.",
+            remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS - nextAttempts,
+          });
         }
       }
       const updates: Record<string, unknown> = {
@@ -225,7 +228,10 @@ router.post("/users/login", async (req, res) => {
             secondsLeft: Math.ceil(LOCKOUT_DURATION_MS / 1000),
           });
         }
-        return void res.status(401).json({ error: "Invalid email or password" });
+        return void res.status(401).json({
+          error: "Invalid email or password",
+          remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS - nextAttempts,
+        });
       }
     } else if (password) {
       // Legacy account with no password set — set it on first login.

@@ -18,6 +18,7 @@ import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
+import { AuthError } from "@/lib/api";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -64,6 +65,8 @@ export default function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState("");
+  const [remainingAttempts, setRemainingAttempts] = useState<number | null>(null);
+  const [lockedSecondsLeft, setLockedSecondsLeft] = useState<number | null>(null);
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
@@ -82,6 +85,17 @@ export default function AuthScreen() {
   useEffect(() => {
     fetchGoogleLoginEnabled().then(setGoogleEnabled);
   }, []);
+
+  useEffect(() => {
+    if (lockedSecondsLeft === null || lockedSecondsLeft <= 0) return;
+    const timer = setInterval(() => {
+      setLockedSecondsLeft((s) => {
+        if (s === null || s <= 1) { clearInterval(timer); return null; }
+        return s - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [lockedSecondsLeft !== null]);
 
   useEffect(() => {
     if (response?.type === "success") {
@@ -128,6 +142,8 @@ export default function AuthScreen() {
 
   const handleSubmit = async () => {
     setError("");
+    setRemainingAttempts(null);
+    setLockedSecondsLeft(null);
     const emailTrimmed = email.trim();
     const nameTrimmed = name.trim();
     if (!emailTrimmed) { setError("البريد الإلكتروني مطلوب"); return; }
@@ -147,7 +163,20 @@ export default function AuthScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "حدث خطأ. حاول مجدداً.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (e instanceof AuthError) {
+        if (e.status === 423) {
+          setLockedSecondsLeft(e.secondsLeft ?? 900);
+          setError("");
+        } else {
+          if (typeof e.remainingAttempts === "number") {
+            setRemainingAttempts(e.remainingAttempts);
+          }
+          setError("كلمة المرور غير صحيحة");
+        }
+      } else {
+        setError(e instanceof Error ? e.message : "حدث خطأ. حاول مجدداً.");
+      }
     } finally {
       setLoading(false);
     }
@@ -293,17 +322,40 @@ export default function AuthScreen() {
             </TouchableOpacity>
           ) : null}
 
+          {lockedSecondsLeft !== null && lockedSecondsLeft > 0 ? (
+            <View style={[styles.lockoutBox, { backgroundColor: "#7f1d1d22", borderColor: "#ef444460" }]}>
+              <Ionicons name="lock-closed" size={22} color="#ef4444" />
+              <View style={styles.lockoutTextCol}>
+                <Text style={[styles.lockoutTitle, { color: "#ef4444" }]}>تم إغلاق الحساب مؤقتاً</Text>
+                <Text style={[styles.lockoutBody, { color: "#ef4444cc" }]}>
+                  {`تجاوزت عدد المحاولات المسموح بها. حاول مرة أخرى بعد ${
+                    lockedSecondsLeft >= 60
+                      ? `${Math.ceil(lockedSecondsLeft / 60)} دقيقة`
+                      : `${lockedSecondsLeft} ثانية`
+                  }.`}
+                </Text>
+              </View>
+            </View>
+          ) : null}
+
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
               <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
-              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+                {remainingAttempts !== null && remainingAttempts > 0 ? (
+                  <Text style={[styles.attemptsText, { color: colors.error + "cc" }]}>
+                    {`تبقّى ${remainingAttempts} ${remainingAttempts === 1 ? "محاولة" : "محاولات"} قبل إغلاق حسابك مؤقتاً`}
+                  </Text>
+                ) : null}
+              </View>
             </View>
           ) : null}
 
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: loading ? 0.7 : 1 }]}
+            style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: (loading || (lockedSecondsLeft !== null && lockedSecondsLeft > 0)) ? 0.5 : 1 }]}
             onPress={handleSubmit}
-            disabled={loading || googleLoading}
+            disabled={loading || googleLoading || (lockedSecondsLeft !== null && lockedSecondsLeft > 0)}
           >
             <Text style={styles.submitText}>
               {loading ? "جاري..." : tab === "login" ? "دخول" : "إنشاء الحساب"}
@@ -422,6 +474,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   submitText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 16 },
+  lockoutBox: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  lockoutTextCol: { flex: 1, gap: 4 },
+  lockoutTitle: { fontSize: 14, fontFamily: "Tajawal_700Bold", textAlign: "right" },
+  lockoutBody: { fontSize: 13, fontFamily: "Tajawal_400Regular", textAlign: "right", lineHeight: 20 },
+  attemptsText: { fontSize: 12, fontFamily: "Tajawal_400Regular", textAlign: "right", marginTop: 3 },
   forgotText: {
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
