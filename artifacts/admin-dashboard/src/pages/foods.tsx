@@ -106,7 +106,7 @@ const CATEGORIES = [
 ];
 
 const CSV_TEMPLATE = `nameAr,nameEn,category,status,reason,notes
-لحم الضأن,Lamb,Meat & Poultry,allowed,حلال بشرط الذبح الشرعي,
+لحم الضأن,Lamb,Meat & Poultry,allowed,مسموح بشرط الذبح الشرعي,
 الكحول,Alcohol,Alcohol & Intoxicants,forbidden,ممنوع شرعاً,
 الجيلاتين,Gelatin,Additives & Preservatives,conditional,يعتمد على المصدر,يجب التحقق من المصدر`;
 

@@ -16,7 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { getPlans, enrollUserPlan } from "@/lib/api";
+import { getPlans, enrollUserPlan, getPublicConfig } from "@/lib/api";
 
 interface Plan {
   id: number;
@@ -39,8 +39,12 @@ export default function PricingScreen() {
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
 
   useEffect(() => {
+    getPublicConfig()
+      .then((cfg) => setSubscriptionEnabled(cfg.subscription_enabled !== "false"))
+      .catch(() => {});
     getPlans()
       .then((data: Plan[]) => setPlans(data.filter((p) => p.isActive === "true")))
       .catch(() => {
@@ -86,6 +90,10 @@ export default function PricingScreen() {
   };
 
   const handleUpgrade = (plan: Plan) => {
+    if (!subscriptionEnabled) {
+      Alert.alert("غير متوفر", "خاصية الاشتراك معطلة حالياً. حاول لاحقاً.");
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!user) {
       Alert.alert(

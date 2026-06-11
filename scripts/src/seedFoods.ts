@@ -18,10 +18,10 @@ const foods = [
   { nameAr: "ريتشارد ستيبرات", nameEn: "rennet pork", category: "إضافات", status: "forbidden" as const, reason: "من الخنزير" },
 
   // === CONDITIONAL ===
-  { nameAr: "الجيلاتين", nameEn: "gelatin", category: "إضافات", status: "conditional" as const, reason: "يعتمد على المصدر - جيلاتين حلال مسموح" },
+  { nameAr: "الجيلاتين", nameEn: "gelatin", category: "إضافات", status: "conditional" as const, reason: "يعتمد على المصدر - جيلاتين مسموح" },
   { nameAr: "إنزيمات اللحوم", nameEn: "meat enzymes", category: "إضافات", status: "conditional" as const, reason: "يعتمد على المصدر" },
   { nameAr: "مستخلص اللحم", nameEn: "meat extract", category: "إضافات", status: "conditional" as const, reason: "يعتمد على مصدر اللحم" },
-  { nameAr: "دهون الحيوانات", nameEn: "animal fat", category: "دهون", status: "conditional" as const, reason: "حلال إن كان من ذبح شرعي" },
+  { nameAr: "دهون الحيوانات", nameEn: "animal fat", category: "دهون", status: "conditional" as const, reason: "مسموح إن كان من ذبح شرعي" },
   { nameAr: "الكارمين", nameEn: "carmine", category: "ألوان", status: "conditional" as const, reason: "من الحشرات - خلاف بين العلماء" },
   { nameAr: "مصل اللبن", nameEn: "whey", category: "ألبان", status: "conditional" as const, reason: "مسموح إن لم يحتوي على أنفحة خنزير" },
   { nameAr: "الفانيليا الطبيعية", nameEn: "natural vanilla", category: "نكهات", status: "conditional" as const, reason: "قد يحتوي على كحول في الاستخلاص" },
@@ -107,7 +107,7 @@ const foods = [
   { nameAr: "صلصة الطماطم", nameEn: "tomato sauce", category: "صلصات", status: "allowed" as const, reason: null },
   { nameAr: "معجون الطماطم", nameEn: "tomato paste", category: "صلصات", status: "allowed" as const, reason: null },
   { nameAr: "الخردل", nameEn: "mustard", category: "صلصات", status: "allowed" as const, reason: null },
-  { nameAr: "المايونيز الحلال", nameEn: "halal mayonnaise", category: "صلصات", status: "allowed" as const, reason: null },
+  { nameAr: "المايونيز المسموح", nameEn: "halal mayonnaise", category: "صلصات", status: "allowed" as const, reason: null },
   { nameAr: "الزعتر", nameEn: "thyme", category: "توابل", status: "allowed" as const, reason: null },
   { nameAr: "القرفة", nameEn: "cinnamon", category: "توابل", status: "allowed" as const, reason: null },
   { nameAr: "الهيل", nameEn: "cardamom", category: "توابل", status: "allowed" as const, reason: null },

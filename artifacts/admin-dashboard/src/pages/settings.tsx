@@ -76,6 +76,7 @@ export default function Settings() {
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
   const freeDailyLimit = getConfig("free_daily_limit") || "10";
+  const subscriptionEnabled = getConfig("subscription_enabled") === "true";
 
   const [branding, setBranding] = useState({ app_name: "", app_description: "", app_logo_url: "" });
   const [brandingLoaded, setBrandingLoaded] = useState(false);
@@ -348,6 +349,22 @@ export default function Settings() {
               <span className="text-sm text-muted-foreground">analyses / day</span>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Subscription Settings */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Subscription & Payments</CardTitle>
+          <CardDescription>Control whether users can subscribe to premium plans.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Toggle
+            enabled={subscriptionEnabled}
+            onChange={(v) => setConfig("subscription_enabled", v ? "true" : "false")}
+            label="Enable Premium Subscriptions"
+            desc="Show upgrade plans and allow users to subscribe"
+          />
         </CardContent>
       </Card>
 

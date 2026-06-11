@@ -195,7 +195,7 @@ export default function SearchScreen() {
                         </View>
                       </View>
                       <Text style={[styles.statusLabel, { color: STATUS_COLORS[food.status] ?? colors.mutedForeground }]}>
-                        {food.status === "allowed" ? "حلال" : food.status === "forbidden" ? "ممنوع" : "مشروط"}
+                        {food.status === "allowed" ? "مسموح" : food.status === "forbidden" ? "ممنوع" : "مشروط"}
                       </Text>
                     </TouchableOpacity>
                   ))}

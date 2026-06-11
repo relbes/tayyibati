@@ -14,7 +14,7 @@ import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { getUserUsage } from "@/lib/api";
+import { getUserUsage, getPublicConfig } from "@/lib/api";
 
 interface UsageInfo {
   dailyCount: number;
@@ -29,7 +29,14 @@ export default function ProfileScreen() {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+
+  useEffect(() => {
+    getPublicConfig()
+      .then((cfg) => setSubscriptionEnabled(cfg.subscription_enabled !== "false"))
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (user) {
@@ -116,7 +123,7 @@ export default function ProfileScreen() {
           )}
 
           {/* Upgrade Card */}
-          {!user.isPremium && (
+          {!user.isPremium && subscriptionEnabled && (
             <TouchableOpacity
               style={[styles.upgradeCard, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40" }]}
               activeOpacity={0.8}
