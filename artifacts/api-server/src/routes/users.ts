@@ -33,9 +33,27 @@ async function getFreeDailyLimit(): Promise<number> {
 
 type PublicUser = Omit<typeof usersTable.$inferSelect, "passwordHash" | "failedLoginAttempts" | "lockedUntil"> & { hasPassword: boolean };
 
+type AdminUser = PublicUser & {
+  isLocked: boolean;
+  lockedUntil: string | null;
+  failedLoginAttempts: number;
+};
+
 function toPublicUser(row: typeof usersTable.$inferSelect): PublicUser {
   const { passwordHash, failedLoginAttempts: _fa, lockedUntil: _lu, ...rest } = row;
   return { ...rest, hasPassword: !!passwordHash };
+}
+
+function toAdminUser(row: typeof usersTable.$inferSelect): AdminUser {
+  const { passwordHash, ...rest } = row;
+  const now = Date.now();
+  const isLocked = !!rest.lockedUntil && rest.lockedUntil.getTime() > now;
+  return {
+    ...rest,
+    hasPassword: !!passwordHash,
+    isLocked,
+    lockedUntil: rest.lockedUntil ? rest.lockedUntil.toISOString() : null,
+  };
 }
 
 async function syncTodayUsagePremium(userId: string, isPremium: boolean): Promise<void> {
@@ -369,7 +387,7 @@ router.get("/users", async (req, res) => {
           .where(or(ilike(usersTable.email, `%${search}%`), ilike(usersTable.name, `%${search}%`)))
           .orderBy(desc(usersTable.createdAt))
       : await base.orderBy(desc(usersTable.createdAt));
-    res.json(rows.map(toPublicUser));
+    res.json(rows.map(toAdminUser));
   } catch (err) {
     req.log.error({ err }, "Failed to list users");
     res.status(500).json({ error: "Internal server error" });
@@ -380,7 +398,7 @@ router.get("/users/:id", async (req, res) => {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id));
     if (!user) return void res.status(404).json({ error: "Not found" });
-    res.json(toPublicUser(user));
+    res.json(toAdminUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to get user");
     res.status(500).json({ error: "Internal server error" });
@@ -408,7 +426,7 @@ router.patch("/users/:id", async (req, res) => {
     if (updates.isPremium !== undefined) {
       await syncTodayUsagePremium(user.id, user.isPremium === "true");
     }
-    res.json(toPublicUser(user));
+    res.json(toAdminUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to update user");
     res.status(500).json({ error: "Internal server error" });
@@ -440,9 +458,25 @@ router.post("/users/:id/plan", async (req, res) => {
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     await syncTodayUsagePremium(user.id, isPremium);
-    res.json(toPublicUser(user));
+    res.json(toAdminUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to enroll user in plan");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/users/:id/unlock", async (req, res) => {
+  try {
+    const [user] = await db
+      .update(usersTable)
+      .set({ lockedUntil: null, failedLoginAttempts: 0 })
+      .where(eq(usersTable.id, req.params.id))
+      .returning();
+    if (!user) return void res.status(404).json({ error: "Not found" });
+    req.log.info({ userId: req.params.id }, "Admin unlocked user account");
+    res.json(toAdminUser(user));
+  } catch (err) {
+    req.log.error({ err }, "Failed to unlock user");
     res.status(500).json({ error: "Internal server error" });
   }
 });

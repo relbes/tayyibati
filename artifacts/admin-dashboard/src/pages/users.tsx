@@ -27,7 +27,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail } from "lucide-react";
+import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail, LockOpen, Lock } from "lucide-react";
 
 const API_BASE = () => localStorage.getItem("tayyibati_api_url") || "";
 
@@ -40,6 +40,9 @@ interface User {
   avatar: string | null;
   planId: number | null;
   hasPassword: boolean;
+  isLocked: boolean;
+  lockedUntil: string | null;
+  failedLoginAttempts: number;
   createdAt: string;
 }
 
@@ -97,9 +100,31 @@ async function resetPassword(id: string, password: string): Promise<void> {
   }
 }
 
+async function unlockUser(id: string): Promise<User> {
+  const res = await fetch(`${API_BASE()}/api/users/${id}/unlock`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || "Failed to unlock user");
+  }
+  return res.json();
+}
+
 async function deleteUser(id: string): Promise<void> {
   const res = await fetch(`${API_BASE()}/api/users/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete user");
+}
+
+function formatLockedUntil(lockedUntil: string): string {
+  const date = new Date(lockedUntil);
+  const now = Date.now();
+  const secsLeft = Math.ceil((date.getTime() - now) / 1000);
+  if (secsLeft <= 0) return "Expiring…";
+  if (secsLeft < 60) return `${secsLeft}s remaining`;
+  const minsLeft = Math.ceil(secsLeft / 60);
+  return `${minsLeft}m remaining`;
 }
 
 const NO_PLAN = "none";
@@ -143,6 +168,18 @@ export default function Users() {
       toast({ title: "User updated" });
     },
     onError: (e) => toast({ title: e instanceof Error ? e.message : "Failed to update user", variant: "destructive" }),
+  });
+
+  const unlockMut = useMutation({
+    mutationFn: (id: string) => unlockUser(id),
+    onSuccess: (updated) => {
+      qc.setQueryData(["users", search], (old: User[] | undefined) =>
+        old ? old.map((u) => (u.id === updated.id ? updated : u)) : old
+      );
+      if (editUser?.id === updated.id) setEditUser(updated);
+      toast({ title: "Account unlocked" });
+    },
+    onError: (e) => toast({ title: e instanceof Error ? e.message : "Failed to unlock user", variant: "destructive" }),
   });
 
   const deleteMut = useMutation({
@@ -206,6 +243,7 @@ export default function Users() {
                 <TableHead>Provider</TableHead>
                 <TableHead>Plan</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Lockout</TableHead>
                 <TableHead className="w-[100px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -225,6 +263,23 @@ export default function Users() {
                       <Badge className="gap-1"><Star className="h-3 w-3" /> Premium</Badge>
                     ) : (
                       <Badge variant="secondary">Free</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {user.isLocked ? (
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="destructive" className="gap-1 text-xs">
+                          <Lock className="h-3 w-3" />
+                          Locked
+                        </Badge>
+                        {user.lockedUntil && (
+                          <span className="text-xs text-muted-foreground">
+                            {formatLockedUntil(user.lockedUntil)}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
                     )}
                   </TableCell>
                   <TableCell>
@@ -255,6 +310,31 @@ export default function Users() {
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {editUser?.isLocked && (
+              <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-destructive" />
+                  <div>
+                    <p className="text-sm font-medium text-destructive">Account locked</p>
+                    {editUser.lockedUntil && (
+                      <p className="text-xs text-muted-foreground">
+                        Unlocks {formatLockedUntil(editUser.lockedUntil)} · {editUser.failedLoginAttempts} failed attempt{editUser.failedLoginAttempts !== 1 ? "s" : ""}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => unlockMut.mutate(editUser.id)}
+                  disabled={unlockMut.isPending}
+                >
+                  <LockOpen className="h-3.5 w-3.5" />
+                  Unlock
+                </Button>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />

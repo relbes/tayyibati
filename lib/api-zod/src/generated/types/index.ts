@@ -7,6 +7,7 @@
  */
 
 export * from './adminStats';
+export * from './adminUser';
 export * from './analysisReport';
 export * from './analysisReportAnalysisType';
 export * from './bulkFoodInput';

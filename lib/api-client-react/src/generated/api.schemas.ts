@@ -188,6 +188,25 @@ export interface UserUsage {
   remainingToday: number;
 }
 
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  isPremium: string;
+  provider: string;
+  /** @nullable */
+  avatar?: string | null;
+  /** @nullable */
+  planId?: number | null;
+  hasPassword: boolean;
+  isLocked: boolean;
+  /** @nullable */
+  lockedUntil?: string | null;
+  failedLoginAttempts: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BulkFoodInput {
   foods: FoodInput[];
 }

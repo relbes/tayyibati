@@ -454,3 +454,27 @@ export const GetUserUsageResponse = zod.object({
 })
 
 
+/**
+ * @summary Unlock a locked user account (admin)
+ */
+export const UnlockUserParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UnlockUserResponse = zod.object({
+  "id": zod.string(),
+  "email": zod.string(),
+  "name": zod.string(),
+  "isPremium": zod.string(),
+  "provider": zod.string(),
+  "avatar": zod.string().nullish(),
+  "planId": zod.number().nullish(),
+  "hasPassword": zod.boolean(),
+  "isLocked": zod.boolean(),
+  "lockedUntil": zod.string().nullish(),
+  "failedLoginAttempts": zod.number(),
+  "createdAt": zod.string(),
+  "updatedAt": zod.string()
+})
+
+

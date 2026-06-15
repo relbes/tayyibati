@@ -21,6 +21,7 @@ import type {
 
 import type {
   AdminStats,
+  AdminUser,
   AnalysisReport,
   BulkFoodInput,
   BulkFoodResult,
@@ -1268,4 +1269,74 @@ export function useGetUserUsage<TData = Awaited<ReturnType<typeof getUserUsage>>
 
 
 
+
+export const getUnlockUserUrl = (id: string,) => {
+
+
+
+
+  return `/api/users/${id}/unlock`
+}
+
+/**
+ * @summary Unlock a locked user account (admin)
+ */
+export const unlockUser = async (id: string, options?: RequestInit): Promise<AdminUser> => {
+
+  return customFetch<AdminUser>(getUnlockUserUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getUnlockUserMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlockUser>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unlockUser>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['unlockUser'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unlockUser>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  unlockUser(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnlockUserMutationResult = NonNullable<Awaited<ReturnType<typeof unlockUser>>>
+
+    export type UnlockUserMutationError = ErrorType<void>
+
+    /**
+ * @summary Unlock a locked user account (admin)
+ */
+export const useUnlockUser = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unlockUser>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unlockUser>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getUnlockUserMutationOptions(options));
+    }
 

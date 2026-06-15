@@ -333,6 +333,27 @@ paths:
               schema:
                 $ref: "#/components/schemas/UserUsage"
 
+  /users/{id}/unlock:
+    post:
+      operationId: unlockUser
+      tags: [users]
+      summary: Unlock a locked user account (admin)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: User unlocked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminUser"
+        "404":
+          description: User not found
+
 components:
   schemas:
     HealthStatus:
@@ -570,6 +591,47 @@ components:
         - dailyLimit
         - isPremium
         - remainingToday
+
+    AdminUser:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+        name:
+          type: string
+        isPremium:
+          type: string
+        provider:
+          type: string
+        avatar:
+          type: ["string", "null"]
+        planId:
+          type: ["integer", "null"]
+        hasPassword:
+          type: boolean
+        isLocked:
+          type: boolean
+        lockedUntil:
+          type: ["string", "null"]
+        failedLoginAttempts:
+          type: integer
+        createdAt:
+          type: string
+        updatedAt:
+          type: string
+      required:
+        - id
+        - email
+        - name
+        - isPremium
+        - provider
+        - hasPassword
+        - isLocked
+        - failedLoginAttempts
+        - createdAt
+        - updatedAt
 
     BulkFoodInput:
       type: object
