@@ -343,7 +343,7 @@ const styles = StyleSheet.create({
   },
   possibleChipText: {
     fontSize: 14,
-    fontFamily: "Tajawal_600SemiBold",
+    fontFamily: "Tajawal_700Bold",
   },
   possibleRetry: {
     alignItems: "center",

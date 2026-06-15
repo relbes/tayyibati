@@ -4,6 +4,7 @@ import {
   Tajawal_700Bold,
   useFonts,
 } from "@expo-google-fonts/tajawal";
+import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -40,6 +41,7 @@ export default function RootLayout() {
     Tajawal_400Regular,
     Tajawal_500Medium,
     Tajawal_700Bold,
+    ...Ionicons.font,
   });
 
   useEffect(() => {
