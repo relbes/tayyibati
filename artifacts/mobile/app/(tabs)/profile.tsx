@@ -144,7 +144,7 @@ export default function ProfileScreen() {
           {[
             { icon: "star-outline" as const, label: "الباقات", route: "/pricing" },
             { icon: "time-outline" as const, label: "سجل التحليلات", route: "/(tabs)/history" },
-            { icon: "shield-checkmark-outline" as const, label: "الخصوصية والأمان", route: null },
+            { icon: "shield-checkmark-outline" as const, label: "سياسة الخصوصية", route: "/privacy-policy" },
             { icon: "information-circle-outline" as const, label: "عن التطبيق", route: null },
           ].map((item) => (
             <TouchableOpacity
