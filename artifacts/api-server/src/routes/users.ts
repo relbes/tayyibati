@@ -9,6 +9,34 @@ const FREE_DAILY_LIMIT = 10;
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
+// ---------------------------------------------------------------------------
+// Per-email registration rate limit (in-memory, no DB required)
+// 3 attempts per email per hour to block rotating-IP abuse.
+// ---------------------------------------------------------------------------
+const EMAIL_REGISTER_MAX = 3;
+const EMAIL_REGISTER_WINDOW_MS = 60 * 60 * 1000;
+
+interface EmailAttemptRecord {
+  count: number;
+  resetAt: number;
+}
+
+const emailRegisterAttempts = new Map<string, EmailAttemptRecord>();
+
+function checkEmailRegisterLimit(email: string): { allowed: boolean; retryAfterSec: number } {
+  const now = Date.now();
+  const record = emailRegisterAttempts.get(email);
+  if (!record || now >= record.resetAt) {
+    emailRegisterAttempts.set(email, { count: 1, resetAt: now + EMAIL_REGISTER_WINDOW_MS });
+    return { allowed: true, retryAfterSec: 0 };
+  }
+  if (record.count >= EMAIL_REGISTER_MAX) {
+    return { allowed: false, retryAfterSec: Math.ceil((record.resetAt - now) / 1000) };
+  }
+  record.count++;
+  return { allowed: true, retryAfterSec: 0 };
+}
+
 const router = Router();
 
 function stableIdFromEmail(email: string): string {
@@ -125,6 +153,15 @@ router.post("/users/register", async (req, res) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(normalizedEmail)) {
       return void res.status(400).json({ error: "Invalid email" });
+    }
+
+    const emailLimit = checkEmailRegisterLimit(normalizedEmail);
+    if (!emailLimit.allowed) {
+      res.setHeader("Retry-After", String(emailLimit.retryAfterSec));
+      return void res.status(429).json({
+        error: "Too many registration attempts for this email. Please try again later.",
+        retryAfterSec: emailLimit.retryAfterSec,
+      });
     }
 
     const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
