@@ -64,6 +64,62 @@ PGPASSWORD=password psql -h helium -U postgres heliumdb -c "INSERT INTO foods ..
 
 _Populate as you build — explicit user instructions worth remembering across sessions._
 
+## نشر التطبيق على Google Play Store
+
+### المتطلبات الأساسية
+1. **حساب Google Play Console** — رسوم تسجيل لمرة واحدة 25$: https://play.google.com/console
+2. **EAS CLI** — أداة البناء السحابي من Expo:
+   ```
+   npm install -g eas-cli
+   eas login
+   ```
+3. **إعداد مشروع EAS**: عدّل `extra.eas.projectId` في `artifacts/mobile/app.json` بعد تشغيل `eas init` داخل مجلد `artifacts/mobile/`.
+
+### خطوات بناء ورفع APK / AAB
+
+```bash
+cd artifacts/mobile
+
+# بناء APK للاختبار (internal testing)
+eas build --platform android --profile preview
+
+# بناء AAB لمتجر Google Play (الإصدار النهائي)
+eas build --platform android --profile production
+```
+
+> ملاحظة: البناء يتم على سيرفرات Expo السحابية، لا يحتاج Java/Android SDK محلياً.
+
+### ما يلزم قبل الرفع
+| البند | الحالة | المطلوب |
+|------|--------|---------|
+| اسم الحزمة `package` | ✅ `com.tayyibati.app` | فريد في المتجر |
+| رقم الإصدار `versionCode` | ✅ `1` | يزيد مع كل إصدار |
+| أيقونة التطبيق | ✅ `icon.png` | 1024×1024 بكسل PNG بدون ألفا |
+| Adaptive Icon | ✅ في `adaptiveIcon` | للأجهزة Android 8+ |
+| صلاحيات الكاميرا | ✅ مشرحة بالعربية | مطلوبة من Google |
+| سياسة الخصوصية | ❌ **مطلوب** | رابط URL على موقع أو صفحة |
+| لقطات شاشة (screenshots) | ❌ **مطلوب** | 2+ لكل حجم شاشة |
+| وصف التطبيق | ✅ في `app.json` | مكتوب |
+| تقييم المحتوى | ❌ **مطلوب** | استبيان داخل Play Console |
+
+### خطوات Play Console
+1. افتح **Play Console → All apps → Create app**
+2. أدخل اسم التطبيق: **طيباتي - Tayyibati**
+3. اختر: Free، Arabic
+4. أجب على استبيان تقييم المحتوى (Food & Drink app, no violence/adult content)
+5. أضف سياسة الخصوصية URL (يمكن صفحة بسيطة على GitHub Pages أو Notion)
+6. ارفع لقطات شاشة (Phone: 16:9 أو 9:16، الأبعاد الموصى بها: 1080×1920)
+7. ارفع ملف AAB المُنتَج من `eas build`
+8. أرسل للمراجعة (مدة المراجعة: 1-7 أيام)
+
+### رفع إصدار جديد
+```bash
+# زد versionCode في app.json (+1 مثلاً من 1 إلى 2)
+# أو استخدم autoIncrement في eas.json (مُفعّل تلقائياً في profile production)
+eas build --platform android --profile production
+eas submit --platform android --profile production
+```
+
 ## Gotchas
 
 - `expo-file-system` is NOT installed — camera uses `asset.base64` from `expo-image-picker` directly
