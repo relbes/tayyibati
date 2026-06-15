@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { setBaseUrl } from "@workspace/api-client-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import NotFound from "@/pages/not-found";
 import Overview from "@/pages/overview";
 import Foods from "@/pages/foods";
@@ -11,6 +11,7 @@ import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
 import Users from "@/pages/users";
+import Login from "@/pages/login";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -20,6 +21,7 @@ import {
   Users as UsersIcon,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +43,7 @@ const NAV_ITEMS = [
   { path: "/settings", label: "Settings", icon: SettingsIcon },
 ];
 
-function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => void; onLogout: () => void }) {
   const [location] = useLocation();
 
   return (
@@ -100,20 +102,27 @@ function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
           </ul>
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
-          <p className="text-xs text-sidebar-foreground/40">Tayyibati Admin v1.0</p>
+        <div className="p-4 border-t border-sidebar-border space-y-2">
+          <button
+            onClick={onLogout}
+            className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+          >
+            <LogOut className="h-4 w-4" />
+            Sign Out
+          </button>
+          <p className="text-xs text-sidebar-foreground/40 px-3">Tayyibati Admin v1.0</p>
         </div>
       </aside>
     </>
   );
 }
 
-function Layout() {
+function Layout({ onLogout }: { onLogout: () => void }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onLogout={onLogout} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 lg:hidden">
           <button
@@ -155,13 +164,69 @@ function AppInit({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+async function verifyToken(token: string): Promise<boolean> {
+  try {
+    const res = await fetch("/api/admin/me", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 function App() {
+  const [token, setToken] = useState<string | null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    const stored = localStorage.getItem("tayyibati_admin_token");
+    if (!stored) {
+      setChecking(false);
+      return;
+    }
+    verifyToken(stored).then((valid) => {
+      if (valid) setToken(stored);
+      else localStorage.removeItem("tayyibati_admin_token");
+      setChecking(false);
+    });
+  }, []);
+
+  const handleLogin = useCallback((t: string) => {
+    setToken(t);
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem("tayyibati_admin_token");
+    setToken(null);
+    queryClient.clear();
+  }, []);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="h-6 w-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!token) {
+    return (
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Login onLogin={handleLogin} />
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    );
+  }
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <AppInit>
-            <Layout />
+            <Layout onLogout={handleLogout} />
           </AppInit>
         </WouterRouter>
         <Toaster />

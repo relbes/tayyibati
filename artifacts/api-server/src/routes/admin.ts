@@ -1,9 +1,71 @@
 import { Router } from "express";
+import { createHmac, timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
 import { analysisHistoryTable, userUsageTable } from "@workspace/db";
 import { desc, sql, count, avg } from "drizzle-orm";
 
 const router = Router();
+
+function getAdminPassword(): string | null {
+  return process.env.ADMIN_PASSWORD || (process.env.NODE_ENV !== "production" ? "admin123" : null);
+}
+
+function signToken(iat: number): string {
+  const secret = (process.env.SESSION_SECRET || "dev-secret") + (getAdminPassword() || "");
+  const payload = `admin:${iat}`;
+  const sig = createHmac("sha256", secret).update(payload).digest("hex");
+  return Buffer.from(`${payload}:${sig}`).toString("base64url");
+}
+
+export function verifyAdminToken(token: string): boolean {
+  try {
+    const decoded = Buffer.from(token, "base64url").toString();
+    const parts = decoded.split(":");
+    if (parts.length !== 3 || parts[0] !== "admin") return false;
+    const [, iat, sig] = parts;
+    if (Date.now() - parseInt(iat) > 86400000 * 7) return false;
+    const secret = (process.env.SESSION_SECRET || "dev-secret") + (getAdminPassword() || "");
+    const expected = createHmac("sha256", secret).update(`admin:${iat}`).digest("hex");
+    const sigBuf = Buffer.from(sig);
+    const expectedBuf = Buffer.from(expected);
+    if (sigBuf.length !== expectedBuf.length) return false;
+    return timingSafeEqual(sigBuf, expectedBuf);
+  } catch {
+    return false;
+  }
+}
+
+router.post("/admin/login", (req, res) => {
+  const { password } = req.body as { password?: string };
+  const adminPassword = getAdminPassword();
+
+  if (!adminPassword) {
+    return void res.status(503).json({ error: "Admin password not configured. Set ADMIN_PASSWORD env var." });
+  }
+  if (!password) {
+    return void res.status(400).json({ error: "Password required" });
+  }
+
+  const a = Buffer.from(password);
+  const b = Buffer.from(adminPassword);
+  const valid = a.length === b.length && timingSafeEqual(a, b);
+
+  if (!valid) {
+    return void res.status(401).json({ error: "كلمة المرور غير صحيحة" });
+  }
+
+  const token = signToken(Date.now());
+  res.json({ token });
+});
+
+router.get("/admin/me", (req, res) => {
+  const auth = req.headers["authorization"];
+  const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (!token || !verifyAdminToken(token)) {
+    return void res.status(401).json({ error: "Unauthorized" });
+  }
+  res.json({ admin: true });
+});
 
 router.get("/admin/history", async (req, res) => {
   try {
