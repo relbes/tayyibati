@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { registerUser, loginUser, getUser, setSessionToken } from "@/lib/api";
+import { loginRevenueCat } from "@/lib/revenuecat";
 
 interface User {
   id: string;
@@ -95,16 +96,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       id: opts?.id,
     });
     await persist(toUser(api), api.token);
+    loginRevenueCat(api.id);
   }, [persist]);
 
   const registerWithPassword = useCallback(async (email: string, name: string, password: string) => {
     const api: ApiUser = await registerUser({ email, name, password });
     await persist(toUser(api), api.token);
+    loginRevenueCat(api.id);
   }, [persist]);
 
   const loginWithPassword = useCallback(async (email: string, password: string) => {
     const api: ApiUser = await loginUser({ email, password });
     await persist(toUser(api), api.token);
+    loginRevenueCat(api.id);
   }, [persist]);
 
   const signOut = useCallback(async () => {

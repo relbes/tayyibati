@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db } from "@workspace/db";
 import { userUsageTable, usersTable, subscriptionPlansTable, appConfigTable, passwordResetsTable } from "@workspace/db";
 import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
@@ -7,6 +8,9 @@ import { sendPasswordResetEmail } from "../lib/email";
 import { issueToken } from "../lib/session";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAdmin } from "./admin";
+
+const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
+const REVENUECAT_ENTITLEMENT = "premium";
 
 const FREE_DAILY_LIMIT = 10;
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
@@ -104,6 +108,53 @@ async function syncTodayUsagePremium(userId: string, isPremium: boolean): Promis
 // ---------------------------------------------------------------------------
 // Specific routes first (must be registered before /users/:id)
 // ---------------------------------------------------------------------------
+
+/**
+ * POST /api/users/me/sync-premium
+ * Verifies the caller's RevenueCat entitlement server-side and updates isPremium in the DB.
+ * This is the ONLY way the mobile app should grant premium — never trust client-side flags alone.
+ */
+router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
+  const userId = req.userId!;
+  try {
+    if (!REVENUECAT_PROJECT_ID) {
+      req.log.error("REVENUECAT_PROJECT_ID not configured");
+      return void res.status(503).json({ error: "Payment service not configured" });
+    }
+
+    const connectors = new ReplitConnectors();
+    const rcRes = await connectors.proxy(
+      "revenuecat",
+      `/v2/projects/${REVENUECAT_PROJECT_ID}/customers/${userId}/active-entitlements`,
+      { method: "GET" }
+    );
+
+    let isPremium = false;
+    if (rcRes.ok) {
+      const data = await rcRes.json() as { items?: Array<{ lookup_key?: string; identifier?: string }> };
+      isPremium = data.items?.some(
+        (e) => e.lookup_key === REVENUECAT_ENTITLEMENT || e.identifier === REVENUECAT_ENTITLEMENT
+      ) ?? false;
+    } else {
+      req.log.warn({ status: rcRes.status, userId }, "RevenueCat returned non-ok for entitlement check");
+    }
+
+    const [user] = await db
+      .update(usersTable)
+      .set({ isPremium: isPremium ? "true" : "false" })
+      .where(eq(usersTable.id, userId))
+      .returning();
+
+    if (!user) return void res.status(404).json({ error: "User not found" });
+    await syncTodayUsagePremium(userId, isPremium);
+
+    req.log.info({ userId, isPremium }, "Premium synced from RevenueCat");
+    res.json({ isPremium });
+  } catch (err) {
+    req.log.error({ err }, "Failed to sync premium from RevenueCat");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 router.get("/users/usage", requireAuth, async (req, res) => {
   try {

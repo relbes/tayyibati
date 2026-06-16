@@ -29,6 +29,18 @@ export function initializeRevenueCat() {
   console.log("RevenueCat configured");
 }
 
+/**
+ * Call after login/register to tie RevenueCat purchases to the user's DB id.
+ * Without this, purchases are anonymous and the server can't verify entitlements.
+ */
+export async function loginRevenueCat(userId: string): Promise<void> {
+  try {
+    await Purchases.logIn(userId);
+  } catch (err: any) {
+    console.warn("RevenueCat logIn failed:", err?.message);
+  }
+}
+
 function useSubscriptionContext() {
   const customerInfoQuery = useQuery({
     queryKey: ["revenuecat", "customer-info"],

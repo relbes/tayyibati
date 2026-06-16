@@ -18,12 +18,13 @@ import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/lib/revenuecat";
+import { syncPremium } from "@/lib/api";
 
 export default function PricingScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, updatePremium } = useAuth();
+  const { user, refreshUser } = useAuth();
   const { offerings, isSubscribed, isLoading, purchase, restore, isPurchasing, isRestoring } =
     useSubscription();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -50,7 +51,8 @@ export default function PricingScreen() {
     setConfirmVisible(false);
     try {
       await purchase(selectedPkg);
-      updatePremium(true);
+      await syncPremium();
+      await refreshUser();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStatusMsg("تم الاشتراك بنجاح! 🎉 أصبحت الآن مشتركاً في الباقة المميزة.");
     } catch (err: any) {
@@ -62,6 +64,8 @@ export default function PricingScreen() {
   const handleRestore = async () => {
     try {
       await restore();
+      await syncPremium();
+      await refreshUser();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStatusMsg("تم استعادة مشترياتك السابقة ✓");
     } catch {

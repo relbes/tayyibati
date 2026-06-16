@@ -273,6 +273,21 @@ export async function enrollUserPlan(id: string, planId: number, isPremium: bool
   return res.json();
 }
 
+/**
+ * Calls the server to verify the user's RevenueCat entitlement and update isPremium in the DB.
+ * Must be called after a successful purchase or restore — server-side verification prevents
+ * users from gaining premium access without actually paying.
+ */
+export async function syncPremium(): Promise<{ isPremium: boolean }> {
+  const base = domain ? `https://${domain}` : "";
+  const res = await fetch(`${base}/api/users/me/sync-premium`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+  });
+  if (!res.ok) throw new Error(`Failed to sync premium: ${res.status}`);
+  return res.json();
+}
+
 export async function getPublicConfig(): Promise<Record<string, string>> {
   const base = domain ? `https://${domain}` : "";
   const res = await fetch(`${base}/api/config/public`);
