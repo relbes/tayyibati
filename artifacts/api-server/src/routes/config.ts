@@ -33,7 +33,7 @@ router.get("/config", requireAdmin, async (req, res) => {
 
 router.patch("/config/:key", requireAdmin, async (req, res) => {
   try {
-    const { key } = req.params;
+    const key = req.params.key as string;
     const { value, isPublic } = req.body;
     if (value === undefined || value === null) {
       return void res.status(400).json({ error: "value is required" });

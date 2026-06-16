@@ -144,7 +144,7 @@ router.delete("/foods/bulk", requireAdmin, async (req, res) => {
 
 router.get("/foods/:id", async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const [food] = await db.select().from(foodsTable).where(eq(foodsTable.id, id));
     if (!food) return void res.status(404).json({ error: "Not found" });
     res.json(food);
@@ -173,7 +173,7 @@ router.post("/foods", requireAdmin, async (req, res) => {
 
 router.patch("/foods/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const { nameAr, nameEn, category, status, reason, notes } = req.body;
     const updates: Record<string, unknown> = {};
     if (nameAr !== undefined) updates.nameAr = nameAr;
@@ -198,7 +198,7 @@ router.patch("/foods/:id", requireAdmin, async (req, res) => {
 
 router.delete("/foods/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     await db.delete(foodsTable).where(eq(foodsTable.id, id));
     res.status(204).send();
   } catch (err) {

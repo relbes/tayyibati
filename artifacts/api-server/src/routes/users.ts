@@ -483,7 +483,7 @@ router.get("/users", requireAdmin, async (req, res) => {
 
 router.get("/users/:id", requireAdmin, async (req, res) => {
   try {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id));
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id as string));
     if (!user) return void res.status(404).json({ error: "Not found" });
     res.json(toAdminUser(user));
   } catch (err) {
@@ -507,7 +507,7 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     const [user] = await db
       .update(usersTable)
       .set(updates)
-      .where(eq(usersTable.id, req.params.id))
+      .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     if (updates.isPremium !== undefined) {
@@ -541,7 +541,7 @@ router.post("/users/:id/plan", requireAdmin, async (req, res) => {
     const [user] = await db
       .update(usersTable)
       .set({ planId: resolvedPlanId, isPremium: isPremium ? "true" : "false" })
-      .where(eq(usersTable.id, req.params.id))
+      .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     await syncTodayUsagePremium(user.id, isPremium);
@@ -557,7 +557,7 @@ router.post("/users/:id/unlock", requireAdmin, async (req, res) => {
     const [user] = await db
       .update(usersTable)
       .set({ lockedUntil: null, failedLoginAttempts: 0 })
-      .where(eq(usersTable.id, req.params.id))
+      .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     req.log.info({ userId: req.params.id }, "Admin unlocked user account");
@@ -578,7 +578,7 @@ router.post("/users/:id/reset-password", requireAdmin, async (req, res) => {
     const [user] = await db
       .update(usersTable)
       .set({ passwordHash: hash })
-      .where(eq(usersTable.id, req.params.id))
+      .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     res.json({ success: true });
@@ -592,7 +592,7 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
   try {
     const [deleted] = await db
       .delete(usersTable)
-      .where(eq(usersTable.id, req.params.id))
+      .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!deleted) return void res.status(404).json({ error: "Not found" });
     res.json({ success: true });

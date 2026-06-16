@@ -12,6 +12,8 @@ import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
 import Users from "@/pages/users";
 import Login from "@/pages/login";
+import { LangProvider, useLang } from "@/contexts/LangContext";
+import { tr } from "@/lib/i18n";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -22,37 +24,31 @@ import {
   Menu,
   X,
   LogOut,
+  Languages,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      retry: 1,
-      staleTime: 30_000,
-    },
-  },
+  defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
-
-const NAV_ITEMS = [
-  { path: "/", label: "نظرة عامة", icon: LayoutDashboard },
-  { path: "/foods", label: "قاعدة الأغذية", icon: UtensilsCrossed },
-  { path: "/history", label: "سجل التحليلات", icon: HistoryIcon },
-  { path: "/users", label: "المستخدمون", icon: UsersIcon },
-  { path: "/plans", label: "خطط الاشتراك", icon: Star },
-  { path: "/settings", label: "الإعدادات", icon: SettingsIcon },
-];
 
 function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => void; onLogout: () => void }) {
   const [location] = useLocation();
+  const { lang, toggle } = useLang();
+
+  const NAV_ITEMS = [
+    { path: "/", label: tr(lang, "overview"), icon: LayoutDashboard },
+    { path: "/foods", label: tr(lang, "foodDb"), icon: UtensilsCrossed },
+    { path: "/history", label: tr(lang, "analysisHistory"), icon: HistoryIcon },
+    { path: "/users", label: tr(lang, "users"), icon: UsersIcon },
+    { path: "/plans", label: tr(lang, "plans"), icon: Star },
+    { path: "/settings", label: tr(lang, "settings"), icon: SettingsIcon },
+  ];
 
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-20 bg-black/50 lg:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 z-20 bg-black/50 lg:hidden" onClick={onClose} />
       )}
       <aside
         className={cn(
@@ -66,7 +62,9 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
           </div>
           <div>
             <p className="font-semibold text-sm leading-none">طيباتي</p>
-            <p className="text-xs text-sidebar-foreground/60 mt-0.5">لوحة التحكم</p>
+            <p className="text-xs text-sidebar-foreground/60 mt-0.5">
+              {lang === "ar" ? "لوحة التحكم" : "Admin Dashboard"}
+            </p>
           </div>
           <button
             className="mr-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
@@ -79,8 +77,7 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
         <nav className="flex-1 overflow-y-auto py-4 px-3">
           <ul className="space-y-1">
             {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
-              const active =
-                path === "/" ? location === "/" : location.startsWith(path);
+              const active = path === "/" ? location === "/" : location.startsWith(path);
               return (
                 <li key={path}>
                   <Link
@@ -104,11 +101,18 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
 
         <div className="p-4 border-t border-sidebar-border space-y-2">
           <button
+            onClick={toggle}
+            className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
+          >
+            <Languages className="h-4 w-4" />
+            {lang === "ar" ? "English" : "العربية"}
+          </button>
+          <button
             onClick={onLogout}
             className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            تسجيل الخروج
+            {tr(lang, "logout")}
           </button>
           <p className="text-xs text-sidebar-foreground/40 px-3">طيباتي Admin v1.0</p>
         </div>
@@ -125,10 +129,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onLogout={onLogout} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 lg:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="text-foreground/70 hover:text-foreground"
-          >
+          <button onClick={() => setSidebarOpen(true)} className="text-foreground/70 hover:text-foreground">
             <Menu className="h-5 w-5" />
           </button>
           <div className="flex items-center gap-2">
@@ -157,9 +158,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
 function AppInit({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const stored = localStorage.getItem("tayyibati_api_url");
-    if (stored) {
-      setBaseUrl(stored);
-    }
+    if (stored) setBaseUrl(stored);
     setAuthTokenGetter(() => localStorage.getItem("tayyibati_admin_token"));
   }, []);
   return <>{children}</>;
@@ -167,9 +166,7 @@ function AppInit({ children }: { children: React.ReactNode }) {
 
 async function verifyToken(token: string): Promise<boolean> {
   try {
-    const res = await fetch("/api/admin/me", {
-      headers: { Authorization: `Bearer ${token}` },
-    });
+    const res = await fetch("/api/admin/me", { headers: { Authorization: `Bearer ${token}` } });
     return res.ok;
   } catch {
     return false;
@@ -182,10 +179,7 @@ function App() {
 
   useEffect(() => {
     const stored = localStorage.getItem("tayyibati_admin_token");
-    if (!stored) {
-      setChecking(false);
-      return;
-    }
+    if (!stored) { setChecking(false); return; }
     verifyToken(stored).then((valid) => {
       if (valid) setToken(stored);
       else localStorage.removeItem("tayyibati_admin_token");
@@ -193,10 +187,7 @@ function App() {
     });
   }, []);
 
-  const handleLogin = useCallback((t: string) => {
-    setToken(t);
-  }, []);
-
+  const handleLogin = useCallback((t: string) => { setToken(t); }, []);
   const handleLogout = useCallback(() => {
     localStorage.removeItem("tayyibati_admin_token");
     setToken(null);
@@ -215,7 +206,9 @@ function App() {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
-          <Login onLogin={handleLogin} />
+          <LangProvider>
+            <Login onLogin={handleLogin} />
+          </LangProvider>
           <Toaster />
         </TooltipProvider>
       </QueryClientProvider>
@@ -225,11 +218,13 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
-        <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-          <AppInit>
-            <Layout onLogout={handleLogout} />
-          </AppInit>
-        </WouterRouter>
+        <LangProvider>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <AppInit>
+              <Layout onLogout={handleLogout} />
+            </AppInit>
+          </WouterRouter>
+        </LangProvider>
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

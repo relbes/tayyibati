@@ -1,7 +1,7 @@
 import { Router } from "express";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
-import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable } from "@workspace/db";
+import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable, subscriptionPlansTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { optionalAuth } from "../middleware/requireAuth";
 
@@ -43,10 +43,31 @@ async function isUserPremium(userId: string): Promise<boolean> {
   }
 }
 
-async function checkAndIncrementUsage(userId: string): Promise<{ allowed: boolean; dailyCount: number }> {
+/** Returns the user's plan limits, or free defaults if they have no plan. */
+async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; imageLimit: number }> {
+  const freeText = await getFreeDailyLimit();
+  const freeImage = Math.ceil(freeText / 2);
+  try {
+    const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    if (!account?.planId) return { textLimit: freeText, imageLimit: freeImage };
+    const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, account.planId));
+    if (!plan) return { textLimit: freeText, imageLimit: freeImage };
+    return {
+      textLimit: plan.dailyTextLimit,
+      imageLimit: plan.dailyImageLimit,
+    };
+  } catch {
+    return { textLimit: freeText, imageLimit: freeImage };
+  }
+}
+
+async function checkAndIncrementUsage(
+  userId: string,
+  type: "text" | "image"
+): Promise<{ allowed: boolean; dailyCount: number; textCount: number; imageCount: number }> {
   const today = new Date().toISOString().split("T")[0];
-  const limit = await getFreeDailyLimit();
   const premium = await isUserPremium(userId);
+  const limits = await getUserPlanLimits(userId);
 
   const existing = await db
     .select()
@@ -54,20 +75,37 @@ async function checkAndIncrementUsage(userId: string): Promise<{ allowed: boolea
     .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
 
   if (existing.length === 0) {
-    await db.insert(userUsageTable).values({ userId, date: today, count: 1, isPremium: premium ? "true" : "false" });
-    return { allowed: true, dailyCount: 1 };
+    const newTextCount = type === "text" ? 1 : 0;
+    const newImageCount = type === "image" ? 1 : 0;
+    await db.insert(userUsageTable).values({
+      userId,
+      date: today,
+      count: 1,
+      textCount: newTextCount,
+      imageCount: newImageCount,
+      isPremium: premium ? "true" : "false",
+    });
+    return { allowed: true, dailyCount: 1, textCount: newTextCount, imageCount: newImageCount };
   }
 
   const row = existing[0];
-  if (premium || row.isPremium === "true") {
-    await db.update(userUsageTable).set({ count: row.count + 1 }).where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
-    return { allowed: true, dailyCount: row.count + 1 };
+  const newTextCount = row.textCount + (type === "text" ? 1 : 0);
+  const newImageCount = row.imageCount + (type === "image" ? 1 : 0);
+  const newCount = row.count + 1;
+
+  if (!premium && row.isPremium !== "true") {
+    const typeCount = type === "text" ? row.textCount : row.imageCount;
+    const typeLimit = type === "text" ? limits.textLimit : limits.imageLimit;
+    if (typeLimit >= 0 && typeCount >= typeLimit) {
+      return { allowed: false, dailyCount: row.count, textCount: row.textCount, imageCount: row.imageCount };
+    }
   }
 
-  if (row.count >= limit) return { allowed: false, dailyCount: row.count };
-
-  await db.update(userUsageTable).set({ count: row.count + 1 }).where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
-  return { allowed: true, dailyCount: row.count + 1 };
+  await db
+    .update(userUsageTable)
+    .set({ count: newCount, textCount: newTextCount, imageCount: newImageCount })
+    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
+  return { allowed: true, dailyCount: newCount, textCount: newTextCount, imageCount: newImageCount };
 }
 
 export type IngredientStatus = "allowed" | "forbidden" | "conditional" | "unknown";
@@ -375,11 +413,11 @@ router.post("/analysis/text", optionalAuth, async (req, res) => {
     const userId = req.userId ?? null;
 
     if (userId) {
-      const usage = await checkAndIncrementUsage(userId);
+      const usage = await checkAndIncrementUsage(userId, "text");
       if (!usage.allowed) {
         return void res.status(429).json({
           error: "limit_reached",
-          message: "لقد وصلت إلى الحد اليومي المجاني للتحليلات. قم بالترقية إلى بريميوم للمتابعة.",
+          message: "لقد وصلت إلى الحد اليومي للبحث النصي. قم بالترقية إلى بريميوم للمتابعة.",
         });
       }
     }
@@ -435,11 +473,11 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
     const userId = req.userId ?? null;
 
     if (userId) {
-      const usage = await checkAndIncrementUsage(userId);
+      const usage = await checkAndIncrementUsage(userId, "image");
       if (!usage.allowed) {
         return void res.status(429).json({
           error: "limit_reached",
-          message: "لقد وصلت إلى الحد اليومي المجاني للتحليلات. قم بالترقية إلى بريميوم للمتابعة.",
+          message: "لقد وصلت إلى الحد اليومي لتحليل الصور. قم بالترقية إلى بريميوم للمتابعة.",
         });
       }
     }

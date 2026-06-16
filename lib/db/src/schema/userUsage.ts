@@ -7,6 +7,8 @@ export const userUsageTable = pgTable("user_usage", {
   userId: text("user_id").notNull(),
   date: text("date").notNull(),
   count: integer("count").notNull().default(0),
+  textCount: integer("text_count").notNull().default(0),
+  imageCount: integer("image_count").notNull().default(0),
   isPremium: text("is_premium").notNull().default("false"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

@@ -7,6 +7,8 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   name: text("name").notNull(),
   nameEn: text("name_en").notNull(),
   dailyLimit: integer("daily_limit").notNull().default(10),
+  dailyTextLimit: integer("daily_text_limit").notNull().default(10),
+  dailyImageLimit: integer("daily_image_limit").notNull().default(5),
   price: text("price").notNull().default("0"),
   currency: text("currency").notNull().default("SAR"),
   billingCycle: text("billing_cycle", { enum: ["monthly", "yearly", "free"] }).notNull().default("free"),

@@ -21,7 +21,7 @@ router.get("/plans", async (req, res) => {
 
 router.post("/plans", requireAdmin, async (req, res) => {
   try {
-    const { name, nameEn, dailyLimit, price, currency, billingCycle, features, isActive, sortOrder } = req.body;
+    const { name, nameEn, dailyLimit, dailyTextLimit, dailyImageLimit, price, currency, billingCycle, features, isActive, sortOrder } = req.body;
     if (!name || !nameEn) return void res.status(400).json({ error: "name and nameEn are required" });
     const [plan] = await db
       .insert(subscriptionPlansTable)
@@ -29,6 +29,8 @@ router.post("/plans", requireAdmin, async (req, res) => {
         name,
         nameEn,
         dailyLimit: dailyLimit ?? 10,
+        dailyTextLimit: dailyTextLimit ?? 10,
+        dailyImageLimit: dailyImageLimit ?? 5,
         price: price ?? "0",
         currency: currency ?? "SAR",
         billingCycle: billingCycle ?? "free",
@@ -46,12 +48,14 @@ router.post("/plans", requireAdmin, async (req, res) => {
 
 router.patch("/plans/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
-    const { name, nameEn, dailyLimit, price, currency, billingCycle, features, isActive, sortOrder } = req.body;
+    const id = parseInt(req.params.id as string);
+    const { name, nameEn, dailyLimit, dailyTextLimit, dailyImageLimit, price, currency, billingCycle, features, isActive, sortOrder } = req.body;
     const updates: Record<string, unknown> = {};
     if (name !== undefined) updates.name = name;
     if (nameEn !== undefined) updates.nameEn = nameEn;
     if (dailyLimit !== undefined) updates.dailyLimit = dailyLimit;
+    if (dailyTextLimit !== undefined) updates.dailyTextLimit = dailyTextLimit;
+    if (dailyImageLimit !== undefined) updates.dailyImageLimit = dailyImageLimit;
     if (price !== undefined) updates.price = price;
     if (currency !== undefined) updates.currency = currency;
     if (billingCycle !== undefined) updates.billingCycle = billingCycle;
@@ -72,9 +76,27 @@ router.patch("/plans/:id", requireAdmin, async (req, res) => {
   }
 });
 
+router.patch("/plans/bulk-limits", requireAdmin, async (req, res) => {
+  try {
+    const { dailyTextLimit, dailyImageLimit } = req.body;
+    const updates: Record<string, unknown> = {};
+    if (dailyTextLimit !== undefined) updates.dailyTextLimit = dailyTextLimit;
+    if (dailyImageLimit !== undefined) updates.dailyImageLimit = dailyImageLimit;
+    if (Object.keys(updates).length === 0) {
+      return void res.status(400).json({ error: "No fields to update" });
+    }
+    await db.update(subscriptionPlansTable).set(updates);
+    const plans = await db.select().from(subscriptionPlansTable).orderBy(subscriptionPlansTable.sortOrder);
+    res.json(plans);
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk update plan limits");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.delete("/plans/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id);
+    const id = parseInt(req.params.id as string);
     const [deleted] = await db
       .delete(subscriptionPlansTable)
       .where(eq(subscriptionPlansTable.id, id))

@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useLang } from "@/contexts/LangContext";
+import { tr } from "@/lib/i18n";
 import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles, Palette } from "lucide-react";
 
 const STORAGE_KEY = "tayyibati_api_url";
@@ -58,6 +60,7 @@ export default function Settings() {
   const [apiUrl, setApiUrl] = useState("");
   const [saved, setSaved] = useState(false);
   const { toast } = useToast();
+  const { lang } = useLang();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -160,8 +163,10 @@ export default function Settings() {
   return (
     <div className="p-6 space-y-6 max-w-2xl">
       <div>
-        <h1 className="text-2xl font-bold">Settings</h1>
-        <p className="text-muted-foreground text-sm mt-0.5">Configure the Tayyibati API and app features</p>
+        <h1 className="text-2xl font-bold">{tr(lang, "settings")}</h1>
+        <p className="text-muted-foreground text-sm mt-0.5">
+          {lang === "ar" ? "إعداد API الطيباتي وميزات التطبيق" : "Configure the Tayyibati API and app features"}
+        </p>
       </div>
 
       {/* API Connection */}
@@ -169,7 +174,7 @@ export default function Settings() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Globe className="h-4 w-4" />
-            API Connection
+            {tr(lang, "apiConnection")}
           </CardTitle>
           <CardDescription>
             By default the dashboard connects to the API on the same server. If self-hosting separately, enter your API server's full base URL.

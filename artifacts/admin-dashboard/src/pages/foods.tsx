@@ -65,6 +65,8 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLang } from "@/contexts/LangContext";
+import { tr } from "@/lib/i18n";
 
 const PAGE_SIZE = 50;
 
@@ -655,6 +657,7 @@ export default function Foods() {
   const [bulkDeletePayload, setBulkDeletePayload] = useState<{ ids?: number[]; status?: string } | null>(null);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
   const { toast } = useToast();
+  const { lang } = useLang();
   const queryClient = useQueryClient();
 
   const queryParams = {
@@ -751,19 +754,19 @@ export default function Foods() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">Foods Database</h1>
+          <h1 className="text-2xl font-bold">{tr(lang, "foodDb")}</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Manage the Tayyibat food rulings database
+            {lang === "ar" ? "إدارة قاعدة بيانات أحكام الطيبات" : "Manage the Tayyibat food rulings database"}
           </p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setBulkOpen(true)}>
             <Upload className="h-4 w-4 mr-1.5" />
-            Bulk Import
+            {tr(lang, "bulkImport")}
           </Button>
           <Button onClick={() => setDialogFood("new")}>
             <Plus className="h-4 w-4 mr-1.5" />
-            Add Food
+            {tr(lang, "addFood")}
           </Button>
         </div>
       </div>
