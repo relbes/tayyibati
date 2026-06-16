@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import { foodsTable } from "@workspace/db";
 import { eq, ilike, and, or, sql, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
+import { requireAdmin } from "./admin";
 
 const router = Router();
 
@@ -62,7 +63,7 @@ router.get("/foods", async (req, res) => {
   }
 });
 
-router.post("/foods/bulk", async (req, res) => {
+router.post("/foods/bulk", requireAdmin, async (req, res) => {
   try {
     const { foods } = req.body as { foods: Array<{ nameAr: string; nameEn: string; category: string; status: string; reason?: string | null; notes?: string | null }> };
     if (!Array.isArray(foods) || foods.length === 0) {
@@ -110,7 +111,7 @@ router.post("/foods/bulk", async (req, res) => {
   }
 });
 
-router.delete("/foods/bulk", async (req, res) => {
+router.delete("/foods/bulk", requireAdmin, async (req, res) => {
   try {
     const { ids, status } = req.body as { ids?: number[]; status?: string };
 
@@ -153,7 +154,7 @@ router.get("/foods/:id", async (req, res) => {
   }
 });
 
-router.post("/foods", async (req, res) => {
+router.post("/foods", requireAdmin, async (req, res) => {
   try {
     const { nameAr, nameEn, category, status, reason, notes } = req.body;
     if (!nameAr || !nameEn || !category || !status) {
@@ -170,7 +171,7 @@ router.post("/foods", async (req, res) => {
   }
 });
 
-router.patch("/foods/:id", async (req, res) => {
+router.patch("/foods/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { nameAr, nameEn, category, status, reason, notes } = req.body;
@@ -195,7 +196,7 @@ router.patch("/foods/:id", async (req, res) => {
   }
 });
 
-router.delete("/foods/:id", async (req, res) => {
+router.delete("/foods/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     await db.delete(foodsTable).where(eq(foodsTable.id, id));

@@ -6,6 +6,7 @@ import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../lib/email";
 import { issueToken } from "../lib/session";
 import { requireAuth } from "../middleware/requireAuth";
+import { requireAdmin } from "./admin";
 
 const FREE_DAILY_LIMIT = 10;
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
@@ -415,7 +416,7 @@ router.post("/users/reset-password-with-code", async (req, res) => {
 // Admin user management
 // ---------------------------------------------------------------------------
 
-router.get("/users", async (req, res) => {
+router.get("/users", requireAdmin, async (req, res) => {
   try {
     const { search } = req.query as Record<string, string>;
     const base = db.select().from(usersTable);
@@ -431,7 +432,7 @@ router.get("/users", async (req, res) => {
   }
 });
 
-router.get("/users/:id", async (req, res) => {
+router.get("/users/:id", requireAdmin, async (req, res) => {
   try {
     const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id));
     if (!user) return void res.status(404).json({ error: "Not found" });
@@ -442,7 +443,7 @@ router.get("/users/:id", async (req, res) => {
   }
 });
 
-router.patch("/users/:id", async (req, res) => {
+router.patch("/users/:id", requireAdmin, async (req, res) => {
   try {
     const { name, email, isPremium, planId } = req.body ?? {};
     const updates: Record<string, unknown> = {};
@@ -470,7 +471,7 @@ router.patch("/users/:id", async (req, res) => {
   }
 });
 
-router.post("/users/:id/plan", async (req, res) => {
+router.post("/users/:id/plan", requireAdmin, async (req, res) => {
   try {
     const { planId } = req.body ?? {};
     if (planId === undefined) return void res.status(400).json({ error: "planId is required" });
@@ -502,7 +503,7 @@ router.post("/users/:id/plan", async (req, res) => {
   }
 });
 
-router.post("/users/:id/unlock", async (req, res) => {
+router.post("/users/:id/unlock", requireAdmin, async (req, res) => {
   try {
     const [user] = await db
       .update(usersTable)
@@ -518,7 +519,7 @@ router.post("/users/:id/unlock", async (req, res) => {
   }
 });
 
-router.post("/users/:id/reset-password", async (req, res) => {
+router.post("/users/:id/reset-password", requireAdmin, async (req, res) => {
   try {
     const { password } = req.body ?? {};
     if (!password || String(password).length < 4) {
@@ -538,7 +539,7 @@ router.post("/users/:id/reset-password", async (req, res) => {
   }
 });
 
-router.delete("/users/:id", async (req, res) => {
+router.delete("/users/:id", requireAdmin, async (req, res) => {
   try {
     const [deleted] = await db
       .delete(usersTable)

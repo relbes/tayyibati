@@ -2,7 +2,7 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { setBaseUrl } from "@workspace/api-client-react";
+import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import { useEffect, useState, useCallback } from "react";
 import NotFound from "@/pages/not-found";
 import Overview from "@/pages/overview";
@@ -160,6 +160,7 @@ function AppInit({ children }: { children: React.ReactNode }) {
     if (stored) {
       setBaseUrl(stored);
     }
+    setAuthTokenGetter(() => localStorage.getItem("tayyibati_admin_token"));
   }, []);
   return <>{children}</>;
 }

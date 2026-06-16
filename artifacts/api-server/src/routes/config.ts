@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { appConfigTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { requireAdmin } from "./admin";
 
 const router = Router();
 
@@ -20,7 +21,7 @@ router.get("/config/public", async (req, res) => {
   }
 });
 
-router.get("/config", async (req, res) => {
+router.get("/config", requireAdmin, async (req, res) => {
   try {
     const rows = await db.select().from(appConfigTable);
     res.json(rows);
@@ -30,7 +31,7 @@ router.get("/config", async (req, res) => {
   }
 });
 
-router.patch("/config/:key", async (req, res) => {
+router.patch("/config/:key", requireAdmin, async (req, res) => {
   try {
     const { key } = req.params;
     const { value, isPublic } = req.body;

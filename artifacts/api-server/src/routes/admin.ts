@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
 import { analysisHistoryTable, userUsageTable } from "@workspace/db";
@@ -15,6 +15,16 @@ function signToken(iat: number): string {
   const payload = `admin:${iat}`;
   const sig = createHmac("sha256", secret).update(payload).digest("hex");
   return Buffer.from(`${payload}:${sig}`).toString("base64url");
+}
+
+export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
+  const auth = req.headers["authorization"];
+  const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
+  if (!token || !verifyAdminToken(token)) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
 }
 
 export function verifyAdminToken(token: string): boolean {
@@ -67,7 +77,7 @@ router.get("/admin/me", (req, res) => {
   res.json({ admin: true });
 });
 
-router.get("/admin/history", async (req, res) => {
+router.get("/admin/history", requireAdmin, async (req, res) => {
   try {
     const { limit = "50", offset = "0" } = req.query as Record<string, string>;
 
@@ -85,7 +95,7 @@ router.get("/admin/history", async (req, res) => {
   }
 });
 
-router.get("/admin/stats", async (req, res) => {
+router.get("/admin/stats", requireAdmin, async (req, res) => {
   try {
     const [totals] = await db
       .select({

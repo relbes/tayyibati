@@ -2,6 +2,7 @@ import { Router } from "express";
 import { db } from "@workspace/db";
 import { subscriptionPlansTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { requireAdmin } from "./admin";
 
 const router = Router();
 
@@ -18,7 +19,7 @@ router.get("/plans", async (req, res) => {
   }
 });
 
-router.post("/plans", async (req, res) => {
+router.post("/plans", requireAdmin, async (req, res) => {
   try {
     const { name, nameEn, dailyLimit, price, currency, billingCycle, features, isActive, sortOrder } = req.body;
     if (!name || !nameEn) return void res.status(400).json({ error: "name and nameEn are required" });
@@ -43,7 +44,7 @@ router.post("/plans", async (req, res) => {
   }
 });
 
-router.patch("/plans/:id", async (req, res) => {
+router.patch("/plans/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const { name, nameEn, dailyLimit, price, currency, billingCycle, features, isActive, sortOrder } = req.body;
@@ -71,7 +72,7 @@ router.patch("/plans/:id", async (req, res) => {
   }
 });
 
-router.delete("/plans/:id", async (req, res) => {
+router.delete("/plans/:id", requireAdmin, async (req, res) => {
   try {
     const id = parseInt(req.params.id);
     const [deleted] = await db

@@ -33,6 +33,10 @@ const API_BASE = () => {
   const stored = localStorage.getItem("tayyibati_api_url");
   return stored || "";
 };
+const adminHeaders = (): HeadersInit => {
+  const token = localStorage.getItem("tayyibati_admin_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 interface Plan {
   id: number;
@@ -70,7 +74,7 @@ async function fetchPlans(): Promise<Plan[]> {
 async function createPlan(data: PlanForm): Promise<Plan> {
   const res = await fetch(`${API_BASE()}/api/plans`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({
       ...data,
       features: Array.isArray(data.features)
@@ -89,7 +93,7 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
   }
   const res = await fetch(`${API_BASE()}/api/plans/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to update plan");
@@ -97,7 +101,7 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
 }
 
 async function deletePlan(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE()}/api/plans/${id}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE()}/api/plans/${id}`, { method: "DELETE", headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to delete plan");
 }
 

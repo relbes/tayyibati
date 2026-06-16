@@ -30,6 +30,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail, LockOpen, Lock } from "lucide-react";
 
 const API_BASE = () => localStorage.getItem("tayyibati_api_url") || "";
+const adminHeaders = (): HeadersInit => {
+  const token = localStorage.getItem("tayyibati_admin_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 interface User {
   id: string;
@@ -57,7 +61,7 @@ async function fetchUsers(search: string): Promise<User[]> {
   const url = search
     ? `${API_BASE()}/api/users?search=${encodeURIComponent(search)}`
     : `${API_BASE()}/api/users`;
-  const res = await fetch(url);
+  const res = await fetch(url, { headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to fetch users");
   return res.json();
 }
@@ -71,7 +75,7 @@ async function fetchPlans(): Promise<Plan[]> {
 async function updateUser(id: string, data: Partial<Pick<User, "name" | "email" | "isPremium">>): Promise<User> {
   const res = await fetch(`${API_BASE()}/api/users/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("Failed to update user");
@@ -81,7 +85,7 @@ async function updateUser(id: string, data: Partial<Pick<User, "name" | "email" 
 async function enrollPlan(id: string, planId: number | null): Promise<User> {
   const res = await fetch(`${API_BASE()}/api/users/${id}/plan`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ planId }),
   });
   if (!res.ok) throw new Error("Failed to update plan");
@@ -91,7 +95,7 @@ async function enrollPlan(id: string, planId: number | null): Promise<User> {
 async function resetPassword(id: string, password: string): Promise<void> {
   const res = await fetch(`${API_BASE()}/api/users/${id}/reset-password`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ password }),
   });
   if (!res.ok) {
@@ -103,7 +107,7 @@ async function resetPassword(id: string, password: string): Promise<void> {
 async function unlockUser(id: string): Promise<User> {
   const res = await fetch(`${API_BASE()}/api/users/${id}/unlock`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
   });
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
@@ -113,7 +117,7 @@ async function unlockUser(id: string): Promise<User> {
 }
 
 async function deleteUser(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE()}/api/users/${id}`, { method: "DELETE" });
+  const res = await fetch(`${API_BASE()}/api/users/${id}`, { method: "DELETE", headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to delete user");
 }
 
