@@ -40,7 +40,7 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     if (user) {
-      getUserUsage(user.id).then(setUsage).catch(() => {});
+      getUserUsage().then(setUsage).catch(() => {});
     }
   }, [user]);
 

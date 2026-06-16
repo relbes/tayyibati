@@ -79,7 +79,7 @@ export default function CameraScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
     try {
-      const report = await analyzeImage(base64, mimeType, "food", user?.id);
+      const report = await analyzeImage(base64, mimeType, "food");
       if (
         report.possibleFoods?.length &&
         !report.allowed?.length &&
@@ -113,7 +113,7 @@ export default function CameraScreen() {
     setPossibleFoods([]);
     setIsAnalyzing(true);
     try {
-      const report = await analyzeText(food, user?.id);
+      const report = await analyzeText(food);
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {

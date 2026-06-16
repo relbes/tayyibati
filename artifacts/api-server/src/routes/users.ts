@@ -4,6 +4,8 @@ import { db } from "@workspace/db";
 import { userUsageTable, usersTable, subscriptionPlansTable, appConfigTable, passwordResetsTable } from "@workspace/db";
 import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../lib/email";
+import { issueToken } from "../lib/session";
+import { requireAuth } from "../middleware/requireAuth";
 
 const FREE_DAILY_LIMIT = 10;
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
@@ -102,11 +104,9 @@ async function syncTodayUsagePremium(userId: string, isPremium: boolean): Promis
 // Specific routes first (must be registered before /users/:id)
 // ---------------------------------------------------------------------------
 
-router.get("/users/usage", async (req, res) => {
+router.get("/users/usage", requireAuth, async (req, res) => {
   try {
-    const { userId } = req.query as Record<string, string>;
-    if (!userId) return void res.status(400).json({ error: "userId is required" });
-
+    const userId = req.userId!;
     const today = new Date().toISOString().split("T")[0];
     const [row] = await db
       .select()
@@ -220,7 +220,7 @@ router.post("/users/register", async (req, res) => {
         .set(updates)
         .where(eq(usersTable.id, existing.id))
         .returning();
-      return void res.json(toPublicUser(updated));
+      return void res.json({ ...toPublicUser(updated), token: issueToken(updated.id) });
     }
 
     const userId = id ?? stableIdFromEmail(normalizedEmail);
@@ -236,7 +236,7 @@ router.post("/users/register", async (req, res) => {
         avatar: avatar ? String(avatar) : null,
       })
       .returning();
-    res.status(201).json(toPublicUser(created));
+    res.status(201).json({ ...toPublicUser(created), token: issueToken(created.id) });
   } catch (err) {
     req.log.error({ err }, "Failed to register user");
     res.status(500).json({ error: "Internal server error" });
@@ -296,7 +296,7 @@ router.post("/users/login", async (req, res) => {
         .set({ passwordHash: hash, failedLoginAttempts: 0, lockedUntil: null })
         .where(eq(usersTable.id, user.id))
         .returning();
-      return void res.json(toPublicUser(updated));
+      return void res.json({ ...toPublicUser(updated), token: issueToken(updated.id) });
     }
 
     // Successful login — reset failure counter and any expired lock.
@@ -305,7 +305,7 @@ router.post("/users/login", async (req, res) => {
       .set({ failedLoginAttempts: 0, lockedUntil: null })
       .where(eq(usersTable.id, user.id))
       .returning();
-    res.json(toPublicUser(loggedIn));
+    res.json({ ...toPublicUser(loggedIn), token: issueToken(loggedIn.id) });
   } catch (err) {
     req.log.error({ err }, "Failed to login user");
     res.status(500).json({ error: "Internal server error" });

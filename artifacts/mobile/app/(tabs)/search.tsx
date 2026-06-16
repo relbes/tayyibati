@@ -95,7 +95,7 @@ export default function SearchScreen() {
     setIsAnalyzing(true);
     setResult(null);
     try {
-      const report = await analyzeText(text, user?.id);
+      const report = await analyzeText(text);
       setResult(report);
       setCurrentReport(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

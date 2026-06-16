@@ -3,6 +3,7 @@ import OpenAI from "openai";
 import { db } from "@workspace/db";
 import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
+import { optionalAuth } from "../middleware/requireAuth";
 
 const router = Router();
 
@@ -364,10 +365,14 @@ function buildNotFoundReport(query: string, analysisType: AnalysisReport["analys
   };
 }
 
-router.post("/analysis/text", async (req, res) => {
+// optionalAuth extracts userId from the verified Bearer token.
+// Body/query userId fields are intentionally ignored to prevent cross-user quota abuse.
+router.post("/analysis/text", optionalAuth, async (req, res) => {
   try {
-    const { query, userId } = req.body as { query: string; userId?: string | null };
+    const { query } = req.body as { query: string };
     if (!query?.trim()) return void res.status(400).json({ error: "query is required" });
+
+    const userId = req.userId ?? null;
 
     if (userId) {
       const usage = await checkAndIncrementUsage(userId);
@@ -418,15 +423,16 @@ router.post("/analysis/text", async (req, res) => {
   }
 });
 
-router.post("/analysis/image", async (req, res) => {
+router.post("/analysis/image", optionalAuth, async (req, res) => {
   try {
-    const { imageBase64, mimeType, userId, analysisType } = req.body as {
+    const { imageBase64, mimeType, analysisType } = req.body as {
       imageBase64: string;
       mimeType: string;
-      userId?: string | null;
       analysisType: "food" | "label";
     };
     if (!imageBase64 || !mimeType) return void res.status(400).json({ error: "imageBase64 and mimeType required" });
+
+    const userId = req.userId ?? null;
 
     if (userId) {
       const usage = await checkAndIncrementUsage(userId);

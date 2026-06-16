@@ -29,12 +29,31 @@ async function readAnalysisError(res: Response, fallback: string): Promise<Analy
   return new AnalysisError(message, res.status, limitReached);
 }
 
-export async function analyzeText(query: string, userId?: string | null) {
+// ---------------------------------------------------------------------------
+// Session token — set by AuthContext after login/register, cleared on signOut.
+// Never expose this outside this module except through the setter.
+// ---------------------------------------------------------------------------
+let _sessionToken: string | null = null;
+
+export function setSessionToken(token: string | null): void {
+  _sessionToken = token;
+}
+
+function authHeader(): Record<string, string> {
+  if (_sessionToken) return { Authorization: `Bearer ${_sessionToken}` };
+  return {};
+}
+
+// ---------------------------------------------------------------------------
+// Analysis
+// ---------------------------------------------------------------------------
+
+export async function analyzeText(query: string) {
   const base = domain ? `https://${domain}` : "";
   const res = await fetch(`${base}/api/analysis/text`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query, userId: userId ?? null }),
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ query }),
   });
   if (!res.ok) throw await readAnalysisError(res, `Analysis failed: ${res.status}`);
   return res.json();
@@ -44,37 +63,55 @@ export async function analyzeImage(
   imageBase64: string,
   mimeType: string,
   analysisType: "food" | "label",
-  userId?: string | null
 ) {
   const base = domain ? `https://${domain}` : "";
   const res = await fetch(`${base}/api/analysis/image`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ imageBase64, mimeType, analysisType, userId: userId ?? null }),
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ imageBase64, mimeType, analysisType }),
   });
   if (!res.ok) throw await readAnalysisError(res, `Image analysis failed: ${res.status}`);
   return res.json();
 }
 
-export async function getHistory(userId: string, limit = 20, offset = 0) {
+// ---------------------------------------------------------------------------
+// History — all require auth token
+// ---------------------------------------------------------------------------
+
+export async function getHistory(limit = 20, offset = 0) {
   const base = domain ? `https://${domain}` : "";
-  const res = await fetch(`${base}/api/history?userId=${userId}&limit=${limit}&offset=${offset}`);
+  const res = await fetch(`${base}/api/history?limit=${limit}&offset=${offset}`, {
+    headers: authHeader(),
+  });
   if (!res.ok) throw new Error("Failed to fetch history");
   return res.json();
 }
 
 export async function deleteHistoryItem(id: number) {
   const base = domain ? `https://${domain}` : "";
-  const res = await fetch(`${base}/api/history/${id}`, { method: "DELETE" });
+  const res = await fetch(`${base}/api/history/${id}`, {
+    method: "DELETE",
+    headers: authHeader(),
+  });
   if (!res.ok) throw new Error("Failed to delete history item");
 }
 
-export async function getUserUsage(userId: string) {
+// ---------------------------------------------------------------------------
+// Usage — requires auth token
+// ---------------------------------------------------------------------------
+
+export async function getUserUsage() {
   const base = domain ? `https://${domain}` : "";
-  const res = await fetch(`${base}/api/users/usage?userId=${userId}`);
+  const res = await fetch(`${base}/api/users/usage`, {
+    headers: authHeader(),
+  });
   if (!res.ok) throw new Error("Failed to fetch usage");
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Foods (public)
+// ---------------------------------------------------------------------------
 
 export async function getFoodStats() {
   const base = domain ? `https://${domain}` : "";
@@ -134,12 +171,20 @@ export async function deleteFood(id: number) {
   if (!res.ok) throw new Error("Failed to delete food");
 }
 
+// ---------------------------------------------------------------------------
+// Plans (public)
+// ---------------------------------------------------------------------------
+
 export async function getPlans() {
   const base = domain ? `https://${domain}` : "";
   const res = await fetch(`${base}/api/plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Auth errors
+// ---------------------------------------------------------------------------
 
 export class AuthError extends Error {
   status: number;
@@ -176,6 +221,10 @@ async function parseAuthError(res: Response, fallback: string): Promise<never> {
   }
   throw new AuthError(message, res.status, { remainingAttempts, lockedUntil, secondsLeft });
 }
+
+// ---------------------------------------------------------------------------
+// Auth (returns user + token from server)
+// ---------------------------------------------------------------------------
 
 export async function registerUser(payload: {
   email: string;

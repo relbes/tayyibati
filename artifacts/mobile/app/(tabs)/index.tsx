@@ -71,7 +71,7 @@ export default function HomeScreen() {
     setIsAnalyzing(true);
     setResult(null);
     try {
-      const report = await analyzeText(query.trim(), user?.id);
+      const report = await analyzeText(query.trim());
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
@@ -116,7 +116,7 @@ export default function HomeScreen() {
     setIsAnalyzing(true);
     setResult(null);
     try {
-      const report = await analyzeImage(base64, mimeType, "food", user?.id);
+      const report = await analyzeImage(base64, mimeType, "food");
       setResult(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {

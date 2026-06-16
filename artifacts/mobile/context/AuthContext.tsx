@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { registerUser, loginUser, getUser } from "@/lib/api";
+import { registerUser, loginUser, getUser, setSessionToken } from "@/lib/api";
 
 interface User {
   id: string;
@@ -26,6 +26,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const USER_KEY = "tayyibati_user_v2";
+const TOKEN_KEY = "tayyibati_session_token";
 
 interface ApiUser {
   id: string;
@@ -35,6 +36,7 @@ interface ApiUser {
   provider?: "email" | "google";
   avatar?: string | null;
   planId?: number | null;
+  token?: string;
 }
 
 function toUser(api: ApiUser): User {
@@ -54,11 +56,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    AsyncStorage.getItem(USER_KEY)
-      .then((data) => {
-        if (data) {
+    Promise.all([
+      AsyncStorage.getItem(USER_KEY),
+      AsyncStorage.getItem(TOKEN_KEY),
+    ])
+      .then(([userData, token]) => {
+        if (token) setSessionToken(token);
+        if (userData) {
           try {
-            setUser(JSON.parse(data));
+            setUser(JSON.parse(userData));
           } catch {
             AsyncStorage.removeItem(USER_KEY);
           }
@@ -67,8 +73,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .finally(() => setIsLoading(false));
   }, []);
 
-  const persist = useCallback(async (u: User) => {
+  const persist = useCallback(async (u: User, token?: string) => {
     await AsyncStorage.setItem(USER_KEY, JSON.stringify(u));
+    if (token) {
+      await AsyncStorage.setItem(TOKEN_KEY, token);
+      setSessionToken(token);
+    }
     setUser(u);
   }, []);
 
@@ -77,28 +87,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     name: string,
     opts?: { provider?: "email" | "google"; avatar?: string; id?: string }
   ) => {
-    const api = await registerUser({
+    const api: ApiUser = await registerUser({
       email,
       name,
       provider: opts?.provider ?? "email",
       avatar: opts?.avatar,
       id: opts?.id,
     });
-    await persist(toUser(api));
+    await persist(toUser(api), api.token);
   }, [persist]);
 
   const registerWithPassword = useCallback(async (email: string, name: string, password: string) => {
-    const api = await registerUser({ email, name, password });
-    await persist(toUser(api));
+    const api: ApiUser = await registerUser({ email, name, password });
+    await persist(toUser(api), api.token);
   }, [persist]);
 
   const loginWithPassword = useCallback(async (email: string, password: string) => {
-    const api = await loginUser({ email, password });
-    await persist(toUser(api));
+    const api: ApiUser = await loginUser({ email, password });
+    await persist(toUser(api), api.token);
   }, [persist]);
 
   const signOut = useCallback(async () => {
-    await AsyncStorage.removeItem(USER_KEY);
+    await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
+    setSessionToken(null);
     setUser(null);
   }, []);
 

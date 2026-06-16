@@ -30,7 +30,7 @@ export default function HistoryScreen() {
 
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["history", user?.id],
-    queryFn: () => (user ? getHistory(user.id) : Promise.resolve([])),
+    queryFn: () => (user ? getHistory() : Promise.resolve([])),
     enabled: !!user,
   });
 
