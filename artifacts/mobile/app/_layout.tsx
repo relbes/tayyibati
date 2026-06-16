@@ -3,7 +3,6 @@ import {
   Tajawal_500Medium,
   Tajawal_700Bold,
 } from "@expo-google-fonts/tajawal";
-import { Ionicons } from "@expo/vector-icons";
 import { useFonts } from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
@@ -38,13 +37,14 @@ function RootLayoutNav() {
 
 export default function RootLayout() {
   // Load ALL fonts before first render — blocks splash until ready.
-  // useFonts from expo-font (not the Tajawal-specific one) supports
-  // arbitrary font maps including Ionicons.
+  // Ionicons is loaded from a local copy (assets/fonts/Ionicons.ttf)
+  // to avoid pnpm symlink resolution issues with Metro bundler.
+  // The font family name "ionicons" must match @expo/vector-icons internals.
   const [fontsLoaded, fontError] = useFonts({
     Tajawal_400Regular,
     Tajawal_500Medium,
     Tajawal_700Bold,
-    ...Ionicons.font,
+    ionicons: require("../assets/fonts/Ionicons.ttf"),
   });
 
   useEffect(() => {
