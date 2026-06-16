@@ -287,18 +287,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTitle: { alignItems: "flex-end", gap: 2 },
+  headerTitle: { alignItems: "center", flex: 1, gap: 2 },
   appName: {
     fontSize: 26,
     fontFamily: "Tajawal_700Bold",
     color: "#fff",
-    textAlign: "right",
+    textAlign: "center",
   },
   appSub: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
-    textAlign: "right",
+    textAlign: "center",
   },
   profileBtn: {
     width: 38,
