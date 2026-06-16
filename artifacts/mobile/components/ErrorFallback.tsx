@@ -73,9 +73,15 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           Something went wrong
         </Text>
 
-        <Text style={[styles.message, { color: colors.mutedForeground }]}>
-          Please reload the app to continue.
-        </Text>
+        {__DEV__ ? (
+          <Text selectable style={[styles.errorInline, { color: "#c0392b", backgroundColor: "#fdecea" }]}>
+            {error.message}
+          </Text>
+        ) : (
+          <Text style={[styles.message, { color: colors.mutedForeground }]}>
+            Please reload the app to continue.
+          </Text>
+        )}
 
         <Pressable
           onPress={handleRestart}
@@ -197,6 +203,14 @@ const styles = StyleSheet.create({
     fontSize: 16,
     textAlign: "center",
     lineHeight: 24,
+  },
+  errorInline: {
+    fontSize: 13,
+    lineHeight: 20,
+    padding: 12,
+    borderRadius: 8,
+    width: "100%",
+    textAlign: "left",
   },
   topButton: {
     position: "absolute",
