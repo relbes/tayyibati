@@ -91,26 +91,26 @@ export default function Overview() {
 
   const pieData = foodStats
     ? [
-        { name: "Allowed", value: foodStats.allowed, color: GREEN },
-        { name: "Forbidden", value: foodStats.forbidden, color: RED },
-        { name: "Conditional", value: foodStats.conditional, color: GOLD },
+        { name: "مسموح", value: foodStats.allowed, color: GREEN },
+        { name: "ممنوع", value: foodStats.forbidden, color: RED },
+        { name: "مشروط", value: foodStats.conditional, color: GOLD },
       ]
     : [];
 
   const analysisTypeData = adminStats
     ? [
-        { name: "Text", value: adminStats.textAnalyses, color: TEAL },
-        { name: "Image", value: adminStats.imageAnalyses, color: BLUE },
-        { name: "Label", value: adminStats.labelAnalyses, color: GOLD },
+        { name: "نص", value: adminStats.textAnalyses, color: TEAL },
+        { name: "صورة", value: adminStats.imageAnalyses, color: BLUE },
+        { name: "ملصق", value: adminStats.labelAnalyses, color: GOLD },
       ]
     : [];
 
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Overview</h1>
+        <h1 className="text-2xl font-bold">نظرة عامة</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
-          Live stats across the Tayyibati platform
+          إحصائيات مباشرة لمنصة طيباتي
         </p>
       </div>
 
@@ -125,26 +125,26 @@ export default function Overview() {
         ) : (
           <>
             <StatCard
-              title="Total Foods"
+              title="إجمالي الأغذية"
               value={foodStats?.total ?? 0}
               icon={Database}
               color={TEAL}
-              sub={`${foodStats?.categories ?? 0} categories`}
+              sub={`${foodStats?.categories ?? 0} فئة`}
             />
             <StatCard
-              title="Allowed"
+              title="مسموح"
               value={foodStats?.allowed ?? 0}
               icon={CheckCircle}
               color={GREEN}
             />
             <StatCard
-              title="Forbidden"
+              title="ممنوع"
               value={foodStats?.forbidden ?? 0}
               icon={XCircle}
               color={RED}
             />
             <StatCard
-              title="Conditional"
+              title="مشروط"
               value={foodStats?.conditional ?? 0}
               icon={AlertCircle}
               color={GOLD}
@@ -163,23 +163,23 @@ export default function Overview() {
         ) : (
           <>
             <StatCard
-              title="Total Analyses"
+              title="إجمالي التحليلات"
               value={adminStats?.totalAnalyses ?? 0}
               icon={Activity}
               color={BLUE}
             />
             <StatCard
-              title="Unique Users"
+              title="المستخدمون"
               value={adminStats?.totalUsers ?? 0}
               icon={Users}
               color={TEAL}
             />
             <StatCard
-              title="Avg. Score"
+              title="متوسط الدرجة"
               value={`${adminStats?.avgScore ?? 0}%`}
               icon={TrendingUp}
               color={GOLD}
-              sub="Compatibility score average"
+              sub="متوسط درجة التوافق"
             />
           </>
         )}
@@ -188,7 +188,7 @@ export default function Overview() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Analyses – Last 14 Days</CardTitle>
+            <CardTitle className="text-base">التحليلات – آخر 14 يوماً</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingAdmin ? (
@@ -236,7 +236,7 @@ export default function Overview() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Score Distribution</CardTitle>
+            <CardTitle className="text-base">توزيع الدرجات</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingAdmin ? (
@@ -272,7 +272,7 @@ export default function Overview() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Food Status Breakdown</CardTitle>
+            <CardTitle className="text-base">توزيع حالات الأغذية</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-6">
             {loadingFoods ? (
@@ -323,7 +323,7 @@ export default function Overview() {
 
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Analysis by Type</CardTitle>
+            <CardTitle className="text-base">التحليلات حسب النوع</CardTitle>
           </CardHeader>
           <CardContent className="flex items-center gap-6">
             {loadingAdmin ? (
@@ -332,21 +332,21 @@ export default function Overview() {
               <div className="w-full space-y-4">
                 {[
                   {
-                    label: "Text Search",
+                    label: "بحث نصي",
                     value: adminStats?.textAnalyses ?? 0,
                     total: adminStats?.totalAnalyses ?? 1,
                     color: TEAL,
                     Icon: FileText,
                   },
                   {
-                    label: "Image Analysis",
+                    label: "تحليل صورة",
                     value: adminStats?.imageAnalyses ?? 0,
                     total: adminStats?.totalAnalyses ?? 1,
                     color: BLUE,
                     Icon: Camera,
                   },
                   {
-                    label: "Label / OCR",
+                    label: "قراءة ملصق",
                     value: adminStats?.labelAnalyses ?? 0,
                     total: adminStats?.totalAnalyses ?? 1,
                     color: GOLD,

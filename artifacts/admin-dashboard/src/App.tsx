@@ -35,12 +35,12 @@ const queryClient = new QueryClient({
 });
 
 const NAV_ITEMS = [
-  { path: "/", label: "Overview", icon: LayoutDashboard },
-  { path: "/foods", label: "Foods Database", icon: UtensilsCrossed },
-  { path: "/history", label: "Analysis History", icon: HistoryIcon },
-  { path: "/users", label: "Users", icon: UsersIcon },
-  { path: "/plans", label: "Subscription Plans", icon: Star },
-  { path: "/settings", label: "Settings", icon: SettingsIcon },
+  { path: "/", label: "نظرة عامة", icon: LayoutDashboard },
+  { path: "/foods", label: "قاعدة الأغذية", icon: UtensilsCrossed },
+  { path: "/history", label: "سجل التحليلات", icon: HistoryIcon },
+  { path: "/users", label: "المستخدمون", icon: UsersIcon },
+  { path: "/plans", label: "خطط الاشتراك", icon: Star },
+  { path: "/settings", label: "الإعدادات", icon: SettingsIcon },
 ];
 
 function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => void; onLogout: () => void }) {
@@ -56,8 +56,8 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
       )}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 flex w-64 flex-col bg-sidebar text-sidebar-foreground transition-transform duration-200 lg:translate-x-0 lg:static lg:z-auto",
-          open ? "translate-x-0" : "-translate-x-full",
+          "fixed inset-y-0 right-0 z-30 flex w-64 flex-col bg-sidebar text-sidebar-foreground transition-transform duration-200 lg:translate-x-0 lg:static lg:z-auto",
+          open ? "translate-x-0" : "translate-x-full",
         )}
       >
         <div className="flex h-16 items-center gap-3 px-5 border-b border-sidebar-border">
@@ -66,10 +66,10 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
           </div>
           <div>
             <p className="font-semibold text-sm leading-none">طيباتي</p>
-            <p className="text-xs text-sidebar-foreground/60 mt-0.5">Admin Dashboard</p>
+            <p className="text-xs text-sidebar-foreground/60 mt-0.5">لوحة التحكم</p>
           </div>
           <button
-            className="ml-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
+            className="mr-auto lg:hidden text-sidebar-foreground/60 hover:text-sidebar-foreground"
             onClick={onClose}
           >
             <X className="h-4 w-4" />
@@ -108,9 +108,9 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
             className="flex items-center gap-2 w-full rounded-lg px-3 py-2 text-sm text-sidebar-foreground/60 hover:text-sidebar-foreground hover:bg-sidebar-accent/50 transition-colors"
           >
             <LogOut className="h-4 w-4" />
-            Sign Out
+            تسجيل الخروج
           </button>
-          <p className="text-xs text-sidebar-foreground/40 px-3">Tayyibati Admin v1.0</p>
+          <p className="text-xs text-sidebar-foreground/40 px-3">طيباتي Admin v1.0</p>
         </div>
       </aside>
     </>
@@ -121,7 +121,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden flex-row-reverse">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onLogout={onLogout} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 lg:hidden">

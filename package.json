@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@replit/connectors-sdk": "^0.4.1",
-    "@replit/revenuecat-sdk": "^4.2.0"
+    "@replit/revenuecat-sdk": "^4.2.0",
+    "sharp": "^0.35.1"
   }
 }

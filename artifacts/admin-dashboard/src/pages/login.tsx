@@ -28,14 +28,14 @@ export default function Login({ onLogin }: LoginProps) {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.error || "Login failed");
+        setError(body.error || "فشل تسجيل الدخول");
         return;
       }
       const { token } = await res.json();
       localStorage.setItem("tayyibati_admin_token", token);
       onLogin(token);
     } catch {
-      setError("Cannot reach API server");
+      setError("تعذّر الوصول إلى الخادم");
     } finally {
       setLoading(false);
     }
@@ -49,36 +49,36 @@ export default function Login({ onLogin }: LoginProps) {
             <span className="text-primary-foreground font-bold text-xl">ط</span>
           </div>
           <h1 className="text-2xl font-bold">طيباتي Admin</h1>
-          <p className="text-sm text-muted-foreground">Sign in to access the dashboard</p>
+          <p className="text-sm text-muted-foreground">سجّل دخولك للوصول إلى لوحة التحكم</p>
         </div>
 
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <Lock className="h-4 w-4" />
-              Admin Login
+              تسجيل الدخول
             </CardTitle>
             <CardDescription>
-              Enter your admin password to continue.
+              أدخل كلمة المرور للمتابعة.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">كلمة المرور</Label>
                 <div className="relative">
                   <Input
                     id="password"
                     type={visible ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter admin password"
-                    className="pr-10"
+                    placeholder="أدخل كلمة المرور"
+                    className="pl-10"
                     autoFocus
                   />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                     onClick={() => setVisible((v) => !v)}
                     tabIndex={-1}
                   >
@@ -94,16 +94,11 @@ export default function Login({ onLogin }: LoginProps) {
               )}
 
               <Button type="submit" className="w-full" disabled={!password.trim() || loading}>
-                {loading ? "Signing in…" : "Sign In"}
+                {loading ? "جارٍ الدخول…" : "دخول"}
               </Button>
             </form>
           </CardContent>
         </Card>
-
-        <p className="text-center text-xs text-muted-foreground">
-          Default password in dev: <code className="bg-muted px-1 rounded">admin123</code>
-          {" · "}Set <code className="bg-muted px-1 rounded">ADMIN_PASSWORD</code> env var for production.
-        </p>
       </div>
     </div>
   );
