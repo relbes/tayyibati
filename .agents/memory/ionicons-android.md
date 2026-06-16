@@ -1,20 +1,26 @@
 ---
 name: Ionicons Android Fix
-description: Why @expo/vector-icons fails on Android Expo Go in pnpm monorepos and how it was resolved.
+description: How to import @expo/vector-icons in pnpm monorepos so Android Hermes doesn't crash
 ---
 
-## The Problem
-`@expo/vector-icons` (Ionicons, Feather, etc.) uses font files loaded via `useFonts`. In a pnpm monorepo, Metro bundler fails to resolve the font files through pnpm symlinks on Android Expo Go — icons render as blank squares or don't show at all. iOS works because Expo Go pre-bundles the fonts.
+## Rule
+Always use the **direct file import** for `@expo/vector-icons` in pnpm monorepos:
 
-## The Fix
-Replace `@expo/vector-icons` entirely with `lucide-react-native`, which uses SVG components (via `react-native-svg`). No font loading is required. Works on Android, iOS, and web.
+```js
+// ✅ Works on Android (Hermes + pnpm)
+import Ionicons from "@expo/vector-icons/Ionicons";
 
-**How:** Created `artifacts/mobile/components/Icon.tsx` — a wrapper that maps Ionicons/Feather icon name strings to the corresponding lucide-react-native component. Accepts `name`, `size`, `color`, `strokeWidth` props — same API as `Ionicons`.
+// ❌ Crashes on Android — Hermes throws: "Property 'Ionicons' doesn't exist"
+import { Ionicons } from "@expo/vector-icons";
+```
 
-**Why:** SVG-based icons bypass the font loading pipeline entirely. `react-native-svg` was already installed in the project.
+Also applies to `_layout.tsx` useFonts — use the direct import for `Ionicons.font` too.
 
-## How to Apply
-- When adding new icons, add them to the `ICON_MAP` in `components/Icon.tsx`
-- Import `{ Icon }` from `@/components/Icon` everywhere, never `@expo/vector-icons`
-- `strokeWidth` defaults to 1.5 for outline icons, 2 for filled ones
-- Icon names come from Ionicons naming convention (the app's existing names)
+**Why:** pnpm does not hoist packages by default. Android's Hermes JS engine cannot resolve barrel exports from `@expo/vector-icons` when the package lives in a non-hoisted symlink location. The direct file import bypasses the barrel and resolves correctly.
+
+**How to apply:** Any file importing from `@expo/vector-icons` must use the direct path (e.g. `@expo/vector-icons/Ionicons`), never the named barrel export `{ Ionicons }`.
+
+## Other Android crash causes found in this project
+- `react-native-keyboard-controller` (KeyboardProvider) — native module not configured as expo plugin → crashes Expo Go on Android. Removed from `_layout.tsx`.
+- `newArchEnabled: false` in `app.json` — Expo Go always uses New Architecture; conflict causes instability. Removed.
+- `lucide-react-native` — uses `react-native-svg` which mismatches Expo Go 54's bundled native side. Do NOT use.

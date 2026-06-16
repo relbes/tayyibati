@@ -1,15 +1,14 @@
 /**
  * Thin wrapper around @expo/vector-icons Ionicons.
- * Expo Go pre-bundles Ionicons fonts for both iOS and Android — no useFonts needed.
+ * Uses direct file import to avoid pnpm barrel-export resolution issues on Android/Hermes.
  */
 import React from "react";
-import { Ionicons } from "@expo/vector-icons";
+import Ionicons from "@expo/vector-icons/Ionicons";
 
 interface IconProps {
   name: string;
   size?: number;
   color?: string;
-  strokeWidth?: number;
 }
 
 export function Icon({ name, size = 20, color = "#000" }: IconProps) {
