@@ -11,7 +11,7 @@ import {
   FlatList,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -162,7 +162,7 @@ export default function SearchScreen() {
                     style={styles.clearBtn}
                     onPress={() => { setQuery(""); setSuggestions([]); setShowSuggestions(false); setResult(null); }}
                   >
-                    <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                    <Icon name="close-circle" size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 )}
                 <TouchableOpacity
@@ -170,7 +170,7 @@ export default function SearchScreen() {
                   onPress={() => handleAnalyze()}
                   disabled={!query.trim() || isAnalyzing}
                 >
-                  <Ionicons name="search" size={20} color={query.trim() ? "#fff" : colors.mutedForeground} />
+                  <Icon name="search" size={20} color={query.trim() ? "#fff" : colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
 
@@ -230,7 +230,7 @@ export default function SearchScreen() {
                   <View style={styles.resultHeader}>
                     <Text style={[styles.resultLabel, { color: colors.foreground }]}>نتيجة التحليل</Text>
                     <TouchableOpacity onPress={() => { setResult(null); setQuery(""); }}>
-                      <Ionicons name="refresh" size={20} color={colors.mutedForeground} />
+                      <Icon name="refresh" size={20} color={colors.mutedForeground} />
                     </TouchableOpacity>
                   </View>
                 )}

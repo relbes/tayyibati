@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listFoods, createFood, deleteFood } from "@/lib/api";
@@ -70,11 +70,11 @@ export default function AdminScreen() {
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          <Icon name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground }]}>لوحة الإدارة</Text>
         <TouchableOpacity onPress={() => setShowAdd(!showAdd)}>
-          <Ionicons name={showAdd ? "close-circle" : "add-circle"} size={26} color={colors.primary} />
+          <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color={colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -130,7 +130,7 @@ export default function AdminScreen() {
       {/* Search & Filter */}
       <View style={[styles.searchBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <View style={[styles.searchInput, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-          <Ionicons name="search" size={16} color={colors.mutedForeground} />
+          <Icon name="search" size={16} color={colors.mutedForeground} />
           <TextInput
             style={[styles.searchText, { color: colors.foreground }]}
             placeholder="بحث..."
@@ -172,7 +172,7 @@ export default function AdminScreen() {
             <View style={styles.foodRight}>
               <Text style={[styles.foodStatus, { color: statusColor(item.status) }]}>{statusLabel(item.status)}</Text>
               <TouchableOpacity onPress={() => handleDelete(item.id, item.nameAr)}>
-                <Ionicons name="trash-outline" size={18} color={colors.error} />
+                <Icon name="trash-outline" size={18} color={colors.error} />
               </TouchableOpacity>
             </View>
           </View>
@@ -183,7 +183,7 @@ export default function AdminScreen() {
         ListEmptyComponent={
           !isLoading ? (
             <View style={styles.emptyCenter}>
-              <Ionicons name="server-outline" size={40} color={colors.mutedForeground} />
+              <Icon name="server-outline" size={40} color={colors.mutedForeground} />
               <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>لا توجد بيانات</Text>
             </View>
           ) : null

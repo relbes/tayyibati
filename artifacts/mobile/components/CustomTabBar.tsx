@@ -5,21 +5,20 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
-  Pressable,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
 import { useColorScheme } from "react-native";
-import { useColors } from "@/hooks/useColors";
-import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { Icon } from "@/components/Icon";
 
-type IoniconName = React.ComponentProps<typeof Ionicons>["name"];
+interface NavRoute { key: string; name: string }
+interface NavState { index: number; routes: NavRoute[] }
+interface BottomTabBarProps { state: NavState; navigation: any }
 
 interface TabConfig {
   name: string;
   label: string;
-  icon: IoniconName;
-  iconFocused: IoniconName;
+  icon: string;
+  iconFocused: string;
   isCamera?: boolean;
 }
 
@@ -31,104 +30,74 @@ const TABS: TabConfig[] = [
   { name: "profile", label: "حسابي",    icon: "person-outline",  iconFocused: "person" },
 ];
 
-const TAB_HEIGHT = 60;
+const PRIMARY = "#1B7A5E";
+const PRIMARY_DARK = "#4DC49A";
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
-  const colors = useColors();
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
 
-  // Reliable bottom padding: respect safe area but cap it, add fixed Android floor
-  const bottomPad = Platform.OS === "android"
-    ? 8
-    : Math.max(insets.bottom, 4);
-
-  // Use a lighter background in dark mode so the tab bar is visually distinct
-  const barBg = scheme === "dark" ? "#1E2D27" : "#FFFFFF";
-  const borderColor = scheme === "dark" ? "#2A3D35" : "#E0EBE5";
+  const isDark = scheme === "dark";
+  const barBg = isDark ? "#1A2622" : "#FFFFFF";
+  const borderColor = isDark ? "#2A3D35" : "#E5EFE9";
+  const activeColor = isDark ? PRIMARY_DARK : PRIMARY;
+  const inactiveColor = isDark ? "#5A7870" : "#8A9B95";
+  const bottomPad = Platform.OS === "android" ? 6 : Math.max(insets.bottom, 4);
 
   return (
     <View
       style={[
-        styles.wrapper,
+        styles.container,
         {
-          paddingBottom: bottomPad,
           backgroundColor: barBg,
           borderTopColor: borderColor,
+          paddingBottom: bottomPad,
         },
       ]}
     >
-      <View style={styles.row}>
-        {TABS.map((tab) => {
-          const routeIndex = state.routes.findIndex((r) => r.name === tab.name);
-          const isFocused = state.index === routeIndex;
+      {TABS.map((tab) => {
+        const routeIndex = state.routes.findIndex((r: NavRoute) => r.name === tab.name);
+        const isFocused = state.index === routeIndex;
+        const color = isFocused ? activeColor : inactiveColor;
 
-          const onPress = () => {
-            if (routeIndex === -1) return;
-            const event = navigation.emit({
-              type: "tabPress",
-              target: state.routes[routeIndex]?.key ?? "",
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(tab.name);
-            }
-          };
-
-          if (tab.isCamera) {
-            return (
-              <View key={tab.name} style={styles.camCol}>
-                <Pressable
-                  onPress={onPress}
-                  style={({ pressed }) => [
-                    styles.camBtn,
-                    { backgroundColor: colors.primary },
-                    pressed && styles.camBtnPressed,
-                  ]}
-                  android_ripple={{ color: "rgba(255,255,255,0.3)", borderless: false }}
-                >
-                  <Ionicons
-                    name={isFocused ? "camera" : "camera-outline"}
-                    size={26}
-                    color="#fff"
-                  />
-                </Pressable>
-                <Text
-                  style={[
-                    styles.label,
-                    { color: isFocused ? colors.primary : colors.mutedForeground },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {tab.label}
-                </Text>
-              </View>
-            );
+        const onPress = () => {
+          if (routeIndex === -1) return;
+          const event = navigation.emit({
+            type: "tabPress",
+            target: state.routes[routeIndex]?.key ?? "",
+            canPreventDefault: true,
+          });
+          if (!isFocused && !event.defaultPrevented) {
+            navigation.navigate(tab.name);
           }
+        };
 
+        if (tab.isCamera) {
           return (
             <TouchableOpacity
               key={tab.name}
-              style={styles.tabCol}
+              style={styles.tab}
               onPress={onPress}
               activeOpacity={0.7}
             >
               <View
                 style={[
-                  styles.indicator,
-                  { backgroundColor: isFocused ? colors.primary : "transparent" },
+                  styles.cameraCircle,
+                  { backgroundColor: isFocused ? activeColor : (isDark ? "#1E2F28" : "#EAF3EF") },
                 ]}
-              />
-              <Ionicons
-                name={isFocused ? tab.iconFocused : tab.icon}
-                size={22}
-                color={isFocused ? colors.primary : colors.mutedForeground}
-              />
+              >
+                <Icon
+                  name={isFocused ? "camera" : "camera-outline"}
+                  size={26}
+                  color={isFocused ? "#fff" : activeColor}
+                  strokeWidth={1.8}
+                />
+              </View>
               <Text
                 style={[
                   styles.label,
                   {
-                    color: isFocused ? colors.primary : colors.mutedForeground,
+                    color,
                     fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_400Regular",
                   },
                 ]}
@@ -138,63 +107,69 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               </Text>
             </TouchableOpacity>
           );
-        })}
-      </View>
+        }
+
+        return (
+          <TouchableOpacity
+            key={tab.name}
+            style={styles.tab}
+            onPress={onPress}
+            activeOpacity={0.7}
+          >
+            <Icon
+              name={isFocused ? tab.iconFocused : tab.icon}
+              size={24}
+              color={color}
+              strokeWidth={isFocused ? 2.5 : 1.5}
+            />
+            <Text
+              style={[
+                styles.label,
+                {
+                  color,
+                  fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_400Regular",
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {tab.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrapper: {
+  container: {
+    flexDirection: "row",
     borderTopWidth: StyleSheet.hairlineWidth,
-    elevation: 12,
+    elevation: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.07,
     shadowRadius: 8,
   },
-  row: {
-    flexDirection: "row",
-    height: TAB_HEIGHT,
-    alignItems: "center",
-  },
-  tabCol: {
+  tab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 3,
+    paddingTop: 10,
+    paddingBottom: 4,
+    gap: 4,
+    minHeight: 62,
   },
-  indicator: {
-    width: 20,
-    height: 3,
-    borderRadius: 2,
-    marginBottom: 2,
+  cameraCircle: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -8,
   },
   label: {
-    fontSize: 10,
+    fontSize: 11,
     textAlign: "center",
-  },
-  camCol: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-  },
-  camBtn: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: "center",
-    justifyContent: "center",
-    elevation: 6,
-    shadowColor: "#1B7A5E",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.35,
-    shadowRadius: 5,
-    marginTop: -16,
-  },
-  camBtnPressed: {
-    opacity: 0.85,
-    transform: [{ scale: 0.93 }],
   },
 });

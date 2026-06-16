@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 
 interface Section {
@@ -98,7 +98,7 @@ export default function PrivacyPolicyScreen() {
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Ionicons name="chevron-forward" size={24} color={colors.primary} />
+          <Icon name="chevron-forward" size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground }]}>
           سياسة الخصوصية
@@ -153,7 +153,7 @@ export default function PrivacyPolicyScreen() {
             },
           ]}
         >
-          <Ionicons name="shield-checkmark" size={20} color={colors.primary} />
+          <Icon name="shield-checkmark" size={20} color={colors.primary} />
           <Text style={[styles.footerNoteText, { color: colors.primary }]}>
             بياناتك في أمان — لا نشارك معلوماتك الشخصية مع أي جهة تجارية
           </Text>

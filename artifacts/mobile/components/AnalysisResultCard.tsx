@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { ScoreRing } from "./ScoreRing";
 import { IngredientChip } from "./IngredientChip";
@@ -19,7 +19,7 @@ export function AnalysisResultCard({ report, onRetry }: AnalysisResultCardProps)
     return (
       <View style={[styles.card, styles.notFoundCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={[styles.notFoundIconWrap, { backgroundColor: colors.muted }]}>
-          <Ionicons name="search-outline" size={36} color={colors.mutedForeground} />
+          <Icon name="search-outline" size={36} color={colors.mutedForeground} />
         </View>
         <Text style={[styles.notFoundTitle, { color: colors.foreground }]}>
           لم يتم التعرف على طعام
@@ -35,7 +35,7 @@ export function AnalysisResultCard({ report, onRetry }: AnalysisResultCardProps)
             style={[styles.retryBtn, { backgroundColor: colors.primary }]}
             onPress={onRetry}
           >
-            <Ionicons name="refresh-outline" size={16} color="#fff" />
+            <Icon name="refresh-outline" size={16} color="#fff" />
             <Text style={styles.retryText}>حاول مجدداً</Text>
           </TouchableOpacity>
         )}
@@ -83,12 +83,12 @@ export function AnalysisResultCard({ report, onRetry }: AnalysisResultCardProps)
             onPress={() => setExpanded(expanded === section.key ? null : section.key)}
           >
             <View style={styles.sectionLeft}>
-              <Ionicons name={section.icon} size={18} color={section.color} />
+              <Icon name={section.icon} size={18} color={section.color} />
               <Text style={[styles.sectionTitle, { color: section.color }]}>
                 {section.label} ({section.items.length})
               </Text>
             </View>
-            <Ionicons
+            <Icon
               name={expanded === section.key ? "chevron-up" : "chevron-down"}
               size={16}
               color={colors.mutedForeground}
@@ -108,7 +108,7 @@ export function AnalysisResultCard({ report, onRetry }: AnalysisResultCardProps)
         <View style={[styles.section, { borderTopColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionLeft}>
-              <Ionicons name="bulb" size={18} color={colors.accent} />
+              <Icon name="bulb" size={18} color={colors.accent} />
               <Text style={[styles.sectionTitle, { color: colors.accent }]}>اقتراحات</Text>
             </View>
           </View>

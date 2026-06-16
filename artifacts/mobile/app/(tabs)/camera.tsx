@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -177,7 +177,7 @@ export default function CameraScreen() {
                 },
               ]}
             >
-              <Ionicons
+              <Icon
                 name="image-outline"
                 size={52}
                 color={colors.mutedForeground}
@@ -194,7 +194,7 @@ export default function CameraScreen() {
                   onPress={() => pickImage("camera")}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="camera" size={20} color="#fff" />
+                  <Icon name="camera" size={20} color="#fff" />
                   <Text style={styles.pickBtnText}>كاميرا</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -209,7 +209,7 @@ export default function CameraScreen() {
                   onPress={() => pickImage("library")}
                   activeOpacity={0.8}
                 >
-                  <Ionicons
+                  <Icon
                     name="images"
                     size={20}
                     color={colors.secondaryForeground}
@@ -249,7 +249,7 @@ export default function CameraScreen() {
                   onPress={resetAll}
                   activeOpacity={0.7}
                 >
-                  <Ionicons
+                  <Icon
                     name="refresh"
                     size={16}
                     color={colors.mutedForeground}
@@ -279,7 +279,7 @@ export default function CameraScreen() {
               ]}
             >
               <View style={styles.possibleHeader}>
-                <Ionicons
+                <Icon
                   name="help-circle-outline"
                   size={20}
                   color={colors.primary}
@@ -336,7 +336,7 @@ export default function CameraScreen() {
                   onPress={() => pickImage("camera")}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="camera" size={16} color="#fff" />
+                  <Icon name="camera" size={16} color="#fff" />
                   <Text style={styles.possibleActionBtnText}>كاميرا</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -351,7 +351,7 @@ export default function CameraScreen() {
                   onPress={() => pickImage("library")}
                   activeOpacity={0.8}
                 >
-                  <Ionicons
+                  <Icon
                     name="images"
                     size={16}
                     color={colors.mutedForeground}
@@ -403,7 +403,7 @@ export default function CameraScreen() {
                     activeOpacity={0.8}
                     disabled={isAnalyzing}
                   >
-                    <Ionicons name="camera" size={18} color="#fff" />
+                    <Icon name="camera" size={18} color="#fff" />
                     <Text style={styles.afterBtnText}>كاميرا</Text>
                   </TouchableOpacity>
 
@@ -420,7 +420,7 @@ export default function CameraScreen() {
                     activeOpacity={0.8}
                     disabled={isAnalyzing}
                   >
-                    <Ionicons
+                    <Icon
                       name="images"
                       size={18}
                       color={colors.secondaryForeground}
@@ -443,7 +443,7 @@ export default function CameraScreen() {
                     onPress={resetAll}
                     activeOpacity={0.7}
                   >
-                    <Ionicons
+                    <Icon
                       name="close"
                       size={16}
                       color={colors.mutedForeground}

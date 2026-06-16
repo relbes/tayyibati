@@ -36,15 +36,10 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  // Tajawal: loaded from package. Ionicons: loaded from a local copy
-  // (assets/fonts/Ionicons.ttf) so Metro bundles it as a project asset —
-  // bypasses pnpm symlink resolution and ensures it reaches Android devices.
-  // iOS Expo Go pre-bundles it anyway; loading again is harmless (same file).
   const [fontsLoaded, fontError] = useFonts({
     Tajawal_400Regular,
     Tajawal_500Medium,
     Tajawal_700Bold,
-    ionicons: require("../assets/fonts/Ionicons.ttf"),
   });
 
   useEffect(() => {

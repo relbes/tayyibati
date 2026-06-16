@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColors } from "@/hooks/useColors";
@@ -57,7 +57,7 @@ export default function ProfileScreen() {
         </View>
         <View style={styles.guestCenter}>
           <View style={[styles.avatarLarge, { backgroundColor: colors.muted }]}>
-            <Ionicons name="person-outline" size={40} color={colors.mutedForeground} />
+            <Icon name="person-outline" size={40} color={colors.mutedForeground} />
           </View>
           <Text style={[styles.guestTitle, { color: colors.foreground }]}>مرحباً بك</Text>
           <Text style={[styles.guestDesc, { color: colors.mutedForeground }]}>
@@ -93,7 +93,7 @@ export default function ProfileScreen() {
           <Text style={styles.userEmail}>{user.email}</Text>
           {user.isPremium && (
             <View style={styles.premiumBadge}>
-              <Ionicons name="star" size={14} color={colors.accent} />
+              <Icon name="star" size={14} color={colors.accent} />
               <Text style={[styles.premiumText, { color: colors.accent }]}>Premium</Text>
             </View>
           )}
@@ -104,7 +104,7 @@ export default function ProfileScreen() {
           {usage && !usage.isPremium && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.cardHeader}>
-                <Ionicons name="analytics-outline" size={20} color={colors.primary} />
+                <Icon name="analytics-outline" size={20} color={colors.primary} />
                 <Text style={[styles.cardTitle, { color: colors.foreground }]}>الاستخدام اليومي</Text>
               </View>
               <View style={styles.usageRow}>
@@ -129,14 +129,14 @@ export default function ProfileScreen() {
               activeOpacity={0.8}
               onPress={() => router.push("/pricing")}
             >
-              <Ionicons name="star" size={28} color={colors.accent} />
+              <Icon name="star" size={28} color={colors.accent} />
               <View style={styles.upgradeText}>
                 <Text style={[styles.upgradeTitle, { color: colors.foreground }]}>ترقية لـ Premium</Text>
                 <Text style={[styles.upgradeDesc, { color: colors.mutedForeground }]}>
                   تحليلات غير محدودة يومياً
                 </Text>
               </View>
-              <Ionicons name="chevron-back" size={20} color={colors.accent} />
+              <Icon name="chevron-back" size={20} color={colors.accent} />
             </TouchableOpacity>
           )}
 
@@ -152,10 +152,10 @@ export default function ProfileScreen() {
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => item.route && router.push(item.route as any)}
             >
-              <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
+              <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
               <Text style={[styles.menuLabel, { color: colors.foreground }]}>{item.label}</Text>
               <View style={[styles.menuIcon, { backgroundColor: colors.primary + "18" }]}>
-                <Ionicons name={item.icon} size={20} color={colors.primary} />
+                <Icon name={item.icon} size={20} color={colors.primary} />
               </View>
             </TouchableOpacity>
           ))}
@@ -165,10 +165,10 @@ export default function ProfileScreen() {
             style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.error + "30" }]}
             onPress={handleSignOut}
           >
-            <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
+            <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
             <Text style={[styles.menuLabel, { color: colors.error }]}>تسجيل الخروج</Text>
             <View style={[styles.menuIcon, { backgroundColor: colors.error + "18" }]}>
-              <Ionicons name="log-out-outline" size={20} color={colors.error} />
+              <Icon name="log-out-outline" size={20} color={colors.error} />
             </View>
           </TouchableOpacity>
         </View>

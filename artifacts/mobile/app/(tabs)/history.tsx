@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -82,14 +82,14 @@ export default function HistoryScreen() {
             {item.query}
           </Text>
           <View style={styles.itemMeta}>
-            <Ionicons name={typeIcon(item.analysisType)} size={13} color={colors.mutedForeground} />
+            <Icon name={typeIcon(item.analysisType)} size={13} color={colors.mutedForeground} />
             <Text style={[styles.itemDate, { color: colors.mutedForeground }]}>
               {new Date(item.createdAt).toLocaleDateString("ar-SA")}
             </Text>
           </View>
         </View>
         <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-          <Ionicons name="trash-outline" size={18} color={colors.error} />
+          <Icon name="trash-outline" size={18} color={colors.error} />
         </TouchableOpacity>
       </TouchableOpacity>
     );
@@ -108,7 +108,7 @@ export default function HistoryScreen() {
 
       {!user ? (
         <View style={styles.emptyCenter}>
-          <Ionicons name="person-outline" size={48} color={colors.mutedForeground} />
+          <Icon name="person-outline" size={48} color={colors.mutedForeground} />
           <Text style={[styles.emptyTitle, { color: colors.foreground }]}>سجّل دخولك</Text>
           <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
             سجّل دخولك لحفظ تحليلاتك ومراجعتها لاحقاً
@@ -131,7 +131,7 @@ export default function HistoryScreen() {
           ListEmptyComponent={
             !isLoading ? (
               <View style={styles.emptyCenter}>
-                <Ionicons name="time-outline" size={48} color={colors.mutedForeground} />
+                <Icon name="time-outline" size={48} color={colors.mutedForeground} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>لا يوجد سجل</Text>
                 <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
                   ابدأ بتحليل طعام لتظهر نتائجك هنا

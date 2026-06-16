@@ -1,0 +1,1 @@
+- [Ionicons Android Fix](ionicons-android.md) — @expo/vector-icons fails on Android Expo Go in pnpm monorepos; use lucide-react-native (SVG, no font loading) via components/Icon.tsx wrapper instead.

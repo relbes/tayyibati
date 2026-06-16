@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -84,7 +84,7 @@ export default function ForgotPasswordScreen() {
         style={[styles.topBar, { paddingTop: topPadding + 8 }]}
       >
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-forward" size={24} color="#fff" />
+          <Icon name="arrow-forward" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>استعادة كلمة المرور</Text>
         <View style={{ width: 40 }} />
@@ -109,7 +109,7 @@ export default function ForgotPasswordScreen() {
 
           {info ? (
             <View style={[styles.infoBox, { backgroundColor: colors.primary + "14", borderColor: colors.primary + "33" }]}>
-              <Ionicons name="mail-outline" size={16} color={colors.primary} />
+              <Icon name="mail-outline" size={16} color={colors.primary} />
               <Text style={[styles.infoText, { color: colors.primary }]}>{info}</Text>
             </View>
           ) : null}
@@ -131,7 +131,7 @@ export default function ForgotPasswordScreen() {
                   autoComplete="email"
                   onSubmitEditing={handleSendCode}
                 />
-                <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+                <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
               </View>
             </View>
           ) : (
@@ -149,7 +149,7 @@ export default function ForgotPasswordScreen() {
                     keyboardType="number-pad"
                     maxLength={6}
                   />
-                  <Ionicons name="keypad-outline" size={18} color={colors.mutedForeground} />
+                  <Icon name="keypad-outline" size={18} color={colors.mutedForeground} />
                 </View>
               </View>
 
@@ -157,7 +157,7 @@ export default function ForgotPasswordScreen() {
                 <Text style={[styles.label, { color: colors.foreground }]}>كلمة المرور الجديدة</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
-                    <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
+                    <Icon name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
@@ -172,7 +172,7 @@ export default function ForgotPasswordScreen() {
                     autoComplete="new-password"
                     onSubmitEditing={handleReset}
                   />
-                  <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+                  <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
                 </View>
               </View>
             </>
@@ -180,7 +180,7 @@ export default function ForgotPasswordScreen() {
 
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
+              <Icon name="alert-circle-outline" size={16} color={colors.error} />
               <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
             </View>
           ) : null}

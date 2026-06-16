@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
@@ -141,7 +141,7 @@ export default function HomeScreen() {
             style={[styles.profileBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
             onPress={() => router.push("/(tabs)/profile")}
           >
-            <Ionicons name={user ? "person" : "person-outline"} size={20} color="#fff" />
+            <Icon name={user ? "person" : "person-outline"} size={20} color="#fff" />
           </TouchableOpacity>
           <View style={styles.headerTitle}>
             <Text style={styles.appName}>{appName}</Text>
@@ -155,11 +155,11 @@ export default function HomeScreen() {
             style={[styles.cameraBtn, { backgroundColor: colors.primary + "18" }]}
             onPress={handleCameraScan}
           >
-            <Ionicons name="camera" size={20} color={colors.primary} />
+            <Icon name="camera" size={20} color={colors.primary} />
           </TouchableOpacity>
           <TextInput
             ref={inputRef}
-            style={[styles.searchInput, { color: colors.foreground }]}
+            style={[styles.searchInput, { color: "#111827" }]}
             placeholder="ابحث أو أدخل اسم طعام أو مكوّن..."
             placeholderTextColor={colors.mutedForeground}
             value={query}
@@ -173,7 +173,7 @@ export default function HomeScreen() {
             onPress={handleSearch}
             disabled={!query.trim() || isAnalyzing}
           >
-            <Ionicons name="search" size={18} color="#fff" />
+            <Icon name="search" size={18} color="#fff" />
           </TouchableOpacity>
         </View>
 
@@ -201,7 +201,7 @@ export default function HomeScreen() {
           >
             <View style={styles.resultHeader}>
               <TouchableOpacity onPress={() => { setResult(null); setQuery(""); }} style={[styles.clearBtn, { backgroundColor: colors.muted }]}>
-                <Ionicons name="close" size={14} color={colors.mutedForeground} />
+                <Icon name="close" size={14} color={colors.mutedForeground} />
                 <Text style={[styles.clearText, { color: colors.mutedForeground }]}>مسح النتيجة</Text>
               </TouchableOpacity>
               <Text style={[styles.resultTitle, { color: colors.foreground }]}>نتيجة التحليل</Text>
@@ -225,7 +225,7 @@ export default function HomeScreen() {
                   style={styles.actionGrad}
                 >
                   <View style={[styles.actionIconWrap, { backgroundColor: colors.primary + "20" }]}>
-                    <Ionicons name="camera" size={28} color={colors.primary} />
+                    <Icon name="camera" size={28} color={colors.primary} />
                   </View>
                   <Text style={[styles.actionLabel, { color: colors.foreground }]}>تحليل صورة</Text>
                   <Text style={[styles.actionDesc, { color: colors.mutedForeground }]}>صوّر الطعام لفحص مكوناته</Text>
@@ -264,9 +264,9 @@ export default function HomeScreen() {
               onPress={() => router.push("/(tabs)/history")}
               activeOpacity={0.7}
             >
-              <Ionicons name="chevron-back" size={18} color={colors.mutedForeground} />
+              <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
               <Text style={[styles.historyLinkText, { color: colors.foreground }]}>عرض سجل التحليلات</Text>
-              <Ionicons name="time-outline" size={18} color={colors.primary} />
+              <Icon name="time-outline" size={18} color={colors.primary} />
             </TouchableOpacity>
           </View>
         )}

@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import type { IngredientResult } from "@/context/AnalysisContext";
 
@@ -33,7 +33,7 @@ export function IngredientChip({ ingredient }: IngredientChipProps) {
 
   return (
     <View style={[styles.chip, { backgroundColor: c.bg, borderColor: c.border }]}>
-      <Ionicons name={c.icon} size={14} color={c.text} />
+      <Icon name={c.icon} size={14} color={c.text} />
       <Text style={[styles.text, { color: c.text }]}>{ingredient.nameAr || ingredient.name}</Text>
       {freqLabel && (
         <View style={[styles.freqBadge, { backgroundColor: c.text + "22" }]}>

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -137,7 +137,7 @@ export default function PricingScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={22} color={colors.foreground} />
+          <Icon name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground }]}>الباقات</Text>
         <View style={{ width: 44 }} />
@@ -172,7 +172,7 @@ export default function PricingScreen() {
                 <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
                   <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
                 </View>
-                <Ionicons name="star" size={32} color={colors.accent} style={{ marginTop: 24 }} />
+                <Icon name="star" size={32} color={colors.accent} style={{ marginTop: 24 }} />
                 <Text style={[styles.planName, { color: colors.foreground }]}>{plan.name}</Text>
                 {priceNum > 0 ? (
                   <Text style={[styles.planPrice, { color: colors.foreground }]}>
@@ -191,7 +191,7 @@ export default function PricingScreen() {
                 {features.map((f) => (
                   <View key={f} style={styles.featureRow}>
                     <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
-                    <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+                    <Icon name="checkmark-circle" size={18} color={colors.accent} />
                   </View>
                 ))}
                 {isCurrentPlan ? (
@@ -224,7 +224,7 @@ export default function PricingScreen() {
                 {features.map((f) => (
                   <View key={f} style={styles.featureRow}>
                     <Text style={[styles.featureText, { color: colors.mutedForeground }]}>{f}</Text>
-                    <Ionicons name="checkmark-circle" size={18} color={colors.allowed} />
+                    <Icon name="checkmark-circle" size={18} color={colors.allowed} />
                   </View>
                 ))}
                 {isCurrentPlan && (

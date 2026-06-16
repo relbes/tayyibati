@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
@@ -191,7 +191,7 @@ export default function AuthScreen() {
         style={[styles.topBar, { paddingTop: topPadding + 8 }]}
       >
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
-          <Ionicons name="close" size={24} color="#fff" />
+          <Icon name="close" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>طيباتي</Text>
         <View style={{ width: 40 }} />
@@ -269,7 +269,7 @@ export default function AuthScreen() {
                   textAlign="right"
                   autoCapitalize="words"
                 />
-                <Ionicons name="person-outline" size={18} color={colors.mutedForeground} />
+                <Icon name="person-outline" size={18} color={colors.mutedForeground} />
               </View>
             </View>
           )}
@@ -289,7 +289,7 @@ export default function AuthScreen() {
                 autoCorrect={false}
                 autoComplete="email"
               />
-              <Ionicons name="mail-outline" size={18} color={colors.mutedForeground} />
+              <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
             </View>
           </View>
 
@@ -297,7 +297,7 @@ export default function AuthScreen() {
             <Text style={[styles.label, { color: colors.foreground }]}>كلمة المرور</Text>
             <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
-                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
+                <Icon name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
@@ -312,7 +312,7 @@ export default function AuthScreen() {
                 autoComplete={tab === "login" ? "current-password" : "new-password"}
                 onSubmitEditing={handleSubmit}
               />
-              <Ionicons name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+              <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
             </View>
           </View>
 
@@ -324,7 +324,7 @@ export default function AuthScreen() {
 
           {lockedSecondsLeft !== null && lockedSecondsLeft > 0 ? (
             <View style={[styles.lockoutBox, { backgroundColor: "#7f1d1d22", borderColor: "#ef444460" }]}>
-              <Ionicons name="lock-closed" size={22} color="#ef4444" />
+              <Icon name="lock-closed" size={22} color="#ef4444" />
               <View style={styles.lockoutTextCol}>
                 <Text style={[styles.lockoutTitle, { color: "#ef4444" }]}>تم إغلاق الحساب مؤقتاً</Text>
                 <Text style={[styles.lockoutBody, { color: "#ef4444cc" }]}>
@@ -340,7 +340,7 @@ export default function AuthScreen() {
 
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
-              <Ionicons name="alert-circle-outline" size={16} color={colors.error} />
+              <Icon name="alert-circle-outline" size={16} color={colors.error} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
                 {remainingAttempts !== null && remainingAttempts > 0 ? (
