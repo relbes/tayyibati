@@ -37,6 +37,9 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  // Load ALL fonts before first render — blocks splash until ready.
+  // useFonts from expo-font (not the Tajawal-specific one) supports
+  // arbitrary font maps including Ionicons.
   const [fontsLoaded, fontError] = useFonts({
     Tajawal_400Regular,
     Tajawal_500Medium,
