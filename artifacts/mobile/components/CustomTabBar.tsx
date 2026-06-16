@@ -48,7 +48,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         {
           paddingBottom: bottomPad,
           backgroundColor: "transparent",
-          pointerEvents: "box-none",
+          pointerEvents: "box-none" as any,
         },
       ]}
     >
@@ -64,7 +64,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       />
 
       {/* Tabs row — overlays the bar */}
-      <View style={[styles.row, { pointerEvents: "box-none" }]}>
+      <View style={[styles.row, { pointerEvents: "box-none" as any }]}>
         {TABS.map((tab) => {
           const routeIndex = state.routes.findIndex((r) => r.name === tab.name);
           const isFocused = state.index === routeIndex;
