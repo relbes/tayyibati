@@ -4,12 +4,12 @@ import {
   Tajawal_700Bold,
 } from "@expo-google-fonts/tajawal";
 import { useFonts } from "expo-font";
+import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { I18nManager } from "react-native";
 
@@ -40,6 +40,7 @@ export default function RootLayout() {
     Tajawal_400Regular,
     Tajawal_500Medium,
     Tajawal_700Bold,
+    ...Ionicons.font,
   });
 
   useEffect(() => {
@@ -57,9 +58,7 @@ export default function RootLayout() {
           <AuthProvider>
             <AnalysisProvider>
               <GestureHandlerRootView style={{ flex: 1 }}>
-                <KeyboardProvider>
-                  <RootLayoutNav />
-                </KeyboardProvider>
+                <RootLayoutNav />
               </GestureHandlerRootView>
             </AnalysisProvider>
           </AuthProvider>
