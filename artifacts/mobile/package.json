@@ -57,6 +57,7 @@
   },
   "dependencies": {
     "@expo-google-fonts/tajawal": "^0.4.1",
-    "lucide-react-native": "^1.18.0"
+    "lucide-react-native": "^1.18.0",
+    "react-native-purchases": "^10.3.0"
   }
 }
