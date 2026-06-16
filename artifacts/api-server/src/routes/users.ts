@@ -170,50 +170,51 @@ router.post("/users/register", async (req, res) => {
       // Account already exists — treat register like a login when credentials match,
       // otherwise reject so we never silently overwrite an account or sign in
       // without proof of ownership.
-      if (existing.passwordHash) {
-        if (!password) {
-          return void res.status(401).json({ error: "Account exists. Sign in with your password." });
-        }
-        // Enforce lockout before comparing the password.
-        if (existing.lockedUntil && existing.lockedUntil.getTime() > Date.now()) {
-          const secondsLeft = Math.ceil((existing.lockedUntil.getTime() - Date.now()) / 1000);
+      if (!existing.passwordHash) {
+        // Account was created via Google or another passwordless flow.
+        // Refuse to set a new password here — doing so would let any caller
+        // take over the account without proving ownership.
+        return void res.status(401).json({ error: "Account registered with a different sign-in method. Please use the correct sign-in method." });
+      }
+      if (!password) {
+        return void res.status(401).json({ error: "Account exists. Sign in with your password." });
+      }
+      // Enforce lockout before comparing the password.
+      if (existing.lockedUntil && existing.lockedUntil.getTime() > Date.now()) {
+        const secondsLeft = Math.ceil((existing.lockedUntil.getTime() - Date.now()) / 1000);
+        return void res.status(423).json({
+          error: "Account temporarily locked due to too many failed login attempts. Try again later.",
+          lockedUntil: existing.lockedUntil.toISOString(),
+          secondsLeft,
+        });
+      }
+      const ok = await bcrypt.compare(String(password), existing.passwordHash);
+      if (!ok) {
+        const nextAttempts = existing.failedLoginAttempts + 1;
+        const shouldLock = nextAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
+        await db
+          .update(usersTable)
+          .set({
+            failedLoginAttempts: nextAttempts,
+            lockedUntil: shouldLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : existing.lockedUntil,
+          })
+          .where(eq(usersTable.id, existing.id));
+        if (shouldLock) {
           return void res.status(423).json({
             error: "Account temporarily locked due to too many failed login attempts. Try again later.",
-            lockedUntil: existing.lockedUntil.toISOString(),
-            secondsLeft,
+            lockedUntil: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString(),
+            secondsLeft: Math.ceil(LOCKOUT_DURATION_MS / 1000),
           });
         }
-        const ok = await bcrypt.compare(String(password), existing.passwordHash);
-        if (!ok) {
-          const nextAttempts = existing.failedLoginAttempts + 1;
-          const shouldLock = nextAttempts >= MAX_FAILED_LOGIN_ATTEMPTS;
-          await db
-            .update(usersTable)
-            .set({
-              failedLoginAttempts: nextAttempts,
-              lockedUntil: shouldLock ? new Date(Date.now() + LOCKOUT_DURATION_MS) : existing.lockedUntil,
-            })
-            .where(eq(usersTable.id, existing.id));
-          if (shouldLock) {
-            return void res.status(423).json({
-              error: "Account temporarily locked due to too many failed login attempts. Try again later.",
-              lockedUntil: new Date(Date.now() + LOCKOUT_DURATION_MS).toISOString(),
-              secondsLeft: Math.ceil(LOCKOUT_DURATION_MS / 1000),
-            });
-          }
-          return void res.status(401).json({
-            error: "Account exists. Wrong password.",
-            remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS - nextAttempts,
-          });
-        }
+        return void res.status(401).json({
+          error: "Account exists. Wrong password.",
+          remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS - nextAttempts,
+        });
       }
       const updates: Record<string, unknown> = {
         failedLoginAttempts: 0,
         lockedUntil: null,
       };
-      if (!existing.passwordHash && password) {
-        updates.passwordHash = await bcrypt.hash(String(password), 10);
-      }
       if (name && !existing.name) updates.name = String(name);
       if (avatar) updates.avatar = String(avatar);
       const [updated] = await db
@@ -289,15 +290,12 @@ router.post("/users/login", async (req, res) => {
           remainingAttempts: MAX_FAILED_LOGIN_ATTEMPTS - nextAttempts,
         });
       }
-    } else if (password) {
-      // Legacy account with no password set — set it on first login.
-      const hash = await bcrypt.hash(String(password), 10);
-      const [updated] = await db
-        .update(usersTable)
-        .set({ passwordHash: hash, failedLoginAttempts: 0, lockedUntil: null })
-        .where(eq(usersTable.id, user.id))
-        .returning();
-      return void res.json({ ...toPublicUser(updated), token: issueToken(updated.id) });
+    } else {
+      // Account has no password (Google/OAuth or other passwordless account).
+      // Reject unconditionally — whether or not the caller supplied a password —
+      // to prevent email-only account takeover. Passwordless accounts must
+      // authenticate via their original sign-in method, not this endpoint.
+      return void res.status(401).json({ error: "This account uses a different sign-in method. Please use the correct sign-in method." });
     }
 
     // Successful login — reset failure counter and any expired lock.
