@@ -15,6 +15,14 @@ import { I18nManager } from "react-native";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { AnalysisProvider } from "@/context/AnalysisContext";
+import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
+
+try {
+  initializeRevenueCat();
+} catch (err: any) {
+  // RevenueCat init failure is non-fatal — app continues without subscriptions
+  console.warn("RevenueCat init failed:", err?.message);
+}
 
 I18nManager.forceRTL(true);
 
@@ -55,9 +63,11 @@ export default function RootLayout() {
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <AnalysisProvider>
-              <GestureHandlerRootView style={{ flex: 1 }}>
-                <RootLayoutNav />
-              </GestureHandlerRootView>
+              <SubscriptionProvider>
+                <GestureHandlerRootView style={{ flex: 1 }}>
+                  <RootLayoutNav />
+                </GestureHandlerRootView>
+              </SubscriptionProvider>
             </AnalysisProvider>
           </AuthProvider>
         </QueryClientProvider>
