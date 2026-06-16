@@ -9,6 +9,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
 
@@ -22,7 +23,6 @@ interface TabConfig {
   isCamera?: boolean;
 }
 
-// RTL order: leftmost in array = rightmost on screen (flex row reversed by RTL)
 const TABS: TabConfig[] = [
   { name: "index",   label: "الرئيسية", icon: "home-outline",   iconFocused: "home" },
   { name: "search",  label: "بحث",      icon: "search-outline",  iconFocused: "search" },
@@ -31,15 +31,21 @@ const TABS: TabConfig[] = [
   { name: "profile", label: "حسابي",    icon: "person-outline",  iconFocused: "person" },
 ];
 
-// Height of regular tab content area
-const TAB_HEIGHT = 56;
-// Extra space above the bar for the camera FAB to "float" into
-const CAM_LIFT = 18;
+const TAB_HEIGHT = 60;
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const colors = useColors();
+  const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
-  const bottomPad = Math.max(insets.bottom, Platform.OS === "android" ? 4 : 0);
+
+  // Reliable bottom padding: respect safe area but cap it, add fixed Android floor
+  const bottomPad = Platform.OS === "android"
+    ? 8
+    : Math.max(insets.bottom, 4);
+
+  // Use a lighter background in dark mode so the tab bar is visually distinct
+  const barBg = scheme === "dark" ? "#1E2D27" : "#FFFFFF";
+  const borderColor = scheme === "dark" ? "#2A3D35" : "#E0EBE5";
 
   return (
     <View
@@ -47,24 +53,12 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         styles.wrapper,
         {
           paddingBottom: bottomPad,
-          backgroundColor: "transparent",
-          pointerEvents: "box-none" as any,
+          backgroundColor: barBg,
+          borderTopColor: borderColor,
         },
       ]}
     >
-      {/* The actual tab bar background — starts CAM_LIFT px below top of wrapper */}
-      <View
-        style={[
-          styles.bar,
-          {
-            backgroundColor: colors.card,
-            borderTopColor: colors.border,
-          },
-        ]}
-      />
-
-      {/* Tabs row — overlays the bar */}
-      <View style={[styles.row, { pointerEvents: "box-none" as any }]}>
+      <View style={styles.row}>
         {TABS.map((tab) => {
           const routeIndex = state.routes.findIndex((r) => r.name === tab.name);
           const isFocused = state.index === routeIndex;
@@ -91,7 +85,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                     { backgroundColor: colors.primary },
                     pressed && styles.camBtnPressed,
                   ]}
-                  android_ripple={{ color: "rgba(255,255,255,0.25)", borderless: false }}
+                  android_ripple={{ color: "rgba(255,255,255,0.3)", borderless: false }}
                 >
                   <Ionicons
                     name={isFocused ? "camera" : "camera-outline"}
@@ -101,7 +95,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 </Pressable>
                 <Text
                   style={[
-                    styles.camLabel,
+                    styles.label,
                     { color: isFocused ? colors.primary : colors.mutedForeground },
                   ]}
                   numberOfLines={1}
@@ -119,10 +113,9 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               onPress={onPress}
               activeOpacity={0.7}
             >
-              {/* active indicator dot above icon */}
               <View
                 style={[
-                  styles.dot,
+                  styles.indicator,
                   { backgroundColor: isFocused ? colors.primary : "transparent" },
                 ]}
               />
@@ -136,9 +129,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                   styles.label,
                   {
                     color: isFocused ? colors.primary : colors.mutedForeground,
-                    fontFamily: isFocused
-                      ? "Tajawal_700Bold"
-                      : "Tajawal_400Regular",
+                    fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_400Regular",
                   },
                 ]}
                 numberOfLines={1}
@@ -155,43 +146,29 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
 const styles = StyleSheet.create({
   wrapper: {
-    // Total height = bar height + lift for FAB
-    height: TAB_HEIGHT + CAM_LIFT,
-    flexDirection: "column",
-    justifyContent: "flex-end",
-  },
-  bar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: TAB_HEIGHT,
-    top: CAM_LIFT,
     borderTopWidth: StyleSheet.hairlineWidth,
-    elevation: 10,
+    elevation: 12,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
   row: {
     flexDirection: "row",
-    height: TAB_HEIGHT + CAM_LIFT,
-    alignItems: "flex-end",
-    paddingBottom: 6,
+    height: TAB_HEIGHT,
+    alignItems: "center",
   },
   tabCol: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-end",
-    paddingBottom: 2,
-    gap: 2,
+    justifyContent: "center",
+    gap: 3,
   },
-  dot: {
-    width: 18,
+  indicator: {
+    width: 20,
     height: 3,
     borderRadius: 2,
-    marginBottom: 4,
+    marginBottom: 2,
   },
   label: {
     fontSize: 10,
@@ -200,30 +177,24 @@ const styles = StyleSheet.create({
   camCol: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "flex-end",
-    paddingBottom: 2,
-    gap: 4,
+    justifyContent: "center",
+    gap: 3,
   },
   camBtn: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 52,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
-    elevation: 8,
+    elevation: 6,
     shadowColor: "#1B7A5E",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    marginBottom: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 5,
+    marginTop: -16,
   },
   camBtnPressed: {
     opacity: 0.85,
-    transform: [{ scale: 0.94 }],
-  },
-  camLabel: {
-    fontSize: 10,
-    fontFamily: "Tajawal_400Regular",
-    textAlign: "center",
+    transform: [{ scale: 0.93 }],
   },
 });

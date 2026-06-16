@@ -64,14 +64,6 @@
           "origin": "https://replit.com/"
         }
       ],
-      [
-        "expo-font",
-        {
-          "fonts": [
-            "node_modules/@expo/vector-icons/fonts/Ionicons.ttf"
-          ]
-        }
-      ],
       "expo-web-browser",
       [
         "expo-image-picker",

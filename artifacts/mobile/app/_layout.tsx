@@ -36,15 +36,13 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  // Load ALL fonts before first render — blocks splash until ready.
-  // Ionicons is loaded from a local copy (assets/fonts/Ionicons.ttf)
-  // to avoid pnpm symlink resolution issues with Metro bundler.
-  // The font family name "ionicons" must match @expo/vector-icons internals.
+  // Only load Tajawal here. Ionicons and all @expo/vector-icons fonts are
+  // pre-bundled inside Expo Go — explicitly loading them overwrites the
+  // pre-bundled copy and breaks icon rendering on Android physical devices.
   const [fontsLoaded, fontError] = useFonts({
     Tajawal_400Regular,
     Tajawal_500Medium,
     Tajawal_700Bold,
-    ionicons: require("../assets/fonts/Ionicons.ttf"),
   });
 
   useEffect(() => {
