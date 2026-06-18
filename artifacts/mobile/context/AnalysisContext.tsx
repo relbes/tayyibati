@@ -8,6 +8,7 @@ export interface IngredientResult {
   status: "allowed" | "forbidden" | "conditional" | "unknown";
   frequency?: IngredientFrequency;
   reason?: string | null;
+  notes?: string | null;
 }
 
 export interface AnalysisReport {

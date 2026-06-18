@@ -467,6 +467,9 @@ components:
           description: Recommended consumption frequency for allowed items (Tayyibat repetition index)
         reason:
           type: ["string", "null"]
+        notes:
+          type: ["string", "null"]
+          description: Extended DB notes with detailed explanation, alternatives, and context
       required:
         - name
         - nameAr

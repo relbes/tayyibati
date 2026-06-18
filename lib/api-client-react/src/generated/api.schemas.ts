@@ -114,6 +114,11 @@ export interface IngredientResult {
   frequency?: IngredientResultFrequency;
   /** @nullable */
   reason?: string | null;
+  /**
+     * Extended DB notes with detailed explanation, alternatives, and context
+     * @nullable
+     */
+  notes?: string | null;
 }
 
 export type AnalysisReportAnalysisType = typeof AnalysisReportAnalysisType[keyof typeof AnalysisReportAnalysisType];

@@ -161,28 +161,32 @@ export const AnalyzeTextResponse = zod.object({
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
@@ -209,28 +213,32 @@ export const AnalyzeImageResponse = zod.object({
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
@@ -265,28 +273,32 @@ export const ListHistoryResponseItem = zod.object({
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
@@ -323,28 +335,32 @@ export const ListAdminHistoryResponseItem = zod.object({
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),
@@ -398,28 +414,32 @@ export const GetHistoryItemResponse = zod.object({
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "forbidden": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "conditional": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "unknown": zod.array(zod.object({
   "name": zod.string(),
   "nameAr": zod.string(),
   "status": zod.enum(['allowed', 'forbidden', 'conditional', 'unknown']),
   "frequency": zod.union([zod.literal('basic'),zod.literal('daily'),zod.literal('weekly'),zod.literal('occasional'),zod.literal(null)]).nullish().describe('Recommended consumption frequency for allowed items (Tayyibat repetition index)'),
-  "reason": zod.string().nullish()
+  "reason": zod.string().nullish(),
+  "notes": zod.string().nullish().describe('Extended DB notes with detailed explanation, alternatives, and context')
 })),
   "explanation": zod.string(),
   "suggestions": zod.array(zod.string()),

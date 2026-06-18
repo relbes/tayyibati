@@ -143,6 +143,7 @@ export interface IngredientResult {
   status: IngredientStatus;
   frequency?: IngredientFrequency;
   reason: string | null;
+  notes?: string | null;
 }
 
 export interface AnalysisReport {
@@ -253,7 +254,7 @@ function parseExtraction(content: string): ExtractionResult {
   };
 }
 
-/** Normalize an Arabic/English food name for exact-match comparison against the DB. */
+/** Normalize an Arabic/English food name for comparison against the DB. */
 function normalizeName(s: string): string {
   return s
     .trim()
@@ -266,26 +267,84 @@ function normalizeName(s: string): string {
     .replace(/\s+/g, " ");
 }
 
+/** Strip the Arabic definite article "ال" (and "al-" in English) from the start. */
+function stripArticle(s: string): string {
+  return s.replace(/^ال/, "").replace(/^al-?/i, "").trim();
+}
+
 /**
  * Classifies extracted food items using ONLY the Foods Database.
- * Items found in the DB → use the DB's status and reason.
- * Items NOT in the DB → status="unknown", reason="not in database".
- * No AI knowledge, pretrained data, or inference is used.
+ * Uses a multi-tier fuzzy matching strategy:
+ *   1. Exact normalized match
+ *   2. Match after stripping "ال" definite article from either side
+ *   3. Substring match (query contained in DB name, or DB name contained in query)
+ *   4. Word-level match (every significant word of query found in DB entry)
+ * Items with no DB match → status="unknown".
+ * No AI pretrained knowledge is used for classification.
  */
 function classifyFromDb(
   rawItems: { nameAr: string; nameEn: string }[],
   allFoods: FoodRow[],
 ): IngredientResult[] {
-  const byName = new Map<string, FoodRow>();
-  for (const f of allFoods) {
-    byName.set(normalizeName(f.nameAr), f);
-    byName.set(normalizeName(f.nameEn), f);
+  // Pre-compute all normalized forms for the DB
+  const normalized = allFoods.map((f) => ({
+    row: f,
+    nAr: normalizeName(f.nameAr),
+    nEn: normalizeName(f.nameEn),
+    sAr: stripArticle(normalizeName(f.nameAr)),
+    sEn: stripArticle(normalizeName(f.nameEn)),
+  }));
+
+  // Build lookup maps for O(1) exact + stripped lookups
+  const byExact = new Map<string, FoodRow>();
+  const byStripped = new Map<string, FoodRow>();
+  for (const e of normalized) {
+    if (e.nAr) byExact.set(e.nAr, e.row);
+    if (e.nEn) byExact.set(e.nEn, e.row);
+    if (e.sAr) byStripped.set(e.sAr, e.row);
+    if (e.sEn) byStripped.set(e.sEn, e.row);
+  }
+
+  function findMatch(nameAr: string, nameEn: string): FoodRow | undefined {
+    const nAr = normalizeName(nameAr);
+    const nEn = normalizeName(nameEn);
+    const sAr = stripArticle(nAr);
+    const sEn = stripArticle(nEn);
+
+    // Tier 1: exact normalized match
+    const t1 = byExact.get(nAr) ?? byExact.get(nEn);
+    if (t1) return t1;
+
+    // Tier 2: strip definite article from query then match
+    const t2 = byStripped.get(sAr) ?? byStripped.get(sEn);
+    if (t2) return t2;
+
+    // Tier 3: substring — query contained in DB name, or DB name in query
+    for (const e of normalized) {
+      const qAr = sAr, qEn = sEn;
+      if (qAr.length >= 3 && (e.sAr.includes(qAr) || qAr.includes(e.sAr))) return e.row;
+      if (qEn.length >= 3 && (e.sEn.includes(qEn) || qEn.includes(e.sEn))) return e.row;
+    }
+
+    // Tier 4: every significant word (≥3 chars) in the query appears in a DB entry
+    const arWords = sAr.split(" ").filter((w) => w.length >= 3);
+    if (arWords.length > 0) {
+      for (const e of normalized) {
+        if (arWords.every((w) => e.sAr.includes(w) || e.nAr.includes(w))) return e.row;
+      }
+    }
+    const enWords = sEn.split(" ").filter((w) => w.length >= 3);
+    if (enWords.length > 0) {
+      for (const e of normalized) {
+        if (enWords.every((w) => e.sEn.includes(w) || e.nEn.includes(w))) return e.row;
+      }
+    }
+
+    return undefined;
   }
 
   return rawItems.map((item): IngredientResult => {
-    const match =
-      byName.get(normalizeName(item.nameAr)) ??
-      byName.get(normalizeName(item.nameEn));
+    const match = findMatch(item.nameAr, item.nameEn);
 
     if (match) {
       return {
@@ -294,6 +353,7 @@ function classifyFromDb(
         status: match.status as IngredientStatus,
         frequency: null,
         reason: match.reason ?? null,
+        notes: match.notes ?? null,
       };
     }
 
@@ -303,6 +363,7 @@ function classifyFromDb(
       status: "unknown",
       frequency: null,
       reason: "هذا الطعام غير متوفر في قاعدة بيانات طيباتي",
+      notes: null,
     };
   });
 }
