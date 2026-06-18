@@ -68,6 +68,11 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 
+const adminHeaders = (): HeadersInit => {
+  const token = localStorage.getItem("tayyibati_admin_token");
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
+
 const PAGE_SIZE = 50;
 
 const STATUS_COLORS: Record<string, string> = {
