@@ -162,94 +162,41 @@ export interface AnalysisReport {
 type FoodRow = typeof foodsTable.$inferSelect;
 
 /**
- * The Tayyibat dietary system, distilled from Dr. Diaa Al-Awadi's book.
- * The AI classifies EVERY ingredient against these rules — the small DB is only
- * an authoritative override for specific items the admin has curated.
+ * Builds an extraction-only prompt.
+ * The AI identifies food names from the query/image but does NOT classify them.
+ * All classification is done server-side using the Foods Database exclusively.
  */
-const TAYYIBAT_SYSTEM = `نظام الطيبات — للدكتور ضياء العوضي رحمه الله.
-
-المبدأ الجوهري للتصنيف:
-• الطعام الطبيعي كما خلقه الله (طيّب) = مسموح. الطعام المصنّع أو المعدّل صناعياً أو المهرمن = ممنوع.
-• «الطعام الطيب هو ما خرج من الأرض كما خلقه الله، فإذا تدخّل فيه الإنسان أفسده».
-• عند الشك في صنف غير مذكور صراحةً: طبّق المبدأ — هل هو طبيعي بسيط (مسموح) أم مصنّع/مكرر/مهرمن (ممنوع)؟
-
-مؤشر التكرار (frequency) للأصناف المسموحة:
-• basic (أساسي): يؤكل بلا قيود في معظم الوجبات — أرز، تمر، سمن بلدي، بطاطا، زبدة بلدي، زيت زيتون، قشطة، عسل.
-• daily (يوميًا): مرة في اليوم — عسل، تمر، توست قمح كامل، جبنة مطبوخة، زيتون، مكسرات.
-• weekly (أسبوعيًا): اللحوم المسموحة بالتناوب، السمك، الفواكه المسموحة، الأجبان المطبوخة.
-• occasional (أحيانًا): شوكولاتة داكنة، مربيات، محشي خضار، جوافة.
-
-═══ قواعد التصنيف الدقيقة (أولوية قصوى) ═══
-• اللحوم المسموحة (weekly): لحم البقري/البتلو/الكندوز/الجاموسي، الإبل (جمل)، الضأن (خروف/غنم)، الماعز، الأرانب، الحمام، السمك بجميع أنواعه.
-• اللحوم الممنوعة: الدجاج، الفراخ، البط، الديك الرومي، البيض بأنواعه.
-• الكبدة: من البقر/الضأن/الماعز/الجاموس = مسموح weekly. كبدة الدجاج/الفراخ = ممنوع.
-• الأرانب: مسموح weekly. لا تخلط بين الأرانب (مسموح) والدجاج (ممنوع).
-• الزبدة البلدية (طبيعية من الحليب) = مسموح basic. الزبدة المكررة/الصناعية/النباتية = ممنوع.
-• الألبان: اللبن البلدي الطازج غير المبستر = ممنوع (تدخل صناعي). القشطة الطبيعية، السمن البلدي = مسموح.
-• الفواكه المسموحة (weekly): العنب، الرمان، التفاح المقشر، الموز، الكرز، الفراولة، المشمش، البرقوق، الجوافة بدون بذر، التين، التمر، الزبيب، الفواكه المجففة. كل ما عداها = ممنوع.
-• الفواكه الممنوعة: البطيخ، الشمام، الموالح (برتقال/ليمون/كيوي/جريبفروت)، الأفوكادو، البابايا، الخيار، الكوسة.
-• الخضار: المسموح مطبوخ فقط (حشو بالأرز). الخضار النيء/السلطات = ممنوع. البطاطا/البطاطس = مسموح basic.
-• الحبوب: الأرز = مسموح basic. القمح/الدقيق الأبيض = ممنوع (مكرر). توست القمح الكامل = مسموح daily.
-• الحلويات: العسل الطبيعي = مسموح basic. الشوكولاتة الداكنة = مسموح occasional. السكر الأبيض المكرر = مشروط.
-• المشروبات: الماء والعصائر الطبيعية المعصورة مباشرة = مسموح. المشروبات الغازية، الشاي المعبأ، القهوة الصناعية = ممنوع.
-• اللبنيات: الجبنة المطبوخة (مثلثات لاف) = مسموح daily. الجبنة البيضاء الطازجة = مسموح. الجبنة المصنعة الأخرى = ممنوع.
-• المكسرات الطبيعية = مسموح daily. المكسرات المحمصة بالملح/الزيوت الصناعية = ممنوع.
-• أمثلة شائعة: برجر = لحم بقري (مسموح) + خبز أبيض (ممنوع) + جبنة مصنعة (ممنوع). كنتاكي/KFC = دجاج (ممنوع). شاورما لحم = لحم غنم/بقر (مسموح) + خبز (ممنوع). تونة = سمك (مسموح). سوشي = أرز (مسموح) + سمك (مسموح).
-
-═══ غير معروف (status=unknown) ═══
-فقط للمكونات التي لا يمكن تصنيفها إطلاقاً حسب المبدأ (نادر جداً). حاول دائماً التصنيف حسب المبدأ الجوهري أولاً.`;
-
-function buildCatalog(foods: FoodRow[]): string {
-  if (foods.length === 0) return "(لا توجد عناصر مخصصة)";
-  return foods.map((f) => `${f.nameEn} | ${f.nameAr} | ${f.status}${f.reason ? " | " + f.reason : ""}`).join("\n");
-}
-
-function buildClassificationPrompt(allFoods: FoodRow[], mode: "text" | "image" | "label"): string {
-  const catalog = buildCatalog(allFoods);
-
+function buildExtractionPrompt(mode: "text" | "image" | "label"): string {
   const extractionInstr =
     mode === "label"
       ? `استخرج قائمة المكونات الكاملة من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). ترجم كل مكوّن للعربية.`
       : mode === "image"
-        ? `حلّل الصورة بالكامل: حدّد الطبق وكل مكوّناته الظاهرة والمكوّنات الضمنية المعتادة. كن دقيقاً في نوع اللحم. إذا كانت الصورة غامضة أو يصعب تحديد نوع الطعام بثقة، أضف حقل "possibleFoods" بقائمة من 2-5 احتمالات باللغة العربية.`
-        : `حلّل نص المستخدم: حدّد الطبق/الصنف وكل مكوّناته (الظاهرة والضمنية). تعامل مع جميع اللهجات العربية وأخطاء الإملاء وأسماء العلامات التجارية. كن دقيقاً في نوع اللحم — لا تكتب "لحم" عام، حدّد نوعه: لحم بقري أو دجاج أو غنم أو أرنب. أمثلة: برجر (معروف) = لحم بقري (مسموح) + خبز أبيض (ممنوع) + جبنة (ممنوع) + صوص (ممنوع). كنتاكي = دجاج (ممنوع) + دقيق (ممنوع). تونة = تونة (مسموح).`
+        ? `حلّل الصورة بالكامل: حدّد الطبق وكل مكوّناته الظاهرة والمكوّنات الضمنية المعتادة. كن دقيقاً في نوع اللحم (بقري / دجاج / غنم / سمك / إلخ). إذا كانت الصورة غامضة أو يصعب تحديد نوع الطعام بثقة، أضف حقل "possibleFoods" بقائمة من 2-5 احتمالات باللغة العربية.`
+        : `حلّل نص المستخدم: حدّد الطبق/الصنف وكل مكوّناته (الظاهرة والضمنية). تعامل مع جميع اللهجات العربية وأخطاء الإملاء وأسماء العلامات التجارية. كن دقيقاً في نوع اللحم — حدّده: لحم بقري، دجاج، غنم، أرنب، سمك، إلخ.`;
 
-  return `أنت خبير في نظام الطيبات الغذائي. مهمتك: ${extractionInstr}
+  return `أنت مساعد متخصص في استخراج أسماء الأطعمة والمكونات.
 
-ثم صنّف كل مكوّن حسب نظام الطيبات أدناه. صنّف كل المكونات — لا تتجاهل أي مكوّن.
+مهمتك الوحيدة: ${extractionInstr}
 
-${TAYYIBAT_SYSTEM}
+قواعد صارمة:
+• استخرج أسماء المكونات والأطعمة فقط — لا تُصنّف أي منها ولا تحكم عليه.
+• لا تستخدم معرفتك المسبقة لتحديد ما إذا كان الطعام مسموحاً أو ممنوعاً.
+• مهمتك هي الاستخراج والتسمية فقط، وليس التقييم.
 
-═══ قاعدة بيانات مخصصة (لها الأولوية المطلقة) ═══
-إذا تطابق مكوّن مع عنصر في هذه القائمة، استخدم تصنيفها هي وليس استنتاجك:
-${catalog}
-
-═══ صيغة الإخراج ═══
 أعِد JSON صالحاً فقط بهذا الشكل:
 {
   "isFood": true,
   "dishName": "اسم الطبق أو الصنف بالعربية",
   "items": [
-    {
-      "nameAr": "الاسم بالعربية",
-      "nameEn": "English name",
-      "status": "allowed | forbidden | conditional | unknown",
-      "frequency": "basic | daily | weekly | occasional | null",
-      "reason": "سبب مختصر بالعربية حسب نظام الطيبات"
-    }
+    {"nameAr": "الاسم بالعربية", "nameEn": "English name"}
   ],
-  "summary": "ملخص قصير بالعربية لحكم الطبق إجمالاً",
-  "suggestions": ["بدائل عملية بالعربية للمكونات الممنوعة، من النظام نفسه"],
   "possibleFoods": ["احتمال1 بالعربية", "احتمال2"]
 }
 
-قواعد:
+قواعد الإخراج:
 • isFood=false فقط إذا لم تكن الصورة/النص متعلقة بطعام إطلاقاً (سيارة، شخص، كلام عشوائي). عندها أعِد items فارغة.
-• frequency تُملأ للأصناف allowed فقط؛ للممنوع والمشروط وغير المعروف ضع null.
-• reason إلزامي لكل مكوّن: لماذا مسموح/ممنوع حسب النظام.
-• suggestions: لكل مكوّن ممنوع اقترح بديلاً من النظام (مثلاً: استبدل الدجاج بالحمام أو السمك؛ استبدل الخبز الأبيض بتوست القمح الكامل أو الأرز؛ استبدل اللبن بالزبدة البلدي).
-• كن شاملاً: الوجبة المركّبة تحتوي عدة مكونات، اذكرها كلها.
-• possibleFoods: أضفه فقط عند الغموض الحقيقي (صورة غير واضحة أو مشروب/وجبة لا يمكن تمييزها). لا تضعه إذا كان الطعام واضحاً.`;
+• possibleFoods: أضفه فقط عند الغموض الحقيقي (صورة غير واضحة). لا تضعه إذا كان الطعام واضحاً.
+• كن شاملاً: اذكر جميع المكونات الظاهرة والضمنية المعتادة للطبق.`;
 }
 
 const FREQUENCIES: ReadonlyArray<NonNullable<IngredientFrequency>> = ["basic", "daily", "weekly", "occasional"];
@@ -266,45 +213,33 @@ function normalizeStatus(raw: unknown): IngredientStatus {
   return "unknown";
 }
 
-interface ClassificationResult {
+/** Raw extraction result from the AI — names only, no classifications. */
+interface ExtractionResult {
   isFood: boolean;
   dishName: string;
-  items: IngredientResult[];
-  summary: string;
-  suggestions: string[];
+  rawItems: { nameAr: string; nameEn: string }[];
   possibleFoods: string[];
 }
 
-function parseClassification(content: string): ClassificationResult {
+function parseExtraction(content: string): ExtractionResult {
   let parsed: Record<string, unknown> = {};
   try {
     parsed = JSON.parse(content || "{}");
   } catch {
-    return { isFood: false, dishName: "", items: [], summary: "", suggestions: [], possibleFoods: [] };
+    return { isFood: false, dishName: "", rawItems: [], possibleFoods: [] };
   }
 
   const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
-  const items: IngredientResult[] = rawItems
-    .map((it: unknown): IngredientResult | null => {
+  const items = rawItems
+    .map((it: unknown): { nameAr: string; nameEn: string } | null => {
       if (typeof it !== "object" || it === null) return null;
       const o = it as Record<string, unknown>;
       const nameAr = typeof o.nameAr === "string" ? o.nameAr.trim() : "";
       const nameEn = typeof o.nameEn === "string" ? o.nameEn.trim() : "";
       if (!nameAr && !nameEn) return null;
-      const status = normalizeStatus(o.status);
-      return {
-        name: nameEn || nameAr,
-        nameAr: nameAr || nameEn,
-        status,
-        frequency: status === "allowed" ? normalizeFrequency(o.frequency) : null,
-        reason: typeof o.reason === "string" && o.reason.trim() ? o.reason.trim() : null,
-      };
+      return { nameAr: nameAr || nameEn, nameEn: nameEn || nameAr };
     })
-    .filter((x): x is IngredientResult => x !== null);
-
-  const suggestions = Array.isArray(parsed.suggestions)
-    ? parsed.suggestions.filter((s: unknown): s is string => typeof s === "string" && s.trim().length > 0).slice(0, 6)
-    : [];
+    .filter((x): x is { nameAr: string; nameEn: string } => x !== null);
 
   const possibleFoods = Array.isArray(parsed.possibleFoods)
     ? parsed.possibleFoods.filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 6)
@@ -313,9 +248,7 @@ function parseClassification(content: string): ClassificationResult {
   return {
     isFood: parsed.isFood !== false,
     dishName: typeof parsed.dishName === "string" ? parsed.dishName.trim() : "",
-    items,
-    summary: typeof parsed.summary === "string" ? parsed.summary.trim() : "",
-    suggestions,
+    rawItems: items,
     possibleFoods,
   };
 }
@@ -334,25 +267,42 @@ function normalizeName(s: string): string {
 }
 
 /**
- * Authoritative DB override: if a classified item exactly matches a curated DB
- * entry (by normalized Arabic or English name), the DB ruling wins over the AI.
+ * Classifies extracted food items using ONLY the Foods Database.
+ * Items found in the DB → use the DB's status and reason.
+ * Items NOT in the DB → status="unknown", reason="not in database".
+ * No AI knowledge, pretrained data, or inference is used.
  */
-function applyDbOverride(items: IngredientResult[], allFoods: FoodRow[]): IngredientResult[] {
-  if (allFoods.length === 0) return items;
+function classifyFromDb(
+  rawItems: { nameAr: string; nameEn: string }[],
+  allFoods: FoodRow[],
+): IngredientResult[] {
   const byName = new Map<string, FoodRow>();
   for (const f of allFoods) {
     byName.set(normalizeName(f.nameAr), f);
     byName.set(normalizeName(f.nameEn), f);
   }
-  return items.map((item) => {
-    const match = byName.get(normalizeName(item.nameAr)) ?? byName.get(normalizeName(item.name));
-    if (!match) return item;
-    const status = match.status as IngredientStatus;
+
+  return rawItems.map((item): IngredientResult => {
+    const match =
+      byName.get(normalizeName(item.nameAr)) ??
+      byName.get(normalizeName(item.nameEn));
+
+    if (match) {
+      return {
+        name: item.nameEn || item.nameAr,
+        nameAr: item.nameAr || item.nameEn,
+        status: match.status as IngredientStatus,
+        frequency: null,
+        reason: match.reason ?? null,
+      };
+    }
+
     return {
-      ...item,
-      status,
-      frequency: status === "allowed" ? item.frequency ?? null : null,
-      reason: match.reason ?? item.reason,
+      name: item.nameEn || item.nameAr,
+      nameAr: item.nameAr || item.nameEn,
+      status: "unknown",
+      frequency: null,
+      reason: "هذا الطعام غير متوفر في قاعدة بيانات طيباتي",
     };
   });
 }
@@ -373,13 +323,13 @@ function scoreFromResults(
   return score;
 }
 
-function buildReportFromClassification(
-  result: ClassificationResult,
+function buildReportFromExtraction(
+  result: ExtractionResult,
   query: string,
   analysisType: AnalysisReport["analysisType"],
   allFoods: FoodRow[],
 ): AnalysisReport {
-  const items = applyDbOverride(result.items, allFoods);
+  const items = classifyFromDb(result.rawItems, allFoods);
   const allowed = items.filter((i) => i.status === "allowed");
   const forbidden = items.filter((i) => i.status === "forbidden");
   const conditional = items.filter((i) => i.status === "conditional");
@@ -387,28 +337,45 @@ function buildReportFromClassification(
 
   const score = scoreFromResults(allowed, forbidden, conditional, unknown);
 
-  let explanation = result.summary;
-  if (!explanation) {
-    const parts: string[] = [];
-    if (forbidden.length > 0) parts.push(`يحتوي على مكونات ممنوعة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
-    if (conditional.length > 0) parts.push(`مكونات مشروطة: ${conditional.map((f) => f.nameAr).join("، ")}`);
-    if (forbidden.length === 0 && conditional.length === 0 && allowed.length > 0) {
-      parts.push("جميع المكونات مسموح بها في نظام الطيبات");
-    }
-    explanation = parts.join(". ") || "تم تحليل المكونات";
-  }
+  // Build summary entirely from DB results — no AI-generated text
+  const parts: string[] = [];
+  if (forbidden.length > 0)
+    parts.push(`يحتوي على مكونات ممنوعة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
+  if (conditional.length > 0)
+    parts.push(`مكونات مشروطة: ${conditional.map((f) => f.nameAr).join("، ")}`);
+  if (forbidden.length === 0 && conditional.length === 0 && allowed.length > 0)
+    parts.push("جميع المكونات الموجودة في قاعدة البيانات مسموح بها");
+  if (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0 && unknown.length > 0)
+    parts.push("لم يتم العثور على أي من المكونات في قاعدة بيانات طيباتي");
+  const explanation = parts.join(". ") || "تم تحليل المكونات";
 
-  const queryLabel = result.dishName || query;
+  // Suggest allowed DB items from the same category as any forbidden item
+  const forbiddenCategories = new Set(
+    forbidden.flatMap((fi) => {
+      const row = allFoods.find(
+        (f) =>
+          normalizeName(f.nameAr) === normalizeName(fi.nameAr) ||
+          normalizeName(f.nameEn) === normalizeName(fi.name),
+      );
+      return row?.category ? [row.category] : [];
+    }),
+  );
+  const suggestions = forbiddenCategories.size > 0
+    ? allFoods
+        .filter((f) => f.status === "allowed" && forbiddenCategories.has(f.category))
+        .slice(0, 6)
+        .map((f) => f.nameAr)
+    : [];
 
   return {
-    query: queryLabel,
+    query: result.dishName || query,
     compatibilityScore: score,
     allowed,
     forbidden,
     conditional,
     unknown,
     explanation,
-    suggestions: result.suggestions,
+    suggestions,
     analysisType,
     possibleFoods: result.possibleFoods?.length ? result.possibleFoods : undefined,
   };
@@ -454,21 +421,21 @@ router.post("/analysis/text", optionalAuth, async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: buildClassificationPrompt(allFoods, "text") },
+        { role: "system", content: buildExtractionPrompt("text") },
         { role: "user", content: query.trim() },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 1500,
+      max_tokens: 1000,
       temperature: 0.1,
     });
 
-    const result = parseClassification(completion.choices[0].message.content || "{}");
+    const result = parseExtraction(completion.choices[0].message.content || "{}");
 
-    if (!result.isFood || result.items.length === 0) {
+    if (!result.isFood || result.rawItems.length === 0) {
       return void res.json(buildNotFoundReport(query.trim(), "text"));
     }
 
-    const report = buildReportFromClassification(result, query.trim(), "text", allFoods);
+    const report = buildReportFromExtraction(result, query.trim(), "text", allFoods);
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
@@ -519,7 +486,7 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: buildClassificationPrompt(allFoods, mode) },
+        { role: "system", content: buildExtractionPrompt(mode) },
         {
           role: "user",
           content: [
@@ -527,30 +494,30 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
             {
               type: "text",
               text: isLabel
-                ? "استخرج كل المكونات من ملصق المنتج وصنّفها حسب نظام الطيبات."
-                : "ما الأطعمة والمكونات في هذه الصورة؟ صنّفها كلها حسب نظام الطيبات.",
+                ? "استخرج كل المكونات من ملصق المنتج."
+                : "ما الأطعمة والمكونات في هذه الصورة؟",
             },
           ],
         },
       ],
       response_format: { type: "json_object" },
-      max_tokens: 1500,
+      max_tokens: 1000,
       temperature: 0.1,
     });
 
-    const result = parseClassification(completion.choices[0].message.content || "{}");
+    const result = parseExtraction(completion.choices[0].message.content || "{}");
 
     if (!result.isFood) {
       return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
     }
-    if (result.items.length === 0 && result.possibleFoods.length > 0) {
+    if (result.rawItems.length === 0 && result.possibleFoods.length > 0) {
       return void res.json({ ...buildNotFoundReport(queryLabel, imageAnalysisType), possibleFoods: result.possibleFoods, notFound: false });
     }
-    if (result.items.length === 0) {
+    if (result.rawItems.length === 0) {
       return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
     }
 
-    const report = buildReportFromClassification(result, queryLabel, imageAnalysisType, allFoods);
+    const report = buildReportFromExtraction(result, queryLabel, imageAnalysisType, allFoods);
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
