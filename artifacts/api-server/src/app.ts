@@ -4,6 +4,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import privacyRouter from "./routes/privacy";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -106,5 +107,6 @@ app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
+app.use("/privacy", privacyRouter);
 
 export default app;
