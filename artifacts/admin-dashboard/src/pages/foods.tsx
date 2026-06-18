@@ -639,7 +639,7 @@ async function bulkDeleteFoods(payload: { ids?: number[]; status?: string }) {
   const base = localStorage.getItem("tayyibati_api_url") || "";
   const res = await fetch(`${base}/api/foods/bulk`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(payload),
   });
   if (!res.ok) throw new Error("Bulk delete failed");
