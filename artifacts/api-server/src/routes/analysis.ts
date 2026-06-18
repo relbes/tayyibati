@@ -43,31 +43,53 @@ async function isUserPremium(userId: string): Promise<boolean> {
   }
 }
 
-/** Returns the user's plan limits, or free defaults if they have no plan. */
+/**
+ * Returns the user's plan limits.
+ * Priority: assigned plan → free plan in DB → config fallback.
+ * -1 means unlimited.
+ */
 async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; imageLimit: number }> {
   const freeText = await getFreeDailyLimit();
-  const freeImage = Math.ceil(freeText / 2);
+  const hardFallback = { textLimit: freeText, imageLimit: Math.ceil(freeText / 2) };
   try {
     const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
-    if (!account?.planId) return { textLimit: freeText, imageLimit: freeImage };
-    const [plan] = await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.id, account.planId));
-    if (!plan) return { textLimit: freeText, imageLimit: freeImage };
-    return {
-      textLimit: plan.dailyTextLimit,
-      imageLimit: plan.dailyImageLimit,
-    };
+
+    if (account?.planId) {
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.id, account.planId));
+      if (plan) return { textLimit: plan.dailyTextLimit, imageLimit: plan.dailyImageLimit };
+    }
+
+    // No plan assigned — use the free plan's limits from the DB
+    const [freePlan] = await db
+      .select()
+      .from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.billingCycle, "free"))
+      .limit(1);
+    if (freePlan) return { textLimit: freePlan.dailyTextLimit, imageLimit: freePlan.dailyImageLimit };
+
+    return hardFallback;
   } catch {
-    return { textLimit: freeText, imageLimit: freeImage };
+    return hardFallback;
   }
 }
 
+/**
+ * Checks whether the user is within their plan's per-type daily limit, then
+ * increments the counter if allowed.
+ *
+ * Limits apply to ALL authenticated users — premium flag does NOT bypass them.
+ * A limit value of -1 means unlimited.
+ */
 async function checkAndIncrementUsage(
   userId: string,
   type: "text" | "image"
 ): Promise<{ allowed: boolean; dailyCount: number; textCount: number; imageCount: number }> {
   const today = new Date().toISOString().split("T")[0];
-  const premium = await isUserPremium(userId);
   const limits = await getUserPlanLimits(userId);
+  const typeLimit = type === "text" ? limits.textLimit : limits.imageLimit;
 
   const existing = await db
     .select()
@@ -75,8 +97,13 @@ async function checkAndIncrementUsage(
     .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
 
   if (existing.length === 0) {
+    // Check limit before first insert (handles limit=0 edge case)
+    if (typeLimit >= 0 && 0 >= typeLimit) {
+      return { allowed: false, dailyCount: 0, textCount: 0, imageCount: 0 };
+    }
     const newTextCount = type === "text" ? 1 : 0;
     const newImageCount = type === "image" ? 1 : 0;
+    const premium = await isUserPremium(userId);
     await db.insert(userUsageTable).values({
       userId,
       date: today,
@@ -89,17 +116,16 @@ async function checkAndIncrementUsage(
   }
 
   const row = existing[0];
+  const typeCount = type === "text" ? row.textCount : row.imageCount;
+
+  // Enforce limit for ALL users — -1 means unlimited
+  if (typeLimit >= 0 && typeCount >= typeLimit) {
+    return { allowed: false, dailyCount: row.count, textCount: row.textCount, imageCount: row.imageCount };
+  }
+
   const newTextCount = row.textCount + (type === "text" ? 1 : 0);
   const newImageCount = row.imageCount + (type === "image" ? 1 : 0);
   const newCount = row.count + 1;
-
-  if (!premium && row.isPremium !== "true") {
-    const typeCount = type === "text" ? row.textCount : row.imageCount;
-    const typeLimit = type === "text" ? limits.textLimit : limits.imageLimit;
-    if (typeLimit >= 0 && typeCount >= typeLimit) {
-      return { allowed: false, dailyCount: row.count, textCount: row.textCount, imageCount: row.imageCount };
-    }
-  }
 
   await db
     .update(userUsageTable)
