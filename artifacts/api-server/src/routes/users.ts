@@ -2,17 +2,17 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db } from "@workspace/db";
-import { userUsageTable, usersTable, subscriptionPlansTable, appConfigTable, passwordResetsTable } from "@workspace/db";
+import { userUsageTable, usersTable, subscriptionPlansTable, passwordResetsTable } from "@workspace/db";
 import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../lib/email";
 import { issueToken } from "../lib/session";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAdmin } from "./admin";
+import { getFreeMonthlyLimit } from "../lib/config";
 
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 const REVENUECAT_ENTITLEMENT = "premium";
 
-const FREE_MONTHLY_LIMIT = 10;
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
@@ -51,19 +51,6 @@ function stableIdFromEmail(email: string): string {
     "user_" +
     Buffer.from(email.toLowerCase()).toString("base64").replace(/[^a-z0-9]/gi, "").slice(0, 16)
   );
-}
-
-async function getFreeMonthlyLimit(): Promise<number> {
-  try {
-    const [row] = await db
-      .select()
-      .from(appConfigTable)
-      .where(eq(appConfigTable.key, "free_monthly_limit"));
-    const val = parseInt(row?.value ?? "10", 10);
-    return isNaN(val) ? FREE_MONTHLY_LIMIT : val;
-  } catch {
-    return FREE_MONTHLY_LIMIT;
-  }
 }
 
 type PublicUser = Omit<typeof usersTable.$inferSelect, "passwordHash" | "failedLoginAttempts" | "lockedUntil"> & { hasPassword: boolean };

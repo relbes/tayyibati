@@ -4,10 +4,9 @@ import { db } from "@workspace/db";
 import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable, subscriptionPlansTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { optionalAuth } from "../middleware/requireAuth";
+import { getFreeMonthlyLimit } from "../lib/config";
 
 const router = Router();
-
-const FREE_MONTHLY_LIMIT = 10;
 
 async function getOpenAIClient(): Promise<OpenAI> {
   try {
@@ -21,19 +20,6 @@ async function getOpenAIClient(): Promise<OpenAI> {
     // fall through
   }
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-}
-
-async function getFreeMonthlyLimit(): Promise<number> {
-  try {
-    const [row] = await db
-      .select()
-      .from(appConfigTable)
-      .where(eq(appConfigTable.key, "free_monthly_limit"));
-    const val = parseInt(row?.value ?? String(FREE_MONTHLY_LIMIT), 10);
-    return isNaN(val) ? FREE_MONTHLY_LIMIT : val;
-  } catch {
-    return FREE_MONTHLY_LIMIT;
-  }
 }
 
 async function isUserPremium(userId: string): Promise<boolean> {
