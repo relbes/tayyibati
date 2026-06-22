@@ -580,20 +580,31 @@ components:
       properties:
         userId:
           type: string
-        dailyCount:
+        monthlyTextCount:
           type: integer
-        dailyLimit:
+        monthlyImageCount:
+          type: integer
+        textLimit:
+          type: integer
+          description: Monthly text search limit; -1 means unlimited
+        imageLimit:
+          type: integer
+          description: Monthly image search limit; -1 means unlimited
+        textRemaining:
+          type: integer
+        imageRemaining:
           type: integer
         isPremium:
           type: boolean
-        remainingToday:
-          type: integer
       required:
         - userId
-        - dailyCount
-        - dailyLimit
+        - monthlyTextCount
+        - monthlyImageCount
+        - textLimit
+        - imageLimit
+        - textRemaining
+        - imageRemaining
         - isPremium
-        - remainingToday
 
     AdminUser:
       type: object

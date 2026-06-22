@@ -92,16 +92,16 @@ function toAdminUser(row: typeof usersTable.$inferSelect): AdminUser {
 }
 
 async function syncTodayUsagePremium(userId: string, isPremium: boolean): Promise<void> {
-  const today = new Date().toISOString().split("T")[0];
+  const currentMonth = new Date().toISOString().slice(0, 7);
   const [existing] = await db
     .select()
     .from(userUsageTable)
-    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
+    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
   if (existing) {
     await db
       .update(userUsageTable)
       .set({ isPremium: isPremium ? "true" : "false" })
-      .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
+      .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
   }
 }
 
@@ -159,36 +159,48 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
 router.get("/users/usage", requireAuth, async (req, res) => {
   try {
     const userId = req.userId!;
-    const today = new Date().toISOString().split("T")[0];
+    const currentMonth = new Date().toISOString().slice(0, 7);
     const [row] = await db
       .select()
       .from(userUsageTable)
-      .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
+      .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
 
     const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
     const isPremium = account?.isPremium === "true" || row?.isPremium === "true";
 
-    let planDailyLimit: number | null = null;
-    if (account?.planId != null) {
+    let textLimit = 15;
+    let imageLimit = 3;
+
+    if (isPremium) {
+      textLimit = -1;
+      imageLimit = -1;
+    } else if (account?.planId != null) {
       const [plan] = await db
         .select()
         .from(subscriptionPlansTable)
         .where(eq(subscriptionPlansTable.id, account.planId));
-      if (plan) planDailyLimit = plan.dailyLimit;
+      if (plan) {
+        textLimit = plan.dailyTextLimit;
+        imageLimit = plan.dailyImageLimit;
+      }
+    } else {
+      const [freePlan] = await db
+        .select()
+        .from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.billingCycle, "free"))
+        .limit(1);
+      if (freePlan) {
+        textLimit = freePlan.dailyTextLimit;
+        imageLimit = freePlan.dailyImageLimit;
+      }
     }
 
-    const freeLimit = await getFreeDailyLimit();
-    const dailyCount = row?.count ?? 0;
-    const dailyLimit = isPremium
-      ? planDailyLimit != null && planDailyLimit >= 0
-        ? planDailyLimit
-        : 9999
-      : planDailyLimit != null && planDailyLimit >= 0
-        ? planDailyLimit
-        : freeLimit;
-    const remainingToday = dailyLimit >= 9999 ? 9999 : Math.max(0, dailyLimit - dailyCount);
+    const monthlyTextCount = row?.textCount ?? 0;
+    const monthlyImageCount = row?.imageCount ?? 0;
+    const textRemaining = textLimit < 0 ? 9999 : Math.max(0, textLimit - monthlyTextCount);
+    const imageRemaining = imageLimit < 0 ? 9999 : Math.max(0, imageLimit - monthlyImageCount);
 
-    res.json({ userId, dailyCount, dailyLimit, isPremium, remainingToday });
+    res.json({ userId, monthlyTextCount, monthlyImageCount, textLimit, imageLimit, textRemaining, imageRemaining, isPremium });
   } catch (err) {
     req.log.error({ err }, "Failed to get user usage");
     res.status(500).json({ error: "Internal server error" });

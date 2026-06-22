@@ -77,42 +77,43 @@ async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; i
 }
 
 /**
- * Checks whether the user is within their plan's per-type daily limit, then
+ * Checks whether the user is within their plan's per-type monthly limit, then
  * increments the counter if allowed.
  *
  * Limits apply to ALL authenticated users — premium flag does NOT bypass them.
  * A limit value of -1 means unlimited.
+ * The `date` column stores "YYYY-MM" (month granularity) to give monthly quotas.
  */
 async function checkAndIncrementUsage(
   userId: string,
   type: "text" | "image"
-): Promise<{ allowed: boolean; dailyCount: number; textCount: number; imageCount: number }> {
-  const today = new Date().toISOString().split("T")[0];
+): Promise<{ allowed: boolean; monthlyCount: number; textCount: number; imageCount: number }> {
+  const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
   const limits = await getUserPlanLimits(userId);
   const typeLimit = type === "text" ? limits.textLimit : limits.imageLimit;
 
   const existing = await db
     .select()
     .from(userUsageTable)
-    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
+    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
 
   if (existing.length === 0) {
     // Check limit before first insert (handles limit=0 edge case)
     if (typeLimit >= 0 && 0 >= typeLimit) {
-      return { allowed: false, dailyCount: 0, textCount: 0, imageCount: 0 };
+      return { allowed: false, monthlyCount: 0, textCount: 0, imageCount: 0 };
     }
     const newTextCount = type === "text" ? 1 : 0;
     const newImageCount = type === "image" ? 1 : 0;
     const premium = await isUserPremium(userId);
     await db.insert(userUsageTable).values({
       userId,
-      date: today,
+      date: currentMonth,
       count: 1,
       textCount: newTextCount,
       imageCount: newImageCount,
       isPremium: premium ? "true" : "false",
     });
-    return { allowed: true, dailyCount: 1, textCount: newTextCount, imageCount: newImageCount };
+    return { allowed: true, monthlyCount: 1, textCount: newTextCount, imageCount: newImageCount };
   }
 
   const row = existing[0];
@@ -120,7 +121,7 @@ async function checkAndIncrementUsage(
 
   // Enforce limit for ALL users — -1 means unlimited
   if (typeLimit >= 0 && typeCount >= typeLimit) {
-    return { allowed: false, dailyCount: row.count, textCount: row.textCount, imageCount: row.imageCount };
+    return { allowed: false, monthlyCount: row.count, textCount: row.textCount, imageCount: row.imageCount };
   }
 
   const newTextCount = row.textCount + (type === "text" ? 1 : 0);
@@ -130,8 +131,8 @@ async function checkAndIncrementUsage(
   await db
     .update(userUsageTable)
     .set({ count: newCount, textCount: newTextCount, imageCount: newImageCount })
-    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, today)));
-  return { allowed: true, dailyCount: newCount, textCount: newTextCount, imageCount: newImageCount };
+    .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
+  return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount };
 }
 
 export type IngredientStatus = "allowed" | "forbidden" | "conditional" | "unknown";
@@ -471,7 +472,7 @@ router.post("/analysis/text", optionalAuth, async (req, res) => {
       if (!usage.allowed) {
         return void res.status(429).json({
           error: "limit_reached",
-          message: "لقد وصلت إلى الحد اليومي للبحث النصي. قم بالترقية إلى بريميوم للمتابعة.",
+          message: "لقد وصلت إلى حد البحث النصي لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
         });
       }
     }
@@ -531,7 +532,7 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
       if (!usage.allowed) {
         return void res.status(429).json({
           error: "limit_reached",
-          message: "لقد وصلت إلى الحد اليومي لتحليل الصور. قم بالترقية إلى بريميوم للمتابعة.",
+          message: "لقد وصلت إلى حد تحليل الصور لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
         });
       }
     }
