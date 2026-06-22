@@ -23,7 +23,7 @@ export const T = {
   confirm: { ar: "تأكيد", en: "Confirm" },
   logout: { ar: "تسجيل الخروج", en: "Logout" },
   free: { ar: "مجاني", en: "Free" },
-  perDay: { ar: "/ يوم", en: "/ day" },
+  perDay: { ar: "/ شهر", en: "/ month" },
 
   // Nav
   overview: { ar: "نظرة عامة", en: "Overview" },
@@ -44,10 +44,10 @@ export const T = {
   billingCycle: { ar: "دورة الفواتير", en: "Billing Cycle" },
   monthly: { ar: "شهري", en: "Monthly" },
   yearly: { ar: "سنوي", en: "Yearly" },
-  dailyTextLimit: { ar: "حد البحث النصي / يوم", en: "Text searches / day" },
-  dailyImageLimit: { ar: "حد الصور / يوم", en: "Images / day" },
-  noLimit: { ar: "بدون حد يومي", en: "No daily limit" },
-  enableLimit: { ar: "تفعيل الحد اليومي", en: "Enable daily limit" },
+  dailyTextLimit: { ar: "حد البحث النصي / شهر", en: "Text searches / month" },
+  dailyImageLimit: { ar: "حد الصور / شهر", en: "Images / month" },
+  noLimit: { ar: "بدون حد شهري", en: "No monthly limit" },
+  enableLimit: { ar: "تفعيل الحد الشهري", en: "Enable monthly limit" },
   features: { ar: "المميزات (سطر لكل ميزة)", en: "Features (one per line)" },
   sortOrder: { ar: "الترتيب", en: "Sort Order" },
   bulkUpdate: { ar: "تحديث جماعي للحدود", en: "Bulk Update Limits" },
@@ -120,7 +120,7 @@ export const T = {
   connected: { ar: "متصل", en: "Connected" },
   disconnected: { ar: "غير متصل", en: "Disconnected" },
   saveUrl: { ar: "حفظ العنوان", en: "Save URL" },
-  freeDailyLimit: { ar: "الحد اليومي المجاني", en: "Free Daily Limit" },
+  freeDailyLimit: { ar: "الحد الشهري المجاني (قديم)", en: "Free Monthly Limit (legacy)" },
 } as const;
 
 export function tr(lang: Lang, key: keyof typeof T): string {

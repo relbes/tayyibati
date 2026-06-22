@@ -341,11 +341,13 @@ export default function Settings() {
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Usage Limits</CardTitle>
-          <CardDescription>Control free-tier analysis limits.</CardDescription>
+          <CardDescription>
+            Legacy free-tier fallback limit. Per-plan monthly limits are now set in the Subscription Plans page and take precedence over this value.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="space-y-1.5">
-            <Label>Free Daily Analysis Limit</Label>
+            <Label>Free Monthly Analysis Limit <span className="text-xs font-normal text-muted-foreground">(legacy — use Plans page instead)</span></Label>
             <div className="flex gap-2 items-center">
               <Input
                 type="number"
@@ -355,7 +357,7 @@ export default function Settings() {
                 min={1}
                 max={100}
               />
-              <span className="text-sm text-muted-foreground">analyses / day</span>
+              <span className="text-sm text-muted-foreground">analyses / month</span>
             </div>
           </div>
         </CardContent>

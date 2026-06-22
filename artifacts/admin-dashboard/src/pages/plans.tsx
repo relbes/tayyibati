@@ -377,7 +377,7 @@ export default function Plans() {
             <div className="rounded-lg border p-4 space-y-4 bg-muted/20">
               <p className="text-sm font-medium flex items-center gap-1.5">
                 <Layers className="h-4 w-4" />
-                {lang === "ar" ? "حدود الاستخدام اليومي" : "Daily Usage Limits"}
+                {lang === "ar" ? "حدود الاستخدام الشهري" : "Monthly Usage Limits"}
               </p>
               <div className="grid grid-cols-2 gap-4">
                 <LimitInput
