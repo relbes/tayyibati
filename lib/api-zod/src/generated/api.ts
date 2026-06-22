@@ -467,10 +467,13 @@ export const GetUserUsageQueryParams = zod.object({
 
 export const GetUserUsageResponse = zod.object({
   "userId": zod.string(),
-  "dailyCount": zod.number(),
-  "dailyLimit": zod.number(),
-  "isPremium": zod.boolean(),
-  "remainingToday": zod.number()
+  "monthlyTextCount": zod.number(),
+  "monthlyImageCount": zod.number(),
+  "textLimit": zod.number().describe('Monthly text search limit; -1 means unlimited'),
+  "imageLimit": zod.number().describe('Monthly image search limit; -1 means unlimited'),
+  "textRemaining": zod.number(),
+  "imageRemaining": zod.number(),
+  "isPremium": zod.boolean()
 })
 
 

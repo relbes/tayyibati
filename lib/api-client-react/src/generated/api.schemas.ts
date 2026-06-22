@@ -187,10 +187,15 @@ export interface HistoryItem {
 
 export interface UserUsage {
   userId: string;
-  dailyCount: number;
-  dailyLimit: number;
+  monthlyTextCount: number;
+  monthlyImageCount: number;
+  /** Monthly text search limit; -1 means unlimited */
+  textLimit: number;
+  /** Monthly image search limit; -1 means unlimited */
+  imageLimit: number;
+  textRemaining: number;
+  imageRemaining: number;
   isPremium: boolean;
-  remainingToday: number;
 }
 
 export interface AdminUser {

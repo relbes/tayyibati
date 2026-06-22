@@ -205,6 +205,15 @@ export default function SearchScreen() {
           </View>
 
           <View style={styles.content}>
+            {/* Search tip */}
+            {!result && (
+              <View style={[styles.tipCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
+                <Text style={[styles.tipText, { color: colors.primary }]}>
+                  💡 للحصول على نتائج دقيقة، اكتب اسم المادة بوضوح باللغة العربية أو الإنجليزية
+                </Text>
+              </View>
+            )}
+
             {/* Quick suggestions */}
             {!result && !query.trim() && (
               <>
@@ -371,6 +380,18 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
+  },
+  tipCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  tipText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
+    lineHeight: 20,
   },
   resultContainer: {
     gap: 10,

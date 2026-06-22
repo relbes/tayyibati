@@ -165,6 +165,15 @@ export default function CameraScreen() {
         </View>
 
         <View style={styles.content}>
+          {/* Camera tip */}
+          {!pickedImage && (
+            <View style={[styles.tipCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
+              <Text style={[styles.tipText, { color: colors.primary }]}>
+                💡 للحصول على أفضل نتيجة، شغّل فلاش الكاميرا وتأكد من وضوح الصورة وقرب الملصق
+              </Text>
+            </View>
+          )}
+
           {/* ── Picker / Preview ─────────────────────────── */}
           {!pickedImage ? (
             /* Empty state — pick image */
@@ -476,6 +485,20 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     gap: 16,
+  },
+
+  /* Tip card */
+  tipCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  tipText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
+    lineHeight: 20,
   },
 
   /* Pick area */

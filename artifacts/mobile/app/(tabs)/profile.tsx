@@ -17,10 +17,13 @@ import { useAuth } from "@/context/AuthContext";
 import { getUserUsage, getPublicConfig } from "@/lib/api";
 
 interface UsageInfo {
-  dailyCount: number;
-  dailyLimit: number;
+  monthlyTextCount: number;
+  monthlyImageCount: number;
+  textLimit: number;
+  imageLimit: number;
+  textRemaining: number;
+  imageRemaining: number;
   isPremium: boolean;
-  remainingToday: number;
 }
 
 export default function ProfileScreen() {
@@ -74,7 +77,8 @@ export default function ProfileScreen() {
     );
   }
 
-  const usagePercent = usage ? Math.min((usage.dailyCount / (usage.isPremium ? 1 : 10)) * 100, 100) : 0;
+  const textPercent = usage && usage.textLimit > 0 ? Math.min((usage.monthlyTextCount / usage.textLimit) * 100, 100) : 0;
+  const imagePercent = usage && usage.imageLimit > 0 ? Math.min((usage.monthlyImageCount / usage.imageLimit) * 100, 100) : 0;
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -105,19 +109,35 @@ export default function ProfileScreen() {
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.cardHeader}>
                 <Icon name="analytics-outline" size={20} color={colors.primary} />
-                <Text style={[styles.cardTitle, { color: colors.foreground }]}>الاستخدام اليومي</Text>
+                <Text style={[styles.cardTitle, { color: colors.foreground }]}>الاستخدام الشهري</Text>
               </View>
+
+              {/* Text searches */}
               <View style={styles.usageRow}>
                 <Text style={[styles.usageCount, { color: colors.primary }]}>
-                  {usage.dailyCount} / {usage.dailyLimit}
+                  {usage.monthlyTextCount} / {usage.textLimit < 0 ? "∞" : usage.textLimit}
                 </Text>
-                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>تحليل اليوم</Text>
+                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>بحث نصي</Text>
               </View>
               <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
-                <View style={[styles.progressFill, { width: `${usagePercent}%` as any, backgroundColor: usagePercent > 80 ? colors.error : colors.primary }]} />
+                <View style={[styles.progressFill, { width: `${textPercent}%` as any, backgroundColor: textPercent > 80 ? colors.error : colors.primary }]} />
               </View>
               <Text style={[styles.usageRemaining, { color: colors.mutedForeground }]}>
-                {usage.remainingToday} تحليل متبقي
+                {usage.textRemaining} بحث نصي متبقٍ هذا الشهر
+              </Text>
+
+              {/* Image searches */}
+              <View style={[styles.usageRow, { marginTop: 8 }]}>
+                <Text style={[styles.usageCount, { color: colors.primary }]}>
+                  {usage.monthlyImageCount} / {usage.imageLimit < 0 ? "∞" : usage.imageLimit}
+                </Text>
+                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>تحليل صور</Text>
+              </View>
+              <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
+                <View style={[styles.progressFill, { width: `${imagePercent}%` as any, backgroundColor: imagePercent > 80 ? colors.error : colors.primary }]} />
+              </View>
+              <Text style={[styles.usageRemaining, { color: colors.mutedForeground }]}>
+                {usage.imageRemaining} تحليل صور متبقٍ هذا الشهر
               </Text>
             </View>
           )}

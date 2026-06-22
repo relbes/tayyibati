@@ -74,8 +74,8 @@ export default function PricingScreen() {
   };
 
   const premiumFeatures = [
-    "تحليلات غير محدودة يومياً",
-    "بحث بالنص والصورة",
+    "بحث نصي غير محدود شهرياً",
+    "تحليل صور غير محدود شهرياً",
     "تحليل ملصقات المنتجات",
     "سجل كامل للتحليلات",
     "أولوية في المعالجة",
@@ -83,9 +83,8 @@ export default function PricingScreen() {
   ];
 
   const freeFeatures = [
-    "10 تحليلات يومياً",
-    "بحث بالنص",
-    "تحليل الصور",
+    "15 بحث نصي / شهر",
+    "3 تحليل صور / شهر",
     "سجل التحليلات",
   ];
 
@@ -131,7 +130,7 @@ export default function PricingScreen() {
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text style={[styles.limitBadge, { color: colors.primary, backgroundColor: colors.primary + "15" }]}>
-              10 تحليلات يومياً
+              15 نصي + 3 صور / شهر
             </Text>
             {freeFeatures.map((f) => (
               <View key={f} style={styles.featureRow}>
