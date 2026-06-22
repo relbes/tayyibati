@@ -20,6 +20,7 @@ import { useAnalysis } from "@/context/AnalysisContext";
 import { analyzeText, listFoods } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
+import { UsageWarningBanner } from "@/components/UsageWarningBanner";
 
 const QUICK_SUGGESTIONS = [
   "بيتزا", "كنتاكي", "همبرغر", "شاورما", "كباب", "فول مدمس",
@@ -213,6 +214,9 @@ export default function SearchScreen() {
           </View>
 
           <View style={styles.content}>
+            {/* Low-usage proactive warning (80%+ used, non-premium) */}
+            {!limitReached && <UsageWarningBanner type="text" />}
+
             {/* Monthly limit reached banner */}
             {limitReached && (
               <View style={[styles.limitBanner, { backgroundColor: colors.error + "15", borderColor: colors.error + "40" }]}>

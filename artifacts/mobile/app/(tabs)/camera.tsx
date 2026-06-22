@@ -20,6 +20,7 @@ import { useAnalysis } from "@/context/AnalysisContext";
 import { analyzeImage, analyzeText, AnalysisError } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
+import { UsageWarningBanner } from "@/components/UsageWarningBanner";
 
 export default function CameraScreen() {
   const colors = useColors();
@@ -165,6 +166,9 @@ export default function CameraScreen() {
         </View>
 
         <View style={styles.content}>
+          {/* Low-usage proactive warning (80%+ used, non-premium) */}
+          <UsageWarningBanner type="image" />
+
           {/* Camera tip */}
           {!pickedImage && (
             <View style={[styles.tipCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
