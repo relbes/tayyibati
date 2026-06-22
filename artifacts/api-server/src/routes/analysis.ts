@@ -7,6 +7,8 @@ import { optionalAuth } from "../middleware/requireAuth";
 
 const router = Router();
 
+const FREE_MONTHLY_LIMIT = 10;
+
 async function getOpenAIClient(): Promise<OpenAI> {
   try {
     const [row] = await db
@@ -27,10 +29,10 @@ async function getFreeMonthlyLimit(): Promise<number> {
       .select()
       .from(appConfigTable)
       .where(eq(appConfigTable.key, "free_monthly_limit"));
-    const val = parseInt(row?.value ?? "10", 10);
-    return isNaN(val) ? 10 : val;
+    const val = parseInt(row?.value ?? String(FREE_MONTHLY_LIMIT), 10);
+    return isNaN(val) ? FREE_MONTHLY_LIMIT : val;
   } catch {
-    return 10;
+    return FREE_MONTHLY_LIMIT;
   }
 }
 

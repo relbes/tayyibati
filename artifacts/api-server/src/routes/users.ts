@@ -12,7 +12,7 @@ import { requireAdmin } from "./admin";
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 const REVENUECAT_ENTITLEMENT = "premium";
 
-const FREE_DAILY_LIMIT = 10;
+const FREE_MONTHLY_LIMIT = 10;
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
 
@@ -60,9 +60,9 @@ async function getFreeMonthlyLimit(): Promise<number> {
       .from(appConfigTable)
       .where(eq(appConfigTable.key, "free_monthly_limit"));
     const val = parseInt(row?.value ?? "10", 10);
-    return isNaN(val) ? FREE_DAILY_LIMIT : val;
+    return isNaN(val) ? FREE_MONTHLY_LIMIT : val;
   } catch {
-    return FREE_DAILY_LIMIT;
+    return FREE_MONTHLY_LIMIT;
   }
 }
 
