@@ -80,14 +80,34 @@ async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; i
  * Checks whether the user is within their plan's per-type monthly limit, then
  * increments the counter if allowed.
  *
- * Limits apply to ALL authenticated users — premium flag does NOT bypass them.
- * A limit value of -1 means unlimited.
+ * Premium users bypass quota entirely (unlimited). For free users, limits come
+ * from the subscription_plans table. A limit value of -1 means unlimited.
  * The `date` column stores "YYYY-MM" (month granularity) to give monthly quotas.
  */
 async function checkAndIncrementUsage(
   userId: string,
   type: "text" | "image"
 ): Promise<{ allowed: boolean; monthlyCount: number; textCount: number; imageCount: number }> {
+  // Premium users always get unlimited access — no quota check needed
+  const premium = await isUserPremium(userId);
+  if (premium) {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const existing = await db
+      .select()
+      .from(userUsageTable)
+      .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
+    const row = existing[0];
+    const newTextCount = (row?.textCount ?? 0) + (type === "text" ? 1 : 0);
+    const newImageCount = (row?.imageCount ?? 0) + (type === "image" ? 1 : 0);
+    const newCount = (row?.count ?? 0) + 1;
+    if (!row) {
+      await db.insert(userUsageTable).values({ userId, date: currentMonth, count: 1, textCount: newTextCount, imageCount: newImageCount, isPremium: "true" });
+    } else {
+      await db.update(userUsageTable).set({ count: newCount, textCount: newTextCount, imageCount: newImageCount }).where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
+    }
+    return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount };
+  }
+
   const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
   const limits = await getUserPlanLimits(userId);
   const typeLimit = type === "text" ? limits.textLimit : limits.imageLimit;

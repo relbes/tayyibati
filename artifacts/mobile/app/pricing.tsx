@@ -206,6 +206,10 @@ export default function PricingScreen() {
               </View>
               <Icon name="star" size={32} color={colors.accent} />
               <Text style={[styles.planName, { color: colors.foreground, marginTop: 8 }]}>بريميوم</Text>
+              <View style={styles.priceRow}>
+                <Text style={[styles.planAmount, { color: colors.accent }]}>$0.99</Text>
+                <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> / شهر</Text>
+              </View>
               <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
               <Text style={[styles.limitBadge, { color: colors.accent, backgroundColor: colors.accent + "15" }]}>
                 ∞ تحليلات غير محدودة

@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   FlatList,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import * as Haptics from "expo-haptics";
@@ -42,10 +43,12 @@ const STATUS_DOT: Record<string, string> = {
 export default function SearchScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user } = useAuth();
   const { setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<any>(null);
+  const [limitReached, setLimitReached] = useState(false);
   const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isFetchingSuggestions, setIsFetchingSuggestions] = useState(false);
@@ -94,13 +97,18 @@ export default function SearchScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
     setResult(null);
+    setLimitReached(false);
     try {
       const report = await analyzeText(text);
       setResult(report);
       setCurrentReport(report);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {
+    } catch (err: unknown) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      const status = (err as { status?: number })?.status ?? (err as { response?: { status?: number } })?.response?.status;
+      if (status === 429) {
+        setLimitReached(true);
+      }
     } finally {
       setIsAnalyzing(false);
     }
@@ -205,8 +213,26 @@ export default function SearchScreen() {
           </View>
 
           <View style={styles.content}>
+            {/* Monthly limit reached banner */}
+            {limitReached && (
+              <View style={[styles.limitBanner, { backgroundColor: colors.error + "15", borderColor: colors.error + "40" }]}>
+                <Text style={[styles.limitBannerTitle, { color: colors.error }]}>
+                  وصلت إلى الحد الشهري للبحث النصي
+                </Text>
+                <Text style={[styles.limitBannerSub, { color: colors.mutedForeground }]}>
+                  يتجدد في أول الشهر القادم — أو اشترك في بريميوم للوصول غير المحدود
+                </Text>
+                <TouchableOpacity
+                  style={[styles.limitBannerBtn, { backgroundColor: colors.accent }]}
+                  onPress={() => router.push("/pricing")}
+                >
+                  <Text style={styles.limitBannerBtnText}>اشترك الآن</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Search tip */}
-            {!result && (
+            {!result && !limitReached && (
               <View style={[styles.tipCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
                 <Text style={[styles.tipText, { color: colors.primary }]}>
                   💡 للحصول على نتائج دقيقة، اكتب اسم المادة بوضوح باللغة العربية أو الإنجليزية
@@ -392,6 +418,35 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_400Regular",
     textAlign: "right",
     lineHeight: 20,
+  },
+  limitBanner: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 16,
+    gap: 6,
+  },
+  limitBannerTitle: {
+    fontSize: 15,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "right",
+  },
+  limitBannerSub: {
+    fontSize: 13,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
+    lineHeight: 20,
+  },
+  limitBannerBtn: {
+    alignSelf: "flex-end",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  limitBannerBtnText: {
+    color: "#fff",
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 14,
   },
   resultContainer: {
     gap: 10,
