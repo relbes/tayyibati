@@ -82,7 +82,7 @@ export default function Settings() {
   const setConfig = (key: string, value: string) => patchMut.mutate({ key, value });
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
-  const freeDailyLimit = getConfig("free_daily_limit") || "10";
+  const freeMonthlyLimit = getConfig("free_monthly_limit") || "10";
   const subscriptionEnabled = getConfig("subscription_enabled") === "true";
 
   const [branding, setBranding] = useState({ app_name: "", app_description: "", app_logo_url: "" });
@@ -352,8 +352,8 @@ export default function Settings() {
               <Input
                 type="number"
                 className="w-32"
-                value={freeDailyLimit}
-                onChange={(e) => setConfig("free_daily_limit", e.target.value)}
+                value={freeMonthlyLimit}
+                onChange={(e) => setConfig("free_monthly_limit", e.target.value)}
                 min={1}
                 max={100}
               />

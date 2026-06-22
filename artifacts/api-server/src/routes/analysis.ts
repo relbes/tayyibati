@@ -21,12 +21,12 @@ async function getOpenAIClient(): Promise<OpenAI> {
   return new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 }
 
-async function getFreeDailyLimit(): Promise<number> {
+async function getFreeMonthlyLimit(): Promise<number> {
   try {
     const [row] = await db
       .select()
       .from(appConfigTable)
-      .where(eq(appConfigTable.key, "free_daily_limit"));
+      .where(eq(appConfigTable.key, "free_monthly_limit"));
     const val = parseInt(row?.value ?? "10", 10);
     return isNaN(val) ? 10 : val;
   } catch {
@@ -49,7 +49,7 @@ async function isUserPremium(userId: string): Promise<boolean> {
  * -1 means unlimited.
  */
 async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; imageLimit: number }> {
-  const freeText = await getFreeDailyLimit();
+  const freeText = await getFreeMonthlyLimit();
   const hardFallback = { textLimit: freeText, imageLimit: Math.ceil(freeText / 2) };
   try {
     const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));

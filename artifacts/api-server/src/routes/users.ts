@@ -53,12 +53,12 @@ function stableIdFromEmail(email: string): string {
   );
 }
 
-async function getFreeDailyLimit(): Promise<number> {
+async function getFreeMonthlyLimit(): Promise<number> {
   try {
     const [row] = await db
       .select()
       .from(appConfigTable)
-      .where(eq(appConfigTable.key, "free_daily_limit"));
+      .where(eq(appConfigTable.key, "free_monthly_limit"));
     const val = parseInt(row?.value ?? "10", 10);
     return isNaN(val) ? FREE_DAILY_LIMIT : val;
   } catch {
@@ -546,7 +546,7 @@ router.post("/users/:id/plan", requireAdmin, async (req, res) => {
         .where(eq(subscriptionPlansTable.id, Number(planId)));
       if (!plan) return void res.status(404).json({ error: "Plan not found" });
       resolvedPlanId = plan.id;
-      const freeLimit = await getFreeDailyLimit();
+      const freeLimit = await getFreeMonthlyLimit();
       isPremium = plan.dailyLimit < 0 || plan.dailyLimit > freeLimit || parseFloat(plan.price) > 0;
     }
 
