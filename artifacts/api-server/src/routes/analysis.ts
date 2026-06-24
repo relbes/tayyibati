@@ -314,30 +314,102 @@ function wholeWordMatch(haystack: string, needle: string): boolean {
  * Items with no DB match → status="unknown".
  * No AI pretrained knowledge is used for classification.
  */
+/** Flip allowed↔forbidden; conditional/unknown unchanged. */
+function flipStatus(s: string): string {
+  if (s === "allowed") return "forbidden";
+  if (s === "forbidden") return "allowed";
+  return s;
+}
+
+/**
+ * Extract the exception text that follows "ما عدا" in an Arabic food name.
+ * Stops at the first parenthesis, comma، or qualifier word (مرفوض/ممنوع/مسموح).
+ * Returns the trimmed exception string, or null if the pattern isn't found.
+ */
+function extractMaAdaException(nameAr: string): { mainPart: string; exceptions: string[] } | null {
+  const idx = nameAr.indexOf("ما عدا");
+  if (idx === -1) return null;
+
+  // Main part is everything before "ما عدا", stripping any trailing "(" context
+  const mainPart = nameAr.slice(0, idx).replace(/\s*\(.*$/, "").trim();
+
+  // Exception text: after "ما عدا ", trimmed at terminators
+  let excRaw = nameAr.slice(idx + "ما عدا".length).trim();
+  // Stop at opening paren or qualifier words
+  excRaw = excRaw.split(/[\(،,]|(?:\s+(?:مرفوضه|مرفوضة|ممنوعه|ممنوع|مسموحه|مسموح))/)[0].trim();
+
+  if (!excRaw) return null;
+
+  // Split multiple exceptions joined by " و "
+  const exceptions = excRaw.split(/\s+و\s+/).map((s) => s.trim()).filter(Boolean);
+  return { mainPart: mainPart || nameAr, exceptions };
+}
+
 function classifyFromDb(
   rawItems: { nameAr: string; nameEn: string }[],
   allFoods: FoodRow[],
 ): IngredientResult[] {
-  // Pre-compute all normalized forms for the DB
-  const normalized = allFoods.map((f) => ({
-    row: f,
-    nAr: normalizeName(f.nameAr),
-    nEn: normalizeName(f.nameEn),
-    sAr: stripArticle(normalizeName(f.nameAr)),
-    sEn: stripArticle(normalizeName(f.nameEn)),
-  }));
+  // MatchEntry wraps a DB row with optional effectiveStatus for exception-derived
+  // entries (where the status is the FLIP of the parent row's status).
+  type MatchEntry = {
+    row: FoodRow;
+    nAr: string;
+    nEn: string;
+    sAr: string;
+    sEn: string;
+    effectiveStatus?: string;
+  };
 
-  // Build lookup maps for O(1) exact + stripped lookups
-  const byExact = new Map<string, FoodRow>();
-  const byStripped = new Map<string, FoodRow>();
-  for (const e of normalized) {
-    if (e.nAr) byExact.set(e.nAr, e.row);
-    if (e.nEn) byExact.set(e.nEn, e.row);
-    if (e.sAr) byStripped.set(e.sAr, e.row);
-    if (e.sEn) byStripped.set(e.sEn, e.row);
+  // Build the normalized list, expanding "ما عدا" exception patterns into
+  // separate entries with flipped status. Exception entries are appended AFTER
+  // all regular entries so that a dedicated DB entry (e.g. "دجاج و فراخ") always
+  // wins over an exception-derived one when both give the same answer.
+  const normalized: MatchEntry[] = [];
+  const exceptionEntries: MatchEntry[] = [];
+
+  for (const f of allFoods) {
+    const nAr = normalizeName(f.nameAr);
+    const nEn = normalizeName(f.nameEn);
+    const exc = extractMaAdaException(f.nameAr);
+
+    if (exc) {
+      // Main entry: keyed by the part BEFORE "ما عدا" so it doesn't accidentally
+      // match exception food names.
+      const mainNar = normalizeName(exc.mainPart);
+      normalized.push({ row: f, nAr: mainNar, nEn, sAr: stripArticle(mainNar), sEn: stripArticle(nEn) });
+
+      // Exception entries: each item after "ما عدا" → flipped status
+      const flipped = flipStatus(f.status);
+      for (const excWord of exc.exceptions) {
+        const excNar = normalizeName(excWord);
+        exceptionEntries.push({
+          row: f,
+          nAr: excNar,
+          nEn: "",
+          sAr: stripArticle(excNar),
+          sEn: "",
+          effectiveStatus: flipped,
+        });
+      }
+    } else {
+      normalized.push({ row: f, nAr, nEn, sAr: stripArticle(nAr), sEn: stripArticle(nEn) });
+    }
   }
 
-  function findMatch(nameAr: string, nameEn: string): FoodRow | undefined {
+  // Combine: regular entries first so dedicated rows take priority
+  const all = [...normalized, ...exceptionEntries];
+
+  // Build lookup maps for O(1) exact + stripped lookups
+  const byExact = new Map<string, MatchEntry>();
+  const byStripped = new Map<string, MatchEntry>();
+  for (const e of all) {
+    if (e.nAr && !byExact.has(e.nAr)) byExact.set(e.nAr, e);
+    if (e.nEn && !byExact.has(e.nEn)) byExact.set(e.nEn, e);
+    if (e.sAr && !byStripped.has(e.sAr)) byStripped.set(e.sAr, e);
+    if (e.sEn && !byStripped.has(e.sEn)) byStripped.set(e.sEn, e);
+  }
+
+  function findMatch(nameAr: string, nameEn: string): MatchEntry | undefined {
     const nAr = normalizeName(nameAr);
     const nEn = normalizeName(nameEn);
     const sAr = stripArticle(nAr);
@@ -352,42 +424,40 @@ function classifyFromDb(
     if (t2) return t2;
 
     // Tier 3: whole-word match — query is a whole word inside DB name, or DB
-    // name is a whole word inside query. Uses wholeWordMatch to prevent "دجاج"
-    // from matching inside "الدجاج" (which is part of the livestock-liver entry).
-    for (const e of normalized) {
+    // name is a whole word inside query. Whole-word prevents "دجاج" matching
+    // inside "الدجاج" (part of the livestock-liver exception entry).
+    for (const e of all) {
       const qAr = sAr, qEn = sEn;
-      if (qAr.length >= 3 && (wholeWordMatch(e.sAr, qAr) || wholeWordMatch(qAr, e.sAr))) return e.row;
-      if (qEn.length >= 3 && (wholeWordMatch(e.sEn, qEn) || wholeWordMatch(qEn, e.sEn))) return e.row;
+      if (qAr.length >= 3 && (wholeWordMatch(e.sAr, qAr) || wholeWordMatch(qAr, e.sAr))) return e;
+      if (qEn.length >= 3 && (wholeWordMatch(e.sEn, qEn) || wholeWordMatch(qEn, e.sEn))) return e;
     }
 
     // Tier 4: every significant word (≥3 chars) in the query appears as a whole
     // word in a DB entry
     const arWords = sAr.split(" ").filter((w) => w.length >= 3);
     if (arWords.length > 0) {
-      for (const e of normalized) {
-        if (arWords.every((w) => wholeWordMatch(e.sAr, w) || wholeWordMatch(e.nAr, w))) return e.row;
+      for (const e of all) {
+        if (arWords.every((w) => wholeWordMatch(e.sAr, w) || wholeWordMatch(e.nAr, w))) return e;
       }
     }
     const enWords = sEn.split(" ").filter((w) => w.length >= 3);
     if (enWords.length > 0) {
-      for (const e of normalized) {
-        if (enWords.every((w) => wholeWordMatch(e.sEn, w) || wholeWordMatch(e.nEn, w))) return e.row;
+      for (const e of all) {
+        if (enWords.every((w) => wholeWordMatch(e.sEn, w) || wholeWordMatch(e.nEn, w))) return e;
       }
     }
 
-    // Tier 5: individual significant-word fallback — for compound names like
-    // "شوكولاتة بيضاء" or "كرات الشوكولاتة البنية", try each word (≥5 chars)
-    // alone as a whole-word match against DB entries.
+    // Tier 5: individual significant-word fallback for compound names
     const arSigWords = sAr.split(" ").filter((w) => w.length >= 5);
     for (const word of arSigWords) {
-      for (const e of normalized) {
-        if (wholeWordMatch(e.sAr, word) || wholeWordMatch(e.nAr, word)) return e.row;
+      for (const e of all) {
+        if (wholeWordMatch(e.sAr, word) || wholeWordMatch(e.nAr, word)) return e;
       }
     }
     const enSigWords = sEn.split(" ").filter((w) => w.length >= 5);
     for (const word of enSigWords) {
-      for (const e of normalized) {
-        if (wholeWordMatch(e.sEn, word) || wholeWordMatch(e.nEn, word)) return e.row;
+      for (const e of all) {
+        if (wholeWordMatch(e.sEn, word) || wholeWordMatch(e.nEn, word)) return e;
       }
     }
 
@@ -398,13 +468,14 @@ function classifyFromDb(
     const match = findMatch(item.nameAr, item.nameEn);
 
     if (match) {
+      const effectiveStatus = match.effectiveStatus ?? match.row.status;
       return {
         name: item.nameEn || item.nameAr,
         nameAr: item.nameAr || item.nameEn,
-        status: match.status as IngredientStatus,
+        status: effectiveStatus as IngredientStatus,
         frequency: null,
-        reason: match.reason ?? null,
-        notes: match.notes ?? null,
+        reason: match.row.reason ?? null,
+        notes: match.row.notes ?? null,
       };
     }
 
