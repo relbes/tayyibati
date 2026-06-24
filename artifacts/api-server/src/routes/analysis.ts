@@ -181,7 +181,12 @@ function buildExtractionPrompt(mode: "text" | "image" | "label"): string {
     mode === "label"
       ? `استخرج قائمة المكونات الكاملة من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). ترجم كل مكوّن للعربية.`
       : mode === "image"
-        ? `حلّل الصورة بالكامل: حدّد الطبق وكل مكوّناته الظاهرة والمكوّنات الضمنية المعتادة. كن دقيقاً في نوع اللحم (بقري / دجاج / غنم / سمك / إلخ). إذا كانت الصورة غامضة أو يصعب تحديد نوع الطعام بثقة، أضف حقل "possibleFoods" بقائمة من 2-5 احتمالات باللغة العربية.`
+        ? `حلّل الصورة: حدّد الطبق وكل مكوّناته. قواعد التسمية للصور:
+- استخدم الاسم القياسي القصير للمكوّن لا وصفه البصري (مثال: اكتب "شوكولاتة" لا "كرات شوكولاتة بنية"، اكتب "دجاج" لا "قطعة دجاج مقلية").
+- اذكر نوع المكوّن الجوهري فقط: "شوكولاتة بيضاء"، "شوكولاتة داكنة"، "لحم بقري"، "دجاج"، إلخ.
+- كن دقيقاً في نوع اللحم: لحم بقري / دجاج / غنم / أرنب / سمك.
+- اذكر المكونات الضمنية المعتادة للطبق أيضاً.
+- إذا كانت الصورة غامضة، أضف "possibleFoods".`
         : `حلّل نص المستخدم: حدّد الطبق/الصنف وكل مكوّناته (الظاهرة والضمنية). تعامل مع جميع اللهجات العربية وأخطاء الإملاء وأسماء العلامات التجارية. كن دقيقاً في نوع اللحم — حدّده: لحم بقري، دجاج، غنم، أرنب، سمك، إلخ.`;
 
   return `أنت مساعد متخصص في استخراج أسماء الأطعمة والمكونات.
@@ -192,6 +197,7 @@ function buildExtractionPrompt(mode: "text" | "image" | "label"): string {
 • استخرج أسماء المكونات والأطعمة فقط — لا تُصنّف أي منها ولا تحكم عليه.
 • لا تستخدم معرفتك المسبقة لتحديد ما إذا كان الطعام مسموحاً أو ممنوعاً.
 • مهمتك هي الاستخراج والتسمية فقط، وليس التقييم.
+• كل مكوّن يجب أن يكون اسماً قياسياً قابلاً للبحث، لا وصفاً بصرياً.
 
 أعِد JSON صالحاً فقط بهذا الشكل:
 {
@@ -349,6 +355,24 @@ function classifyFromDb(
       }
     }
 
+    // Tier 5: individual significant-word fallback — for compound names like
+    // "شوكولاتة بيضاء" or "كرات الشوكولاتة البنية", try each word (≥5 chars)
+    // alone as a substring against DB entries. Picks the first DB entry whose
+    // stripped Arabic name contains that word. Avoids false positives by
+    // requiring the word to be at least 5 chars.
+    const arSigWords = sAr.split(" ").filter((w) => w.length >= 5);
+    for (const word of arSigWords) {
+      for (const e of normalized) {
+        if (e.sAr.includes(word) || e.nAr.includes(word)) return e.row;
+      }
+    }
+    const enSigWords = sEn.split(" ").filter((w) => w.length >= 5);
+    for (const word of enSigWords) {
+      for (const e of normalized) {
+        if (e.sEn.includes(word) || e.nEn.includes(word)) return e.row;
+      }
+    }
+
     return undefined;
   }
 
@@ -496,7 +520,7 @@ router.post("/analysis/text", optionalAuth, async (req, res) => {
       ],
       response_format: { type: "json_object" },
       max_tokens: 1000,
-      temperature: 0.1,
+      temperature: 0,
     });
 
     const result = parseExtraction(completion.choices[0].message.content || "{}");
@@ -572,7 +596,7 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
       ],
       response_format: { type: "json_object" },
       max_tokens: 1000,
-      temperature: 0.1,
+      temperature: 0,
     });
 
     const result = parseExtraction(completion.choices[0].message.content || "{}");
