@@ -345,6 +345,24 @@ function extractMaAdaException(nameAr: string): { mainPart: string; exceptions: 
   return { mainPart: mainPart || nameAr, exceptions };
 }
 
+/**
+ * Split a compound DB entry name into its individual matchable components.
+ * Strips parenthetical explanatory notes, then splits at "/" and " و ".
+ * Examples:
+ *   "شوكولاتة / شوكولاتة بالحليب (دارك وغير دارك)" → ["شوكولاتة", "شوكولاتة بالحليب"]
+ *   "دجاج و فراخ" → ["دجاج", "فراخ"]
+ *   "أرز / رز ابيض مصري" → ["أرز", "رز ابيض مصري"]
+ *   "بطاطس" → ["بطاطس"] (single component unchanged)
+ */
+function splitComponents(nameAr: string): string[] {
+  const clean = nameAr.replace(/\s*\([^)]*\)/g, "").trim();
+  const parts = (clean || nameAr)
+    .split(/\/|\s+و\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return parts.length > 0 ? parts : [nameAr.trim()];
+}
+
 function classifyFromDb(
   rawItems: { nameAr: string; nameEn: string }[],
   allFoods: FoodRow[],
@@ -360,23 +378,25 @@ function classifyFromDb(
     effectiveStatus?: string;
   };
 
-  // Build the normalized list, expanding "ما عدا" exception patterns into
-  // separate entries with flipped status. Exception entries are appended AFTER
-  // all regular entries so that a dedicated DB entry (e.g. "دجاج و فراخ") always
-  // wins over an exception-derived one when both give the same answer.
+  // Build the normalized list:
+  //  • Each DB entry is split into individual components (at "/" and " و ") so
+  //    "دجاج و فراخ" produces separate matchable entries for "دجاج" and "فراخ".
+  //  • "ما عدا" entries produce a main entry plus exception entries with flipped
+  //    status. Exception entries are appended last so a dedicated DB row always
+  //    wins over an exception-derived one when both yield the same answer.
   const normalized: MatchEntry[] = [];
   const exceptionEntries: MatchEntry[] = [];
 
   for (const f of allFoods) {
-    const nAr = normalizeName(f.nameAr);
     const nEn = normalizeName(f.nameEn);
     const exc = extractMaAdaException(f.nameAr);
 
     if (exc) {
-      // Main entry: keyed by the part BEFORE "ما عدا" so it doesn't accidentally
-      // match exception food names.
-      const mainNar = normalizeName(exc.mainPart);
-      normalized.push({ row: f, nAr: mainNar, nEn, sAr: stripArticle(mainNar), sEn: stripArticle(nEn) });
+      // Split the main part (before "ما عدا") into components too
+      for (const comp of splitComponents(exc.mainPart)) {
+        const compNar = normalizeName(comp);
+        normalized.push({ row: f, nAr: compNar, nEn, sAr: stripArticle(compNar), sEn: stripArticle(nEn) });
+      }
 
       // Exception entries: each item after "ما عدا" → flipped status
       const flipped = flipStatus(f.status);
@@ -392,7 +412,11 @@ function classifyFromDb(
         });
       }
     } else {
-      normalized.push({ row: f, nAr, nEn, sAr: stripArticle(nAr), sEn: stripArticle(nEn) });
+      // Split compound names into independent matchable components
+      for (const comp of splitComponents(f.nameAr)) {
+        const compNar = normalizeName(comp);
+        normalized.push({ row: f, nAr: compNar, nEn, sAr: stripArticle(compNar), sEn: stripArticle(nEn) });
+      }
     }
   }
 
@@ -423,44 +447,31 @@ function classifyFromDb(
     const t2 = byStripped.get(sAr) ?? byStripped.get(sEn);
     if (t2) return t2;
 
-    // Tier 3: whole-word match — query is a whole word inside DB name, or DB
-    // name is a whole word inside query. Whole-word prevents "دجاج" matching
-    // inside "الدجاج" (part of the livestock-liver exception entry).
+    // Tier 3: whole-word match — query is a whole word inside a DB component,
+    // or a DB component is a whole word inside the query.
     for (const e of all) {
       const qAr = sAr, qEn = sEn;
       if (qAr.length >= 3 && (wholeWordMatch(e.sAr, qAr) || wholeWordMatch(qAr, e.sAr))) return e;
       if (qEn.length >= 3 && (wholeWordMatch(e.sEn, qEn) || wholeWordMatch(qEn, e.sEn))) return e;
     }
 
-    // Tier 4: every significant word (≥3 chars) in the query appears as a whole
-    // word in a DB entry
-    const arWords = sAr.split(" ").filter((w) => w.length >= 3);
+    // Tier 4: every significant word (≥4 chars) in the query appears as a whole
+    // word in a DB component. Requires ALL significant words to match so that
+    // short/common words don't create false positives.
+    const arWords = sAr.split(" ").filter((w) => w.length >= 4);
     if (arWords.length > 0) {
       for (const e of all) {
         if (arWords.every((w) => wholeWordMatch(e.sAr, w) || wholeWordMatch(e.nAr, w))) return e;
       }
     }
-    const enWords = sEn.split(" ").filter((w) => w.length >= 3);
+    const enWords = sEn.split(" ").filter((w) => w.length >= 4);
     if (enWords.length > 0) {
       for (const e of all) {
         if (enWords.every((w) => wholeWordMatch(e.sEn, w) || wholeWordMatch(e.nEn, w))) return e;
       }
     }
 
-    // Tier 5: individual significant-word fallback for compound names
-    const arSigWords = sAr.split(" ").filter((w) => w.length >= 5);
-    for (const word of arSigWords) {
-      for (const e of all) {
-        if (wholeWordMatch(e.sAr, word) || wholeWordMatch(e.nAr, word)) return e;
-      }
-    }
-    const enSigWords = sEn.split(" ").filter((w) => w.length >= 5);
-    for (const word of enSigWords) {
-      for (const e of all) {
-        if (wholeWordMatch(e.sEn, word) || wholeWordMatch(e.nEn, word)) return e;
-      }
-    }
-
+    // No confident match found → return unknown rather than guess.
     return undefined;
   }
 
