@@ -288,6 +288,23 @@ function stripArticle(s: string): string {
 }
 
 /**
+ * Check whether `needle` appears as a complete word inside `haystack`.
+ * A word boundary in Arabic is a space, the start, or the end of the string.
+ * This prevents "دجاج" from matching inside "الدجاج" (no preceding space).
+ */
+function wholeWordMatch(haystack: string, needle: string): boolean {
+  if (!needle) return false;
+  let idx = 0;
+  while ((idx = haystack.indexOf(needle, idx)) !== -1) {
+    const before = idx === 0 || haystack[idx - 1] === " ";
+    const after = idx + needle.length === haystack.length || haystack[idx + needle.length] === " ";
+    if (before && after) return true;
+    idx++;
+  }
+  return false;
+}
+
+/**
  * Classifies extracted food items using ONLY the Foods Database.
  * Uses a multi-tier fuzzy matching strategy:
  *   1. Exact normalized match
@@ -334,42 +351,43 @@ function classifyFromDb(
     const t2 = byStripped.get(sAr) ?? byStripped.get(sEn);
     if (t2) return t2;
 
-    // Tier 3: substring — query contained in DB name, or DB name in query
+    // Tier 3: whole-word match — query is a whole word inside DB name, or DB
+    // name is a whole word inside query. Uses wholeWordMatch to prevent "دجاج"
+    // from matching inside "الدجاج" (which is part of the livestock-liver entry).
     for (const e of normalized) {
       const qAr = sAr, qEn = sEn;
-      if (qAr.length >= 3 && (e.sAr.includes(qAr) || qAr.includes(e.sAr))) return e.row;
-      if (qEn.length >= 3 && (e.sEn.includes(qEn) || qEn.includes(e.sEn))) return e.row;
+      if (qAr.length >= 3 && (wholeWordMatch(e.sAr, qAr) || wholeWordMatch(qAr, e.sAr))) return e.row;
+      if (qEn.length >= 3 && (wholeWordMatch(e.sEn, qEn) || wholeWordMatch(qEn, e.sEn))) return e.row;
     }
 
-    // Tier 4: every significant word (≥3 chars) in the query appears in a DB entry
+    // Tier 4: every significant word (≥3 chars) in the query appears as a whole
+    // word in a DB entry
     const arWords = sAr.split(" ").filter((w) => w.length >= 3);
     if (arWords.length > 0) {
       for (const e of normalized) {
-        if (arWords.every((w) => e.sAr.includes(w) || e.nAr.includes(w))) return e.row;
+        if (arWords.every((w) => wholeWordMatch(e.sAr, w) || wholeWordMatch(e.nAr, w))) return e.row;
       }
     }
     const enWords = sEn.split(" ").filter((w) => w.length >= 3);
     if (enWords.length > 0) {
       for (const e of normalized) {
-        if (enWords.every((w) => e.sEn.includes(w) || e.nEn.includes(w))) return e.row;
+        if (enWords.every((w) => wholeWordMatch(e.sEn, w) || wholeWordMatch(e.nEn, w))) return e.row;
       }
     }
 
     // Tier 5: individual significant-word fallback — for compound names like
     // "شوكولاتة بيضاء" or "كرات الشوكولاتة البنية", try each word (≥5 chars)
-    // alone as a substring against DB entries. Picks the first DB entry whose
-    // stripped Arabic name contains that word. Avoids false positives by
-    // requiring the word to be at least 5 chars.
+    // alone as a whole-word match against DB entries.
     const arSigWords = sAr.split(" ").filter((w) => w.length >= 5);
     for (const word of arSigWords) {
       for (const e of normalized) {
-        if (e.sAr.includes(word) || e.nAr.includes(word)) return e.row;
+        if (wholeWordMatch(e.sAr, word) || wholeWordMatch(e.nAr, word)) return e.row;
       }
     }
     const enSigWords = sEn.split(" ").filter((w) => w.length >= 5);
     for (const word of enSigWords) {
       for (const e of normalized) {
-        if (e.sEn.includes(word) || e.nEn.includes(word)) return e.row;
+        if (wholeWordMatch(e.sEn, word) || wholeWordMatch(e.nEn, word)) return e.row;
       }
     }
 
