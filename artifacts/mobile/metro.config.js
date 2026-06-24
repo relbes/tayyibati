@@ -15,4 +15,10 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
+// Exclude agent/skill temp directories so Metro doesn't crash when they
+// are created and deleted while the bundler is running.
+config.resolver.blockList = [
+  new RegExp(`${workspaceRoot.replace(/[/\\]/g, "[\\\\/]")}\\.local[\\\\/].*`),
+];
+
 module.exports = config;
