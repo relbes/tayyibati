@@ -1,0 +1,35 @@
+#22 - Fix Plans, Limits & Tips
+What & Why
+Update the freemium model to use monthly quotas (instead of daily), update the in-app pricing UI to show the correct $0.99 premium price and new limits, and add contextual tips in the search and camera screens to help users get better results.
+
+Done looks like
+Free plan enforces exactly 15 text searches and 3 image searches per calendar month, resetting on the 1st of each month
+Premium plan is shown as $0.99/month and grants unlimited text + image searches
+Profile/usage screen shows "X of 15 text searches used this month" and "X of 3 image searches used this month"
+Pricing screen clearly lists Free vs Premium features with the new limits
+A dismissible tips card (or static hint text) appears on the Search screen (e.g. "للحصول على نتائج بحث دقيقة يرجى كتابة الاسم بوضوح") and on the Camera screen (e.g. "للحصول على أفضل نتيجة شغّل فلاش الكاميرا")
+Users who hit their monthly limit see a clear Arabic message explaining the limit renews next month, with a prompt to upgrade
+Out of scope
+Changing the RevenueCat product price (must be updated in the RevenueCat dashboard by the developer)
+Historical usage migration — existing daily rows can be left as-is; the new monthly key format (YYYY-MM) will simply start fresh
+Annual or other plan tiers
+Steps
+Schema migration — monthly usage tracking: Change the user_usage table so date stores YYYY-MM (month granularity) instead of YYYY-MM-DD. Update the unique constraint accordingly. Run pnpm --filter @workspace/db run push to apply.
+Update plan limits in DB: Update the subscription_plans rows so the free plan has textLimit = 15, imageLimit = 3, dailyLimit = -1 (unused). Rename or repurpose the limit columns to clearly mean "monthly". Premium plan keeps all limits as -1 (unlimited).
+Server enforcement — monthly reset: In checkAndIncrementUsage, build the usage key using the current YYYY-MM string instead of today's full date. All limit checks and increments use this monthly bucket.
+Usage API response: Update the /users/me or usage endpoint to return monthlyTextUsed, monthlyImageUsed, monthlyTextLimit, monthlyImageLimit so the mobile app can display accurate meters.
+Mobile profile screen: Update the usage meter to show "X / 15 بحث نصي هذا الشهر" and "X / 3 بحث بالصور هذا الشهر".
+Mobile pricing screen: Update the Free plan feature list to "15 بحث نصي / شهر" and "3 بحث بالصور / شهر". Update Premium to "بحث نصي غير محدود" and "بحث بالصور غير محدود" at "0.99$ / شهر". Keep RevenueCat purchase flow unchanged.
+Limit-reached messages: Update the 429 error message shown in the search/camera screens to say the limit renews monthly (e.g. "لقد وصلت إلى حد الشهر، يتجدد في أول الشهر القادم").
+Tips UI — Search screen: Add a static tip card below the search bar (Arabic, RTL): "💡 للحصول على نتائج دقيقة، اكتب اسم المادة بوضوح باللغة العربية أو الإنجليزية".
+Tips UI — Camera screen: Add a static tip card above the camera button: "💡 للحصول على أفضل نتيجة، شغّل فلاش الكاميرا وتأكد من وضوح الصورة".
+Relevant files
+lib/db/src/schema/userUsage.ts
+lib/db/src/schema/subscriptionPlans.ts
+artifacts/api-server/src/routes/analysis.ts
+artifacts/api-server/src/routes/users.ts
+lib/api-spec/openapi.yaml
+artifacts/mobile/app/pricing.tsx
+artifacts/mobile/app/(tabs)/search.tsx
+artifacts/mobile/app/(tabs)/camera.tsx
+artifacts/mobile/app/(tabs)/profile.tsx
