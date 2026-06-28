@@ -84,7 +84,7 @@ export default function ForgotPasswordScreen() {
         style={[styles.topBar, { paddingTop: topPadding + 8 }]}
       >
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
-          <Icon name="arrow-forward" size={24} color="#fff" />
+          <Icon name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.topTitle}>استعادة كلمة المرور</Text>
         <View style={{ width: 40 }} />

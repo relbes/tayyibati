@@ -311,7 +311,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: 14,
     borderWidth: 1.5,
-    paddingLeft: 8,
+    paddingStart: 8,
     overflow: "visible",
   },
   input: {
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   statusLabel: {
     fontSize: 11,
     fontFamily: "Tajawal_700Bold",
-    marginLeft: 8,
+    marginStart: 8,
   },
   content: {
     padding: 16,

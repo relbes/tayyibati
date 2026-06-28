@@ -489,7 +489,7 @@ const styles = StyleSheet.create({
   forgotText: {
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
-    textAlign: "left",
+    textAlign: "right",
     marginTop: -4,
   },
   privacyNote: {

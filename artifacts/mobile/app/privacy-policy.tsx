@@ -98,7 +98,7 @@ export default function PrivacyPolicyScreen() {
           style={styles.backBtn}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Icon name="chevron-forward" size={24} color={colors.primary} />
+          <Icon name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         <Text style={[styles.title, { color: colors.foreground }]}>
           سياسة الخصوصية

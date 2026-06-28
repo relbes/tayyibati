@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     width: "100%",
-    textAlign: "left",
+    textAlign: "right",
   },
   topButton: {
     position: "absolute",
