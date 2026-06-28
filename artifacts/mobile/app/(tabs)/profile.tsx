@@ -153,7 +153,7 @@ export default function ProfileScreen() {
               <View style={styles.upgradeText}>
                 <Text style={[styles.upgradeTitle, { color: colors.foreground }]}>ترقية لـ Premium</Text>
                 <Text style={[styles.upgradeDesc, { color: colors.mutedForeground }]}>
-                  تحليلات غير محدودة يومياً
+                  تحليلات غير محدودة شهرياً
                 </Text>
               </View>
               <Icon name="chevron-back" size={20} color={colors.accent} />
