@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -18,7 +18,18 @@ import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/lib/revenuecat";
-import { syncPremium } from "@/lib/api";
+import { syncPremium, getPlans } from "@/lib/api";
+
+interface Plan {
+  id: number;
+  name: string;
+  nameEn: string;
+  dailyTextLimit: number;
+  dailyImageLimit: number;
+  price: string;
+  currency: string;
+  billingCycle: string;
+}
 
 export default function PricingScreen() {
   const colors = useColors();
@@ -32,9 +43,23 @@ export default function PricingScreen() {
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [premiumPlan, setPremiumPlan] = useState<Plan | null>(null);
 
   const currentOffering = offerings?.current;
   const packages = currentOffering?.availablePackages ?? [];
+
+  useEffect(() => {
+    getPlans()
+      .then((plans: Plan[]) => {
+        const p = plans.find((pl) => pl.billingCycle !== "free");
+        if (p) setPremiumPlan(p);
+      })
+      .catch(() => {});
+  }, []);
+
+  const displayPrice = premiumPlan
+    ? `$${premiumPlan.price}`
+    : "$0.99";
 
   const handleUpgrade = (pkg: any) => {
     if (!user) {
@@ -44,6 +69,14 @@ export default function PricingScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setSelectedPkg(pkg);
     setConfirmVisible(true);
+  };
+
+  const handleUpgradeFallback = () => {
+    if (!user) {
+      setStatusMsg("يجب تسجيل الدخول أولاً للاشتراك.");
+      return;
+    }
+    setStatusMsg("الاشتراك غير متاح حالياً عبر متجر التطبيقات.");
   };
 
   const confirmPurchase = async () => {
@@ -88,6 +121,55 @@ export default function PricingScreen() {
     "سجل التحليلات",
   ];
 
+  const PremiumCard = ({ pkg }: { pkg?: any }) => (
+    <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent }]}>
+      <LinearGradient
+        colors={[colors.accent + "22", colors.primary + "11"]}
+        style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
+      <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
+        <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
+      </View>
+      <Icon name="star" size={32} color={colors.accent} />
+      <Text style={[styles.planName, { color: colors.foreground, marginTop: 8 }]}>بريميوم</Text>
+      <View style={styles.priceRow}>
+        <Text style={[styles.planAmount, { color: colors.accent }]}>{displayPrice}</Text>
+        <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> / شهر</Text>
+      </View>
+      <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
+      <Text style={[styles.limitBadge, { color: colors.accent, backgroundColor: colors.accent + "15" }]}>
+        ∞ تحليلات غير محدودة
+      </Text>
+      {premiumFeatures.map((f) => (
+        <View key={f} style={styles.featureRow}>
+          <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
+          <Icon name="checkmark-circle" size={18} color={colors.accent} />
+        </View>
+      ))}
+      {isSubscribed ? (
+        <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
+          <Text style={[styles.currentText, { color: colors.accent }]}>✓ خطتك الحالية</Text>
+        </View>
+      ) : pkg ? (
+        <TouchableOpacity
+          style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
+          onPress={() => handleUpgrade(pkg)}
+        >
+          <Text style={styles.upgradeBtnText}>اشترك الآن — {displayPrice} / شهر</Text>
+        </TouchableOpacity>
+      ) : (
+        <TouchableOpacity
+          style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
+          onPress={handleUpgradeFallback}
+        >
+          <Text style={styles.upgradeBtnText}>اشترك الآن — {displayPrice} / شهر</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
@@ -112,12 +194,12 @@ export default function PricingScreen() {
           {/* Status message */}
           {statusMsg && (
             <View style={[styles.statusBox, { backgroundColor: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed + "20" : "#fdecea" }]}>
-              <Text style={[styles.statusText, { color: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed : "#c0392b" }]}>
-                {statusMsg}
-              </Text>
               <TouchableOpacity onPress={() => setStatusMsg(null)}>
                 <Icon name="close" size={16} color={colors.mutedForeground} />
               </TouchableOpacity>
+              <Text style={[styles.statusText, { color: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed : "#c0392b" }]}>
+                {statusMsg}
+              </Text>
             </View>
           )}
 
@@ -145,86 +227,11 @@ export default function PricingScreen() {
             )}
           </View>
 
-          {/* Premium plan(s) from RevenueCat */}
-          {packages.length > 0 ? packages.map((pkg) => {
-            const price = pkg.product.priceString;
-            const period = pkg.product.subscriptionPeriod;
-            const periodLabel = period === "P1M" ? "شهر" : period === "P1Y" ? "سنة" : period ?? "شهر";
-
-            return (
-              <View key={pkg.identifier} style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent }]}>
-                <LinearGradient
-                  colors={[colors.accent + "22", colors.primary + "11"]}
-                  style={StyleSheet.absoluteFill}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                />
-                <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
-                  <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
-                </View>
-                <Icon name="star" size={32} color={colors.accent} />
-                <Text style={[styles.planName, { color: colors.foreground, marginTop: 8 }]}>بريميوم</Text>
-                <View style={styles.priceRow}>
-                  <Text style={[styles.planAmount, { color: colors.accent }]}>{price}</Text>
-                  <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> / {periodLabel}</Text>
-                </View>
-                <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
-                <Text style={[styles.limitBadge, { color: colors.accent, backgroundColor: colors.accent + "15" }]}>
-                  ∞ تحليلات غير محدودة
-                </Text>
-                {premiumFeatures.map((f) => (
-                  <View key={f} style={styles.featureRow}>
-                    <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
-                    <Icon name="checkmark-circle" size={18} color={colors.accent} />
-                  </View>
-                ))}
-                {isSubscribed ? (
-                  <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
-                    <Text style={[styles.currentText, { color: colors.accent }]}>✓ خطتك الحالية</Text>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
-                    onPress={() => handleUpgrade(pkg)}
-                  >
-                    <Text style={styles.upgradeBtnText}>اشترك الآن — {price}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            );
-          }) : (
-            /* Fallback if RevenueCat offerings not loaded */
-            <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent }]}>
-              <LinearGradient
-                colors={[colors.accent + "22", colors.primary + "11"]}
-                style={StyleSheet.absoluteFill}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-              />
-              <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
-                <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
-              </View>
-              <Icon name="star" size={32} color={colors.accent} />
-              <Text style={[styles.planName, { color: colors.foreground, marginTop: 8 }]}>بريميوم</Text>
-              <View style={styles.priceRow}>
-                <Text style={[styles.planAmount, { color: colors.accent }]}>$0.99</Text>
-                <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> / شهر</Text>
-              </View>
-              <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
-              <Text style={[styles.limitBadge, { color: colors.accent, backgroundColor: colors.accent + "15" }]}>
-                ∞ تحليلات غير محدودة
-              </Text>
-              {premiumFeatures.map((f) => (
-                <View key={f} style={styles.featureRow}>
-                  <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
-                  <Icon name="checkmark-circle" size={18} color={colors.accent} />
-                </View>
-              ))}
-              <View style={[styles.currentBadge, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.currentText, { color: colors.mutedForeground }]}>غير متوفر حالياً</Text>
-              </View>
-            </View>
-          )}
+          {/* Premium plan */}
+          {packages.length > 0
+            ? packages.map((pkg) => <PremiumCard key={pkg.identifier} pkg={pkg} />)
+            : <PremiumCard />
+          }
 
           {/* Restore purchases */}
           <TouchableOpacity onPress={handleRestore} style={styles.restoreBtn}>
@@ -240,7 +247,7 @@ export default function PricingScreen() {
           <View style={[styles.modalBox, { backgroundColor: colors.card }]}>
             <Text style={[styles.modalTitle, { color: colors.foreground }]}>تأكيد الاشتراك</Text>
             <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
-              سيتم خصم {selectedPkg?.product.priceString ?? ""} من حسابك عبر متجر التطبيقات.
+              سيتم خصم {selectedPkg?.product.priceString ?? displayPrice} من حسابك عبر متجر التطبيقات.
             </Text>
             <View style={styles.modalButtons}>
               <Pressable
@@ -273,14 +280,14 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  backBtn: { width: 44, alignItems: "flex-start" },
+  backBtn: { width: 44, alignItems: "flex-end" },
   title: { fontSize: 18, fontFamily: "Tajawal_700Bold", textAlign: "center" },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14, fontFamily: "Tajawal_400Regular" },
   statusBox: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    justifyContent: "flex-start",
     padding: 12,
     borderRadius: 12,
     gap: 8,
@@ -297,7 +304,7 @@ const styles = StyleSheet.create({
   popularBadge: {
     position: "absolute",
     top: 14,
-    left: 14,
+    right: 14,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
