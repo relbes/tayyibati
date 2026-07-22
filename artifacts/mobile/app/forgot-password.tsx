@@ -8,6 +8,7 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  I18nManager,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -98,10 +99,10 @@ export default function ForgotPasswordScreen() {
           contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={[styles.welcomeText, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>
+          <Text style={[styles.welcomeText, { color: colors.foreground }]}>
             {step === "email" ? "نسيت كلمة المرور؟" : "أدخل الرمز"}
           </Text>
-          <Text style={[styles.subText, { color: colors.mutedForeground, textAlign: "right", alignSelf: "flex-end" }]}>
+          <Text style={[styles.subText, { color: colors.mutedForeground }]}>
             {step === "email"
               ? "أدخل بريدك الإلكتروني وسنرسل لك رمز تحقق لإعادة تعيين كلمة المرور."
               : "أدخل رمز التحقق المرسل إلى بريدك وكلمة المرور الجديدة."}
@@ -110,13 +111,13 @@ export default function ForgotPasswordScreen() {
           {info ? (
             <View style={[styles.infoBox, { backgroundColor: colors.primary + "14", borderColor: colors.primary + "33" }]}>
               <Icon name="mail-outline" size={16} color={colors.primary} />
-              <Text style={[styles.infoText, { color: colors.primary, textAlign: "right" }]}>{info}</Text>
+              <Text style={[styles.infoText, { color: colors.primary }]}>{info}</Text>
             </View>
           ) : null}
 
           {step === "email" ? (
             <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>البريد الإلكتروني</Text>
+              <Text style={[styles.label, { color: colors.foreground }]}>البريد الإلكتروني</Text>
               <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
                 <TextInput
@@ -125,7 +126,7 @@ export default function ForgotPasswordScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   value={email}
                   onChangeText={setEmail}
-                  textAlign="right"
+                  textAlign={I18nManager.isRTL ? "right" : "left"}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -137,7 +138,7 @@ export default function ForgotPasswordScreen() {
           ) : (
             <>
               <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>رمز التحقق</Text>
+                <Text style={[styles.label, { color: colors.foreground }]}>رمز التحقق</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Icon name="keypad-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
@@ -154,7 +155,7 @@ export default function ForgotPasswordScreen() {
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>كلمة المرور الجديدة</Text>
+                <Text style={[styles.label, { color: colors.foreground }]}>كلمة المرور الجديدة</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
@@ -163,7 +164,7 @@ export default function ForgotPasswordScreen() {
                     placeholderTextColor={colors.mutedForeground}
                     value={newPassword}
                     onChangeText={setNewPassword}
-                    textAlign="right"
+                    textAlign={I18nManager.isRTL ? "right" : "left"}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -181,7 +182,7 @@ export default function ForgotPasswordScreen() {
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
               <Icon name="alert-circle-outline" size={16} color={colors.error} />
-              <Text style={[styles.errorText, { color: colors.error, textAlign: "right" }]}>{error}</Text>
+              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
             </View>
           ) : null}
 
@@ -221,7 +222,7 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 24,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
+    textAlign: "left",
     width: "100%",
     writingDirection: "rtl",
     marginTop: 8,
@@ -229,7 +230,7 @@ const styles = StyleSheet.create({
   subText: {
     fontSize: 14,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
+    textAlign: "left",
     width: "100%",
     writingDirection: "rtl",
     lineHeight: 22,
@@ -238,7 +239,7 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
-    textAlign: "right",
+    textAlign: "left",
     width: "100%",
     writingDirection: "rtl",
   },
@@ -269,7 +270,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
-    textAlign: "right",
+    textAlign: "left",
     width: "100%",
     writingDirection: "rtl",
     lineHeight: 20,
@@ -287,7 +288,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
-    textAlign: "right",
+    textAlign: "left",
     width: "100%",
     writingDirection: "rtl",
   },

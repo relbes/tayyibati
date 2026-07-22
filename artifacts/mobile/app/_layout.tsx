@@ -12,6 +12,14 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { I18nManager } from "react-native";
 
+// Force RTL layout direction for Arabic language support
+try {
+  I18nManager.allowRTL(true);
+  I18nManager.forceRTL(true);
+} catch (e) {
+  console.warn("RTL initialization failed:", e);
+}
+
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { AnalysisProvider } from "@/context/AnalysisContext";

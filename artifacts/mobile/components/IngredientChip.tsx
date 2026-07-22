@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
     borderWidth: 1,
-    marginRight: 6,
+    marginEnd: 6,
     marginBottom: 6,
   },
   text: {

@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     gap: 12,
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
   },
   stat: { alignItems: "center" },
   statCount: { fontSize: 18, fontFamily: "Tajawal_700Bold" },

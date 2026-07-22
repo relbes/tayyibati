@@ -448,11 +448,11 @@ tipContent: {
 },
   tipEmoji: {
     fontSize: 18,
-    marginLeft: 8,
+    marginEnd: 8,
   },
 
   tipText: {
-    textAlign: "left",
+    textAlign: "right",
     lineHeight: 24,
     fontFamily: "Tajawal_500Medium",
   },

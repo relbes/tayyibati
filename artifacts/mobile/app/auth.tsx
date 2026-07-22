@@ -1,3 +1,7 @@
+import { I18nManager } from "react-native";
+
+console.log("RTL:", I18nManager.isRTL);
+console.log("allowRTL:", I18nManager.allowRTL);
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -241,7 +245,6 @@ export default function AuthScreen() {
               styles.welcomeText,
               {
                 color: colors.foreground,
-                alignSelf: "flex-end",
               },
             ]}
           >
@@ -252,7 +255,6 @@ export default function AuthScreen() {
              styles.subText,
              {
                color: colors.mutedForeground,
-               alignSelf: "flex-end",
              },
            ]}
          >
@@ -300,7 +302,7 @@ export default function AuthScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   value={name}
                   onChangeText={setName}
-                  textAlign="right"
+                  textAlign={I18nManager.isRTL ? "left" : "right"}
                   autoCapitalize="words"
                 />
               </View>
@@ -317,7 +319,7 @@ export default function AuthScreen() {
                 placeholderTextColor={colors.mutedForeground}
                 value={email}
                 onChangeText={setEmail}
-                textAlign="left"
+                textAlign={I18nManager.isRTL ? "right" : "left"}
                 keyboardType="email-address"
 
                 autoCapitalize="none"
@@ -337,7 +339,7 @@ export default function AuthScreen() {
                 placeholderTextColor={colors.mutedForeground}
                 value={password}
                 onChangeText={setPassword}
-                textAlign="left"
+                textAlign={I18nManager.isRTL ? "right" : "left"}
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -401,9 +403,9 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, direction: "rtl" },
+  container: { flex: 1 },
   topBar: {
-    flexDirection: "row",
+    flexDirection: I18nManager.isRTL ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
@@ -418,7 +420,7 @@ const styles = StyleSheet.create({
       gap: 22,
   },
   tabToggle: {
-    flexDirection: "row",
+    flexDirection: I18nManager.isRTL ? "row-reverse" : "row",
     borderRadius: 12,
     borderWidth: 1,
     padding: 4,
@@ -433,19 +435,19 @@ const styles = StyleSheet.create({
   tabText: { fontSize: 14, fontFamily: "Tajawal_700Bold" },
   welcomeText: {
       width: "100%",
-      textAlign: "right",
+      textAlign: "left",
       fontSize: 32,
       fontFamily: "Tajawal_700Bold",
   },
   subText: {
       width: "100%",
-      textAlign: "right",
+      textAlign: "left",
       fontSize: 16,
       lineHeight: 24,
       fontFamily: "Tajawal_400Regular",
   },
   googleBtn: {
-    flexDirection: "row",
+    flexDirection: I18nManager.isRTL ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 14,
@@ -466,16 +468,16 @@ const styles = StyleSheet.create({
   },
   googleG: { fontSize: 14, fontFamily: "Tajawal_700Bold", color: "#4285F4" },
   googleText: { fontSize: 15, fontFamily: "Tajawal_700Bold" },
-  dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
+  dividerRow: { flexDirection: I18nManager.isRTL ? "row-reverse" : "row", alignItems: "center", gap: 12 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 13, fontFamily: "Tajawal_400Regular" },
   fieldGroup: {
        gap: 8,
        marginTop: 4,
    },
-  label: { fontSize: 14, fontFamily: "Tajawal_500Medium", textAlign: "right" },
+  label: { fontSize: 14, fontFamily: "Tajawal_500Medium", textAlign: "left" },
   inputWrap: {
-      flexDirection: "row",
+      flexDirection: I18nManager.isRTL ? "row-reverse" : "row",
       alignItems: "center",
       justifyContent: "flex-start",
 
@@ -496,7 +498,7 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_400Regular",
   },
   errorBox: {
-    flexDirection: "row",
+    flexDirection: I18nManager.isRTL ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
     padding: 12,
@@ -507,7 +509,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
-    textAlign: "right",
+    textAlign: "left",
   },
   submitBtn: {
     paddingVertical: 16,
@@ -517,7 +519,7 @@ const styles = StyleSheet.create({
   },
   submitText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 16 },
   lockoutBox: {
-    flexDirection: "row",
+    flexDirection: I18nManager.isRTL ? "row-reverse" : "row",
     alignItems: "flex-start",
     gap: 12,
     padding: 14,
@@ -525,13 +527,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   lockoutTextCol: { flex: 1, gap: 4 },
-  lockoutTitle: { fontSize: 14, fontFamily: "Tajawal_700Bold", textAlign: "right" },
-  lockoutBody: { fontSize: 13, fontFamily: "Tajawal_400Regular", textAlign: "right", lineHeight: 20 },
-  attemptsText: { fontSize: 12, fontFamily: "Tajawal_400Regular", textAlign: "right", marginTop: 3 },
+  lockoutTitle: { fontSize: 14, fontFamily: "Tajawal_700Bold", textAlign: "left" },
+  lockoutBody: { fontSize: 13, fontFamily: "Tajawal_400Regular", textAlign: "left", lineHeight: 20 },
+  attemptsText: { fontSize: 12, fontFamily: "Tajawal_400Regular", textAlign: "left", marginTop: 3 },
   forgotText: {
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
-    textAlign: "right",
+    textAlign: "left",
     marginTop: -4,
   },
   privacyNote: {
