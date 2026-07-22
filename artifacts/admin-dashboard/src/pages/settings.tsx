@@ -13,7 +13,7 @@ import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeO
 
 const STORAGE_KEY = "tayyibati_api_url";
 
-const API_BASE =
+const API_BASE = () =>
   localStorage.getItem(STORAGE_KEY) || "https://api.tayyibati.xyz";
 const adminHeaders = (): HeadersInit => {
   const token = localStorage.getItem("tayyibati_admin_token");
@@ -35,20 +35,33 @@ async function fetchConfig(): Promise<ConfigRow[]> {
 }
 
 async function patchConfig(key: string, value: string): Promise<ConfigRow> {
-  const res = await fetch(`${API_BASE()}/api/config/${key}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...adminHeaders(),
-    },
-    body: JSON.stringify({ value }),
-  });
+  console.log("[DEBUG] patchConfig called with key:", key, "value:", value);
+  try {
+    const res = await fetch(`${API_BASE()}/api/config/${key}`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        ...adminHeaders(),
+      },
+      body: JSON.stringify({ value }),
+    });
 
-  if (!res.ok) {
-    throw new Error("Failed to update config");
+    console.log("[DEBUG] patchConfig response status:", res.status, "ok:", res.ok);
+    const contentType = res.headers.get("content-type");
+    console.log("[DEBUG] patchConfig content-type:", contentType);
+
+    const text = await res.text();
+    console.log("[DEBUG] patchConfig response text:", text);
+
+    if (!res.ok) {
+      throw new Error(`Failed to update config: ${res.status} ${text}`);
+    }
+
+    return text ? JSON.parse(text) : ({} as ConfigRow);
+  } catch (err) {
+    console.error("[DEBUG] patchConfig caught error:", err);
+    throw err;
   }
-
-  return res.json();
 }
 
 function Toggle({ enabled, onChange, label, desc }: { enabled: boolean; onChange: (v: boolean) => void; label: string; desc?: string; }) {
@@ -88,8 +101,27 @@ export default function Settings() {
 
   const patchMut = useMutation({
     mutationFn: ({ key, value }: { key: string; value: string }) => patchConfig(key, value),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["config"] }); toast({ title: "Setting saved" }); },
-    onError: () => toast({ title: "Failed to save setting", variant: "destructive" }),
+    onSuccess: (data, variables) => {
+      console.log("[DEBUG] patchMut onSuccess data:", data, "variables:", variables);
+      try {
+        console.log("[DEBUG] Invalidating config query keys...");
+        queryClient.invalidateQueries({ queryKey: ["config"] });
+        console.log("[DEBUG] Invalidation called successfully");
+        toast({ title: "Setting saved" });
+        console.log("[DEBUG] Toast shown successfully");
+      } catch (err) {
+        console.error("[DEBUG] Error inside onSuccess callback:", err);
+      }
+    },
+    onError: (error, variables) => {
+      console.error("[DEBUG] patchMut onError error:", error, "variables:", variables);
+      try {
+        toast({ title: "Failed to save setting", variant: "destructive" });
+        console.log("[DEBUG] Error toast shown successfully");
+      } catch (err) {
+        console.error("[DEBUG] Error inside onError callback:", err);
+      }
+    },
   });
 
   const getConfig = (key: string) => configRows.find((r) => r.key === key)?.value ?? "";
