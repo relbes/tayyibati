@@ -1,9 +1,15 @@
 import { setBaseUrl } from "@workspace/api-client-react";
 
-const domain = process.env.EXPO_PUBLIC_DOMAIN;
-if (domain) {
-  setBaseUrl(`https://${domain}`);
-}
+// Use environment variable if available, otherwise use production API.
+const domain =
+  process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
+
+const BASE_URL =
+  domain.startsWith("http://") || domain.startsWith("https://")
+    ? domain
+    : `https://${domain}`;
+
+setBaseUrl(BASE_URL);
 
 export class AnalysisError extends Error {
   status: number;
@@ -49,7 +55,7 @@ function authHeader(): Record<string, string> {
 // ---------------------------------------------------------------------------
 
 export async function analyzeText(query: string) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/analysis/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -64,7 +70,7 @@ export async function analyzeImage(
   mimeType: string,
   analysisType: "food" | "label",
 ) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/analysis/image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -79,7 +85,7 @@ export async function analyzeImage(
 // ---------------------------------------------------------------------------
 
 export async function getHistory(limit = 20, offset = 0) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/history?limit=${limit}&offset=${offset}`, {
     headers: authHeader(),
   });
@@ -88,7 +94,7 @@ export async function getHistory(limit = 20, offset = 0) {
 }
 
 export async function deleteHistoryItem(id: number) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/history/${id}`, {
     method: "DELETE",
     headers: authHeader(),
@@ -101,7 +107,7 @@ export async function deleteHistoryItem(id: number) {
 // ---------------------------------------------------------------------------
 
 export async function getUserUsage() {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/usage`, {
     headers: authHeader(),
   });
@@ -114,14 +120,14 @@ export async function getUserUsage() {
 // ---------------------------------------------------------------------------
 
 export async function getFoodStats() {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/foods/stats`);
   if (!res.ok) throw new Error("Failed to fetch stats");
   return res.json();
 }
 
 export async function listFoods(params: { search?: string; status?: string; category?: string; limit?: number; offset?: number } = {}) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const qs = new URLSearchParams();
   if (params.search) qs.set("search", params.search);
   if (params.status) qs.set("status", params.status);
@@ -141,7 +147,7 @@ export async function createFood(data: {
   reason?: string;
   notes?: string;
 }) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/foods`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -155,7 +161,7 @@ export async function updateFood(
   id: number,
   data: Partial<{ nameAr: string; nameEn: string; category: string; status: string; reason: string; notes: string }>
 ) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/foods/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -166,7 +172,7 @@ export async function updateFood(
 }
 
 export async function deleteFood(id: number) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/foods/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete food");
 }
@@ -176,7 +182,7 @@ export async function deleteFood(id: number) {
 // ---------------------------------------------------------------------------
 
 export async function getPlans() {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
@@ -234,7 +240,7 @@ export async function registerUser(payload: {
   avatar?: string;
   id?: string;
 }) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -245,7 +251,7 @@ export async function registerUser(payload: {
 }
 
 export async function loginUser(payload: { email: string; password?: string }) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -256,14 +262,14 @@ export async function loginUser(payload: { email: string; password?: string }) {
 }
 
 export async function getUser(id: string) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/${id}`);
   if (!res.ok) throw new Error("Failed to fetch user");
   return res.json();
 }
 
 export async function enrollUserPlan(id: string, planId: number, isPremium: boolean) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/${id}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -279,7 +285,7 @@ export async function enrollUserPlan(id: string, planId: number, isPremium: bool
  * users from gaining premium access without actually paying.
  */
 export async function syncPremium(): Promise<{ isPremium: boolean }> {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/me/sync-premium`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -289,14 +295,14 @@ export async function syncPremium(): Promise<{ isPremium: boolean }> {
 }
 
 export async function getPublicConfig(): Promise<Record<string, string>> {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/config/public`);
   if (!res.ok) throw new Error("Failed to fetch config");
   return res.json();
 }
 
 export async function forgotPassword(email: string) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -307,7 +313,7 @@ export async function forgotPassword(email: string) {
 }
 
 export async function resetPasswordWithCode(email: string, code: string, newPassword: string) {
-  const base = domain ? `https://${domain}` : "";
+  const base = BASE_URL;
   const res = await fetch(`${base}/api/users/reset-password-with-code`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

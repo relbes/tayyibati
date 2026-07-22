@@ -1,7 +1,5 @@
-// Resend email client backed by the Replit Resend connector.
-// Uses @replit/connectors-sdk, which handles identity, token refresh, and auth
-// headers automatically. See the Resend integration blueprint.
-import { ReplitConnectors } from "@replit/connectors-sdk";
+// Resend email client backed by the official Resend SDK.
+import { Resend } from "resend";
 
 interface SendPayload {
   from: string;
@@ -17,25 +15,20 @@ interface ResendClient {
 }
 
 export async function getUncachableResendClient(): Promise<ResendClient> {
-  const connectors = new ReplitConnectors();
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    throw new Error("RESEND_API_KEY is not configured");
+  }
+  const resend = new Resend(apiKey);
   return {
     emails: {
       send: async (payload: SendPayload) => {
-        const res = await connectors.proxy("resend", "/emails", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-        if (!res.ok) {
-          let detail: unknown;
-          try {
-            detail = await res.json();
-          } catch {
-            detail = await res.text().catch(() => res.statusText);
-          }
-          return { error: detail ?? `Resend returned ${res.status}` };
+        try {
+          const { error } = await resend.emails.send(payload);
+          return { error };
+        } catch (err) {
+          return { error: err };
         }
-        return { error: null };
       },
     },
   };

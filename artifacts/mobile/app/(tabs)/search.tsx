@@ -21,6 +21,7 @@ import { analyzeText, listFoods } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { UsageWarningBanner } from "@/components/UsageWarningBanner";
+import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 
 const QUICK_SUGGESTIONS = [
   "بيتزا", "كنتاكي", "همبرغر", "شاورما", "كباب", "فول مدمس",
@@ -49,6 +50,7 @@ export default function SearchScreen() {
   const { setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [query, setQuery] = useState("");
   const [result, setResult] = useState<any>(null);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
   const [limitReached, setLimitReached] = useState(false);
   const [suggestions, setSuggestions] = useState<FoodSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -94,6 +96,10 @@ export default function SearchScreen() {
   const handleAnalyze = async (q?: string) => {
     const text = (q ?? query).trim();
     if (!text) return;
+    if (!user) {
+      setAuthModalVisible(true);
+      return;
+    }
     setShowSuggestions(false);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
@@ -139,7 +145,7 @@ export default function SearchScreen() {
       >
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: 120 }}
+          contentContainerStyle={{ paddingBottom: 120, direction: "rtl" }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -153,6 +159,13 @@ export default function SearchScreen() {
             {/* Search Input + Autocomplete */}
             <View>
               <View style={[styles.searchRow, { backgroundColor: colors.muted, borderColor: showSuggestions ? colors.primary : colors.border }]}>
+                <TouchableOpacity
+                  style={[styles.searchBtn, { backgroundColor: query.trim() ? colors.primary : colors.border }]}
+                  onPress={() => handleAnalyze()}
+                  disabled={!query.trim() || isAnalyzing}
+                >
+                  <Icon name="search" size={20} color={query.trim() ? "#fff" : colors.mutedForeground} />
+                </TouchableOpacity>
                 <TextInput
                   ref={inputRef}
                   style={[styles.input, { color: colors.foreground, fontFamily: "Tajawal_400Regular" }]}
@@ -174,13 +187,6 @@ export default function SearchScreen() {
                     <Icon name="close-circle" size={18} color={colors.mutedForeground} />
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity
-                  style={[styles.searchBtn, { backgroundColor: query.trim() ? colors.primary : colors.border }]}
-                  onPress={() => handleAnalyze()}
-                  disabled={!query.trim() || isAnalyzing}
-                >
-                  <Icon name="search" size={20} color={query.trim() ? "#fff" : colors.mutedForeground} />
-                </TouchableOpacity>
               </View>
 
               {/* Suggestions dropdown */}
@@ -235,14 +241,26 @@ export default function SearchScreen() {
               </View>
             )}
 
-            {/* Search tip */}
-            {!result && !limitReached && (
-              <View style={[styles.tipCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
-                <Text style={[styles.tipText, { color: colors.primary }]}>
-                  💡 للحصول على نتائج دقيقة، اكتب اسم المادة بوضوح باللغة العربية أو الإنجليزية
-                </Text>
-              </View>
-            )}
+           {/* Search tip */}
+           {!result && !limitReached && (
+             <View
+               style={[
+                 styles.tipCard,
+                 {
+                   backgroundColor: colors.primary + "12",
+                   borderColor: colors.primary + "30",
+                 },
+               ]}
+             >
+               <Text style={styles.tipEmoji}>💡</Text>
+
+               <View style={styles.tipContent}>
+                 <Text style={[styles.tipText, { color: colors.primary }]}>
+                   للحصول على نتائج دقيقة، اكتب اسم المادة بوضوح باللغة العربية أو الإنجليزية
+                 </Text>
+               </View>
+             </View>
+           )}
 
             {/* Quick suggestions */}
             {!result && !query.trim() && (
@@ -282,12 +300,13 @@ export default function SearchScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      <AuthRequiredDialog visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   scroll: { flex: 1 },
   header: {
     paddingHorizontal: 16,
@@ -299,19 +318,21 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
     textAlign: "right",
+    alignSelf: "flex-start",
   },
   subtitle: {
     fontSize: 14,
     fontFamily: "Tajawal_400Regular",
     textAlign: "right",
     marginBottom: 8,
+    alignSelf: "flex-start",
   },
   searchRow: {
     flexDirection: "row",
     alignItems: "center",
     borderRadius: 14,
     borderWidth: 1.5,
-    paddingStart: 8,
+    paddingLeft: 8,
     overflow: "visible",
   },
   input: {
@@ -319,6 +340,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 10,
     fontSize: 16,
+    textAlign: "right",
   },
   clearBtn: {
     paddingHorizontal: 6,
@@ -368,7 +390,7 @@ const styles = StyleSheet.create({
   },
   suggestionNames: {
     flex: 1,
-    alignItems: "flex-end",
+    alignItems: "flex-start",
   },
   suggestionAr: {
     fontSize: 14,
@@ -394,12 +416,13 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Tajawal_500Medium",
     textAlign: "right",
+    alignSelf: "flex-start",
   },
   suggestionsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
   },
   chip: {
     paddingHorizontal: 14,
@@ -411,17 +434,27 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
   },
-  tipCard: {
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+ tipCard: {
+   flexDirection: "row-reverse",
+   alignItems: "flex-start",
+   borderWidth: 1,
+   borderRadius: 14,
+   paddingVertical: 14,
+   paddingHorizontal: 16,
+ },
+tipContent: {
+  flex: 1,
+  alignItems: "flex-end",
+},
+  tipEmoji: {
+    fontSize: 18,
+    marginLeft: 8,
   },
+
   tipText: {
-    fontSize: 13,
-    fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
-    lineHeight: 20,
+    textAlign: "left",
+    lineHeight: 24,
+    fontFamily: "Tajawal_500Medium",
   },
   limitBanner: {
     borderRadius: 14,

@@ -47,6 +47,9 @@ export default function PricingScreen() {
 
   const currentOffering = offerings?.current;
   const packages = currentOffering?.availablePackages ?? [];
+  console.log("Offerings:", JSON.stringify(offerings, null, 2));
+console.log("Current:", currentOffering);
+console.log("Packages:", packages);
 
   useEffect(() => {
     getPlans()
@@ -144,8 +147,10 @@ export default function PricingScreen() {
       </Text>
       {premiumFeatures.map((f) => (
         <View key={f} style={styles.featureRow}>
-          <Text style={[styles.featureText, { color: colors.foreground }]}>{f}</Text>
           <Icon name="checkmark-circle" size={18} color={colors.accent} />
+          <View style={styles.featureTextWrap}>
+            <Text style={[styles.featureTextText, { color: colors.foreground }]}>{f}</Text>
+          </View>
         </View>
       ))}
       {isSubscribed ? (
@@ -174,11 +179,11 @@ export default function PricingScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={{ width: 44 }} />
+        <Text style={[styles.title, { color: colors.foreground }]}>الباقات</Text>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Icon name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.foreground }]}>الباقات</Text>
-        <View style={{ width: 44 }} />
       </View>
 
       {isLoading || isPurchasing || isRestoring ? (
@@ -189,17 +194,17 @@ export default function PricingScreen() {
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 16 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 16, direction: "rtl" }} showsVerticalScrollIndicator={false}>
 
           {/* Status message */}
           {statusMsg && (
             <View style={[styles.statusBox, { backgroundColor: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed + "20" : "#fdecea" }]}>
-              <TouchableOpacity onPress={() => setStatusMsg(null)}>
-                <Icon name="close" size={16} color={colors.mutedForeground} />
-              </TouchableOpacity>
               <Text style={[styles.statusText, { color: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed : "#c0392b" }]}>
                 {statusMsg}
               </Text>
+              <TouchableOpacity onPress={() => setStatusMsg(null)}>
+                <Icon name="close" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
             </View>
           )}
 
@@ -216,8 +221,10 @@ export default function PricingScreen() {
             </Text>
             {freeFeatures.map((f) => (
               <View key={f} style={styles.featureRow}>
-                <Text style={[styles.featureText, { color: colors.mutedForeground }]}>{f}</Text>
                 <Icon name="checkmark-circle" size={18} color={colors.allowed} />
+                <View style={styles.featureTextWrap}>
+                  <Text style={[styles.featureTextText, { color: colors.mutedForeground }]}>{f}</Text>
+                </View>
               </View>
             ))}
             {!isSubscribed && (
@@ -271,7 +278,7 @@ export default function PricingScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -299,22 +306,23 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
     overflow: "hidden",
+    alignItems: "flex-start",
   },
   premiumCard: { borderWidth: 2, position: "relative", paddingTop: 48 },
   popularBadge: {
     position: "absolute",
     top: 14,
-    right: 14,
+    end: 14,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   popularText: { color: "#fff", fontSize: 11, fontFamily: "Tajawal_700Bold" },
-  planName: { fontSize: 22, fontFamily: "Tajawal_700Bold", textAlign: "right" },
-  priceRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-end" },
+  planName: { fontSize: 22, fontFamily: "Tajawal_700Bold" },
+  priceRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-start" },
   planAmount: { fontSize: 36, fontFamily: "Tajawal_700Bold" },
   planCurrency: { fontSize: 14, fontFamily: "Tajawal_400Regular", paddingBottom: 6 },
-  divider: { height: 1, marginVertical: 4 },
+  divider: { height: 1, marginVertical: 4, alignSelf: "stretch" },
   limitBadge: {
     fontSize: 13,
     fontFamily: "Tajawal_700Bold",
@@ -327,13 +335,21 @@ const styles = StyleSheet.create({
   featureRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
     gap: 10,
+    width: "100%",
   },
-  featureText: { fontSize: 14, fontFamily: "Tajawal_400Regular", flex: 1, textAlign: "right" },
-  currentBadge: { padding: 10, borderRadius: 10, alignItems: "center", marginTop: 4 },
+  featureTextWrap: {
+    flex: 1,
+    alignItems: "flex-start",
+  },
+  featureTextText: {
+    fontSize: 14,
+    fontFamily: "Tajawal_400Regular",
+  },
+  currentBadge: { padding: 10, borderRadius: 10, alignItems: "center", marginTop: 4, alignSelf: "stretch" },
   currentText: { fontSize: 13, fontFamily: "Tajawal_700Bold" },
-  upgradeBtn: { padding: 14, borderRadius: 14, alignItems: "center", marginTop: 4 },
+  upgradeBtn: { padding: 14, borderRadius: 14, alignItems: "center", marginTop: 4, alignSelf: "stretch" },
   upgradeBtnText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 16 },
   restoreBtn: { alignItems: "center", paddingVertical: 8 },
   restoreText: { fontSize: 13, fontFamily: "Tajawal_400Regular", textDecorationLine: "underline" },

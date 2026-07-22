@@ -22,6 +22,7 @@ import { useAnalysis } from "@/context/AnalysisContext";
 import { analyzeText, analyzeImage, getFoodStats, getPublicConfig, AnalysisError } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
+import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 
 interface FoodStats {
   total: number;
@@ -38,6 +39,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [query, setQuery] = useState("");
+  const [authModalVisible, setAuthModalVisible] = useState(false);
   const [stats, setStats] = useState<FoodStats | null>(null);
   const [result, setResult] = useState<any>(null);
   const [appName, setAppName] = useState("طيباتي");
@@ -67,6 +69,10 @@ export default function HomeScreen() {
 
   const handleSearch = useCallback(async () => {
     if (!query.trim()) return;
+    if (!user) {
+      setAuthModalVisible(true);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setIsAnalyzing(true);
     setResult(null);
@@ -95,6 +101,10 @@ export default function HomeScreen() {
   );
 
   const handleCameraScan = async () => {
+    if (!user) {
+      setAuthModalVisible(true);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) {
@@ -137,16 +147,17 @@ export default function HomeScreen() {
         style={[styles.header, { paddingTop: topPadding + 12 }]}
       >
         <View style={styles.headerTop}>
+          <View style={{ width: 38 }} />
+          <View style={styles.headerTitle}>
+            <Text style={styles.appName}>{appName}</Text>
+            <Text style={styles.appSub}>{appSub}</Text>
+          </View>
           <TouchableOpacity
             style={[styles.profileBtn, { backgroundColor: "rgba(255,255,255,0.2)" }]}
             onPress={() => router.push("/(tabs)/profile")}
           >
             <Icon name={user ? "person" : "person-outline"} size={20} color="#fff" />
           </TouchableOpacity>
-          <View style={styles.headerTitle}>
-            <Text style={styles.appName}>{appName}</Text>
-            <Text style={styles.appSub}>{appSub}</Text>
-          </View>
         </View>
 
         {/* Hero Search Bar */}
@@ -178,8 +189,13 @@ export default function HomeScreen() {
         </View>
 
         {/* Quick tips row */}
-        <View style={styles.tipsRow}>
-          {["بيتزا", "E471", "جيلاتين", "هوت دوج"].map((tip) => (
+       <View style={styles.tipsRow}>
+         {[
+           "🍕 بيتزا",
+           "🧪 E471",
+           "🥩 جيلاتين",
+           "🌭 هوت دوج",
+         ].map((tip) => (
             <Pressable
               key={tip}
               style={[styles.tipChip, { backgroundColor: "rgba(255,255,255,0.18)" }]}
@@ -262,21 +278,21 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={[styles.historyLink, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => router.push("/(tabs)/history")}
-              activeOpacity={0.7}
             >
+              <Icon name="time-outline" size={20} color={colors.primary} />
+              <Text style={[styles.historyLinkText, { color: colors.foreground }]}>سجل التحليلات</Text>
               <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
-              <Text style={[styles.historyLinkText, { color: colors.foreground }]}>عرض سجل التحليلات</Text>
-              <Icon name="time-outline" size={18} color={colors.primary} />
             </TouchableOpacity>
           </View>
         )}
       </View>
+      <AuthRequiredDialog visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 20,
@@ -287,15 +303,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  headerTitle: { alignItems: "center", flex: 1, gap: 2 },
+ headerTitle: {
+     flex: 1,
+     alignItems: "center",
+     justifyContent: "center",
+     paddingHorizontal: 12,
+ },
   appName: {
-    fontSize: 26,
+    fontSize: 30,
     fontFamily: "Tajawal_700Bold",
     color: "#fff",
     textAlign: "center",
   },
   appSub: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
     textAlign: "center",
@@ -310,9 +331,9 @@ const styles = StyleSheet.create({
   searchBox: {
     flexDirection: "row",
     alignItems: "center",
-    borderRadius: 16,
-    paddingHorizontal: 6,
-    paddingVertical: 6,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     gap: 6,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
@@ -322,38 +343,40 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 17,
     fontFamily: "Tajawal_400Regular",
     paddingHorizontal: 8,
     paddingVertical: 8,
     minHeight: 40,
   },
   searchBtn: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   cameraBtn: {
-    width: 42,
-    height: 42,
+    width: 48,
+    height: 48,
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   tipsRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    alignItems: "center",
     gap: 8,
-    justifyContent: "flex-end",
   },
-  tipChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 20,
-  },
+ tipChip: {
+     paddingHorizontal: 14,
+     paddingVertical: 8,
+     borderRadius: 24,
+ },
   tipText: {
-    fontSize: 12,
+    fontSize: 14,
     fontFamily: "Tajawal_500Medium",
     color: "#fff",
   },

@@ -74,10 +74,15 @@ export default function HistoryScreen() {
         onPress={() => handleView(item)}
         activeOpacity={0.7}
       >
-        <View style={[styles.scoreCircle, { backgroundColor: scoreColor + "20", borderColor: scoreColor + "40" }]}>
-          <Text style={[styles.scoreText, { color: scoreColor }]}>{score}</Text>
+        {/* RIGHT - Score Circle */}
+        <View style={styles.rightSection}>
+          <View style={[styles.scoreCircle, { backgroundColor: scoreColor + "20", borderColor: scoreColor + "40" }]}>
+            <Text style={[styles.scoreText, { color: scoreColor }]}>{score}</Text>
+          </View>
         </View>
-        <View style={styles.itemInfo}>
+
+        {/* CENTER - Food details */}
+        <View style={styles.centerSection}>
           <Text style={[styles.itemQuery, { color: colors.foreground }]} numberOfLines={1}>
             {item.query}
           </Text>
@@ -88,9 +93,13 @@ export default function HistoryScreen() {
             </Text>
           </View>
         </View>
-        <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
-          <Icon name="trash-outline" size={18} color={colors.error} />
-        </TouchableOpacity>
+
+        {/* LEFT - Delete Icon */}
+        <View style={styles.leftSection}>
+          <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
+            <Icon name="trash-outline" size={18} color={colors.error} />
+          </TouchableOpacity>
+        </View>
       </TouchableOpacity>
     );
   };
@@ -146,7 +155,7 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -157,11 +166,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
     textAlign: "right",
+    alignSelf: "flex-start",
   },
   subtitle: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     textAlign: "right",
+    alignSelf: "flex-start",
   },
   item: {
     flexDirection: "row",
@@ -170,6 +181,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     gap: 12,
+    direction: "rtl",
   },
   scoreCircle: {
     width: 48,
@@ -183,9 +195,20 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Tajawal_700Bold",
   },
-  itemInfo: {
+  rightSection: {
+    width: 56,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  centerSection: {
     flex: 1,
     gap: 4,
+    alignItems: "flex-start",
+  },
+  leftSection: {
+    width: 40,
+    alignItems: "center",
+    justifyContent: "center",
   },
   itemQuery: {
     fontSize: 15,
@@ -196,11 +219,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
   },
   itemDate: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
   },
   deleteBtn: {
     padding: 6,

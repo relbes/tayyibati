@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
+  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -47,9 +48,24 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
-  const handleSignOut = async () => {
+  const handleSignOut = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    await signOut();
+    Alert.alert(
+      "تسجيل الخروج",
+      "هل أنت متأكد أنك تريد تسجيل الخروج؟",
+      [
+        { text: "إلغاء", style: "cancel" },
+        {
+          text: "تسجيل الخروج",
+          style: "destructive",
+          onPress: async () => {
+            await signOut();
+            Alert.alert("تم تسجيل الخروج", "تم تسجيل الخروج بنجاح");
+            router.replace("/(tabs)");
+          },
+        },
+      ]
+    );
   };
 
   if (!user) {
@@ -82,7 +98,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100, direction: "rtl" }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient
           colors={[colors.primary, colors.primary + "BB"]}
@@ -108,16 +124,16 @@ export default function ProfileScreen() {
           {usage && !usage.isPremium && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.cardHeader}>
-                <Icon name="analytics-outline" size={20} color={colors.primary} />
                 <Text style={[styles.cardTitle, { color: colors.foreground }]}>الاستخدام الشهري</Text>
+                <Icon name="analytics-outline" size={20} color={colors.primary} />
               </View>
 
               {/* Text searches */}
               <View style={styles.usageRow}>
+                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>بحث نصي</Text>
                 <Text style={[styles.usageCount, { color: colors.primary }]}>
                   {usage.monthlyTextCount} / {usage.textLimit < 0 ? "∞" : usage.textLimit}
                 </Text>
-                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>بحث نصي</Text>
               </View>
               <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
                 <View style={[styles.progressFill, { width: `${textPercent}%` as any, backgroundColor: textPercent > 80 ? colors.error : colors.primary }]} />
@@ -128,10 +144,10 @@ export default function ProfileScreen() {
 
               {/* Image searches */}
               <View style={[styles.usageRow, { marginTop: 8 }]}>
+                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>تحليل صور</Text>
                 <Text style={[styles.usageCount, { color: colors.primary }]}>
                   {usage.monthlyImageCount} / {usage.imageLimit < 0 ? "∞" : usage.imageLimit}
                 </Text>
-                <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>تحليل صور</Text>
               </View>
               <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
                 <View style={[styles.progressFill, { width: `${imagePercent}%` as any, backgroundColor: imagePercent > 80 ? colors.error : colors.primary }]} />
@@ -172,11 +188,13 @@ export default function ProfileScreen() {
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => item.route && router.push(item.route as any)}
             >
-              <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
-              <Text style={[styles.menuLabel, { color: colors.foreground }]}>{item.label}</Text>
               <View style={[styles.menuIcon, { backgroundColor: colors.primary + "18" }]}>
                 <Icon name={item.icon} size={20} color={colors.primary} />
               </View>
+              <View style={styles.menuLabelWrap}>
+                <Text style={[styles.menuLabelText, { color: colors.foreground }]}>{item.label}</Text>
+              </View>
+              <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           ))}
 
@@ -185,11 +203,13 @@ export default function ProfileScreen() {
             style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.error + "30" }]}
             onPress={handleSignOut}
           >
-            <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
-            <Text style={[styles.menuLabel, { color: colors.error }]}>تسجيل الخروج</Text>
             <View style={[styles.menuIcon, { backgroundColor: colors.error + "18" }]}>
               <Icon name="log-out-outline" size={20} color={colors.error} />
             </View>
+            <View style={styles.menuLabelWrap}>
+              <Text style={[styles.menuLabelText, { color: colors.error }]}>تسجيل الخروج</Text>
+            </View>
+            <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -198,7 +218,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -232,11 +252,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
     color: "#fff",
+    textAlign: "center",
   },
   userEmail: {
     fontSize: 14,
     fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
+    textAlign: "center",
   },
   premiumBadge: {
     flexDirection: "row",
@@ -294,18 +316,17 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
   },
   cardTitle: {
     fontSize: 15,
     fontFamily: "Tajawal_700Bold",
+    textAlign: "right",
   },
   usageRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 6,
-    justifyContent: "flex-end",
+    justifyContent: "space-between",
   },
   usageCount: {
     fontSize: 24,
@@ -314,6 +335,7 @@ const styles = StyleSheet.create({
   usageLabel: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
   },
   progressTrack: {
     height: 6,
@@ -323,11 +345,13 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 3,
+    alignSelf: "flex-start",
   },
   usageRemaining: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
     textAlign: "right",
+    alignSelf: "flex-start",
   },
   upgradeCard: {
     flexDirection: "row",
@@ -339,16 +363,16 @@ const styles = StyleSheet.create({
   },
   upgradeText: {
     flex: 1,
+    alignItems: "flex-start",
+    gap: 2,
   },
   upgradeTitle: {
     fontSize: 16,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
   },
   upgradeDesc: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
   },
   menuItem: {
     flexDirection: "row",
@@ -365,10 +389,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  menuLabel: {
+  menuLabelWrap: {
     flex: 1,
+    alignItems: "flex-start",
+  },
+  menuLabelText: {
     fontSize: 15,
     fontFamily: "Tajawal_500Medium",
-    textAlign: "right",
   },
 });

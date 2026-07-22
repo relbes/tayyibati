@@ -1,3 +1,4 @@
+import { API_BASE } from "@/lib/api";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,31 +16,56 @@ export default function Login({ onLogin }: LoginProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!password.trim()) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/admin/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.error || "فشل تسجيل الدخول");
-        return;
-      }
-      const { token } = await res.json();
-      localStorage.setItem("tayyibati_admin_token", token);
-      onLogin(token);
-    } catch {
-      setError("تعذّر الوصول إلى الخادم");
-    } finally {
-      setLoading(false);
+async function handleSubmit(e: React.FormEvent) {
+  e.preventDefault();
+
+  if (!password.trim()) return;
+
+  setLoading(true);
+  setError(null);
+
+  try {
+    console.log("API =", API_BASE);
+
+const res = await fetch(`${API_BASE}/api/admin/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+
+    console.log("status =", res.status);
+
+    const text = await res.text();
+
+    console.log("response text =", text);
+
+    const body = JSON.parse(text);
+
+    console.log("parsed =", body);
+
+    if (!res.ok) {
+      setError(body.error || "فشل تسجيل الدخول");
+      return;
     }
+
+    console.log("token =", body.token);
+
+    localStorage.setItem("tayyibati_admin_token", body.token);
+
+    console.log("saved");
+
+    onLogin(body.token);
+
+    console.log("done");
+  } catch (err) {
+    console.error(err);
+    setError("تعذّر الوصول إلى الخادم");
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">

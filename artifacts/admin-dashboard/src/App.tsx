@@ -2,7 +2,6 @@ import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { setBaseUrl, setAuthTokenGetter } from "@workspace/api-client-react";
 import { useEffect, useState, useCallback } from "react";
 import NotFound from "@/pages/not-found";
 import Overview from "@/pages/overview";
@@ -155,18 +154,11 @@ function Layout({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-function AppInit({ children }: { children: React.ReactNode }) {
-  useEffect(() => {
-    const stored = localStorage.getItem("tayyibati_api_url");
-    if (stored) setBaseUrl(stored);
-    setAuthTokenGetter(() => localStorage.getItem("tayyibati_admin_token"));
-  }, []);
-  return <>{children}</>;
-}
+
 
 async function verifyToken(token: string): Promise<boolean> {
   try {
-    const res = await fetch("/api/admin/me", { headers: { Authorization: `Bearer ${token}` } });
+   const res = await fetch(`${localStorage.getItem("tayyibati_api_url") || "https://api.tayyibati.xyz"}/api/admin/me`, {headers: { Authorization: `Bearer ${token}` } });
     return res.ok;
   } catch {
     return false;
@@ -219,11 +211,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <LangProvider>
-          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-            <AppInit>
-              <Layout onLogout={handleLogout} />
-            </AppInit>
-          </WouterRouter>
+         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+  <Layout onLogout={handleLogout} />
+</WouterRouter>
         </LangProvider>
         <Toaster />
       </TooltipProvider>

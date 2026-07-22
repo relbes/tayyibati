@@ -10,7 +10,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
@@ -32,12 +32,17 @@ const GOOGLE_DISCOVERY = {
   revocationEndpoint: "https://oauth2.googleapis.com/revoke",
 };
 
-const domain = process.env.EXPO_PUBLIC_DOMAIN;
+const domain =
+  process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
+
+const BASE_URL =
+  domain.startsWith("http://") || domain.startsWith("https://")
+    ? domain
+    : `https://${domain}`;
 
 async function fetchGoogleLoginEnabled(): Promise<boolean> {
   try {
-    const base = domain ? `https://${domain}` : "";
-    const res = await fetch(`${base}/api/config/public`);
+   const res = await fetch(`${BASE_URL}/api/config/public`);
     if (!res.ok) return false;
     const config = await res.json();
     return config.google_login_enabled === "true";
@@ -57,7 +62,14 @@ export default function AuthScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signIn, registerWithPassword, loginWithPassword } = useAuth();
-  const [tab, setTab] = useState<"login" | "register">("login");
+  const { tab: paramTab } = useLocalSearchParams<{ tab?: "login" | "register" }>();
+  const [tab, setTab] = useState<"login" | "register">(paramTab === "register" ? "register" : "login");
+
+  useEffect(() => {
+    if (paramTab === "login" || paramTab === "register") {
+      setTab(paramTab);
+    }
+  }, [paramTab]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -165,10 +177,9 @@ export default function AuthScreen() {
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       if (e instanceof AuthError) {
-        if (e.status === 423) {
-          setLockedSecondsLeft(e.secondsLeft ?? 900);
-          setError("");
-        } else {
+          if (e.status === 423) {
+              setError("تم تعطيل تسجيل الدخول مؤقتاً، حاول مرة أخرى لاحقاً.");
+          }else {
           if (typeof e.remainingAttempts === "number") {
             setRemainingAttempts(e.remainingAttempts);
           }
@@ -190,19 +201,25 @@ export default function AuthScreen() {
         colors={[colors.primary, colors.primary + "99"]}
         style={[styles.topBar, { paddingTop: topPadding + 8 }]}
       >
+        <View style={{ width: 40 }} />
+        <Text style={styles.topTitle}>طيباتي</Text>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <Icon name="close" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>طيباتي</Text>
-        <View style={{ width: 40 }} />
       </LinearGradient>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
-          contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + 40 }]}
+       <ScrollView
+           contentContainerStyle={[
+               styles.form,
+               {
+                   paddingBottom: insets.bottom + 40,
+                   alignItems: "stretch",
+               },
+           ]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={[styles.tabToggle, { backgroundColor: colors.muted, borderColor: colors.border }]}>
@@ -219,10 +236,26 @@ export default function AuthScreen() {
             ))}
           </View>
 
-          <Text style={[styles.welcomeText, { color: colors.foreground }]}>
+          <Text
+            style={[
+              styles.welcomeText,
+              {
+                color: colors.foreground,
+                alignSelf: "flex-end",
+              },
+            ]}
+          >
             {tab === "login" ? "أهلاً بعودتك" : "انضم إلى طيباتي"}
           </Text>
-          <Text style={[styles.subText, { color: colors.mutedForeground }]}>
+         <Text
+           style={[
+             styles.subText,
+             {
+               color: colors.mutedForeground,
+               alignSelf: "flex-end",
+             },
+           ]}
+         >
             {tab === "login"
               ? "سجّل دخولك للوصول لتحليلاتك المحفوظة"
               : "أنشئ حساباً لحفظ تحليلاتك"}
@@ -260,6 +293,7 @@ export default function AuthScreen() {
             <View style={styles.fieldGroup}>
               <Text style={[styles.label, { color: colors.foreground }]}>الاسم</Text>
               <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Icon name="person-outline" size={18} color={colors.mutedForeground} />
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   placeholder="اسمك الكريم"
@@ -269,7 +303,6 @@ export default function AuthScreen() {
                   textAlign="right"
                   autoCapitalize="words"
                 />
-                <Icon name="person-outline" size={18} color={colors.mutedForeground} />
               </View>
             </View>
           )}
@@ -277,42 +310,43 @@ export default function AuthScreen() {
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>البريد الإلكتروني</Text>
             <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 placeholder="example@email.com"
                 placeholderTextColor={colors.mutedForeground}
                 value={email}
                 onChangeText={setEmail}
-                textAlign="right"
+                textAlign="left"
                 keyboardType="email-address"
+
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoComplete="email"
               />
-              <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
             </View>
           </View>
 
           <View style={styles.fieldGroup}>
             <Text style={[styles.label, { color: colors.foreground }]}>كلمة المرور</Text>
             <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
-                <Icon name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
-              </TouchableOpacity>
+              <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
               <TextInput
                 style={[styles.input, { color: colors.foreground }]}
                 placeholder="••••••••"
                 placeholderTextColor={colors.mutedForeground}
                 value={password}
                 onChangeText={setPassword}
-                textAlign="right"
+                textAlign="left"
                 secureTextEntry={!showPassword}
                 autoCapitalize="none"
                 autoCorrect={false}
                 autoComplete={tab === "login" ? "current-password" : "new-password"}
                 onSubmitEditing={handleSubmit}
               />
-              <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+              <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
+                <Icon name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -322,21 +356,7 @@ export default function AuthScreen() {
             </TouchableOpacity>
           ) : null}
 
-          {lockedSecondsLeft !== null && lockedSecondsLeft > 0 ? (
-            <View style={[styles.lockoutBox, { backgroundColor: "#7f1d1d22", borderColor: "#ef444460" }]}>
-              <Icon name="lock-closed" size={22} color="#ef4444" />
-              <View style={styles.lockoutTextCol}>
-                <Text style={[styles.lockoutTitle, { color: "#ef4444" }]}>تم إغلاق الحساب مؤقتاً</Text>
-                <Text style={[styles.lockoutBody, { color: "#ef4444cc" }]}>
-                  {`تجاوزت عدد المحاولات المسموح بها. حاول مرة أخرى بعد ${
-                    lockedSecondsLeft >= 60
-                      ? `${Math.ceil(lockedSecondsLeft / 60)} دقيقة`
-                      : `${lockedSecondsLeft} ثانية`
-                  }.`}
-                </Text>
-              </View>
-            </View>
-          ) : null}
+
 
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
@@ -353,9 +373,15 @@ export default function AuthScreen() {
           ) : null}
 
           <TouchableOpacity
-            style={[styles.submitBtn, { backgroundColor: colors.primary, opacity: (loading || (lockedSecondsLeft !== null && lockedSecondsLeft > 0)) ? 0.5 : 1 }]}
-            onPress={handleSubmit}
-            disabled={loading || googleLoading || (lockedSecondsLeft !== null && lockedSecondsLeft > 0)}
+              style={[
+                  styles.submitBtn,
+                  {
+                      backgroundColor: colors.primary,
+                      opacity: loading ? 0.6 : 1,
+                  },
+              ]}
+              onPress={handleSubmit}
+              disabled={loading || googleLoading}
           >
             <Text style={styles.submitText}>
               {loading ? "جاري..." : tab === "login" ? "دخول" : "إنشاء الحساب"}
@@ -375,7 +401,7 @@ export default function AuthScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -385,7 +411,12 @@ const styles = StyleSheet.create({
   },
   closeBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
   topTitle: { fontSize: 20, fontFamily: "Tajawal_700Bold", color: "#fff" },
-  form: { padding: 24, gap: 16 },
+  form: {
+      paddingHorizontal: 24,
+      paddingTop: 18,
+      paddingBottom: 40,
+      gap: 22,
+  },
   tabToggle: {
     flexDirection: "row",
     borderRadius: 12,
@@ -395,22 +426,23 @@ const styles = StyleSheet.create({
   },
   tabBtn: {
     flex: 1,
-    paddingVertical: 10,
+    paddingVertical: 14,
     borderRadius: 10,
     alignItems: "center",
   },
   tabText: { fontSize: 14, fontFamily: "Tajawal_700Bold" },
   welcomeText: {
-    fontSize: 24,
-    fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
-    marginTop: 8,
+      width: "100%",
+      textAlign: "right",
+      fontSize: 32,
+      fontFamily: "Tajawal_700Bold",
   },
   subText: {
-    fontSize: 14,
-    fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
-    lineHeight: 22,
+      width: "100%",
+      textAlign: "right",
+      fontSize: 16,
+      lineHeight: 24,
+      fontFamily: "Tajawal_400Regular",
   },
   googleBtn: {
     flexDirection: "row",
@@ -437,15 +469,25 @@ const styles = StyleSheet.create({
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 13, fontFamily: "Tajawal_400Regular" },
-  fieldGroup: { gap: 6 },
+  fieldGroup: {
+       gap: 8,
+       marginTop: 4,
+   },
   label: { fontSize: 14, fontFamily: "Tajawal_500Medium", textAlign: "right" },
   inputWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 14,
-    gap: 10,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "flex-start",
+
+      width: "100%",
+
+      borderRadius: 12,
+      borderWidth: 1,
+
+      paddingHorizontal: 16,
+      paddingVertical: 2,
+
+      gap: 12,
   },
   input: {
     flex: 1,

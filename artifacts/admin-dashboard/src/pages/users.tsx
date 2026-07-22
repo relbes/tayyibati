@@ -18,11 +18,7 @@ import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail, LockOpen, Lock } from "lucide-react";
 
-const API_BASE = () => localStorage.getItem("tayyibati_api_url") || "";
-const adminHeaders = (): HeadersInit => {
-  const token = localStorage.getItem("tayyibati_admin_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import { API_BASE, adminHeaders } from "@/lib/api";
 
 interface User {
   id: string;
@@ -43,19 +39,19 @@ interface Plan { id: number; name: string; nameEn: string; dailyLimit: number; }
 
 async function fetchUsers(search: string): Promise<User[]> {
   const url = search
-    ? `${API_BASE()}/api/users?search=${encodeURIComponent(search)}`
-    : `${API_BASE()}/api/users`;
+    ? `${API_BASE}/api/users?search=${encodeURIComponent(search)}`
+    : `${API_BASE}/api/users`;
   const res = await fetch(url, { headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to fetch users");
   return res.json();
 }
 async function fetchPlans(): Promise<Plan[]> {
-  const res = await fetch(`${API_BASE()}/api/plans`);
+  const res = await fetch(`${API_BASE}/api/plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
 async function updateUser(id: string, data: Partial<Pick<User, "name" | "email" | "isPremium">>): Promise<User> {
-  const res = await fetch(`${API_BASE()}/api/users/${id}`, {
+  const res = await fetch(`${API_BASE}/api/users/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(data),
@@ -64,7 +60,7 @@ async function updateUser(id: string, data: Partial<Pick<User, "name" | "email" 
   return res.json();
 }
 async function enrollPlan(id: string, planId: number | null): Promise<User> {
-  const res = await fetch(`${API_BASE()}/api/users/${id}/plan`, {
+  const res = await fetch(`${API_BASE}/api/users/${id}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ planId }),
@@ -73,7 +69,7 @@ async function enrollPlan(id: string, planId: number | null): Promise<User> {
   return res.json();
 }
 async function resetPassword(id: string, password: string): Promise<void> {
-  const res = await fetch(`${API_BASE()}/api/users/${id}/reset-password`, {
+  const res = await fetch(`${API_BASE}/api/users/${id}/reset-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ password }),
@@ -84,14 +80,14 @@ async function resetPassword(id: string, password: string): Promise<void> {
   }
 }
 async function unlockUser(id: string): Promise<User> {
-  const res = await fetch(`${API_BASE()}/api/users/${id}/unlock`, {
+  const res = await fetch(`${API_BASE}/api/users/${id}/unlock`, {
     method: "POST", headers: { "Content-Type": "application/json", ...adminHeaders() },
   });
   if (!res.ok) { const data = await res.json().catch(() => ({})); throw new Error(data.error || "Failed"); }
   return res.json();
 }
 async function deleteUser(id: string): Promise<void> {
-  const res = await fetch(`${API_BASE()}/api/users/${id}`, { method: "DELETE", headers: adminHeaders() });
+  const res = await fetch(`${API_BASE}/api/users/${id}`, { method: "DELETE", headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to delete user");
 }
 

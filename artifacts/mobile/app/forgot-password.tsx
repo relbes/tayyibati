@@ -83,11 +83,11 @@ export default function ForgotPasswordScreen() {
         colors={[colors.primary, colors.primary + "99"]}
         style={[styles.topBar, { paddingTop: topPadding + 8 }]}
       >
+        <View style={{ width: 40 }} />
+        <Text style={styles.topTitle}>استعادة كلمة المرور</Text>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
           <Icon name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.topTitle}>استعادة كلمة المرور</Text>
-        <View style={{ width: 40 }} />
       </LinearGradient>
 
       <KeyboardAvoidingView
@@ -98,10 +98,10 @@ export default function ForgotPasswordScreen() {
           contentContainerStyle={[styles.form, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
         >
-          <Text style={[styles.welcomeText, { color: colors.foreground }]}>
+          <Text style={[styles.welcomeText, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>
             {step === "email" ? "نسيت كلمة المرور؟" : "أدخل الرمز"}
           </Text>
-          <Text style={[styles.subText, { color: colors.mutedForeground }]}>
+          <Text style={[styles.subText, { color: colors.mutedForeground, textAlign: "right", alignSelf: "flex-end" }]}>
             {step === "email"
               ? "أدخل بريدك الإلكتروني وسنرسل لك رمز تحقق لإعادة تعيين كلمة المرور."
               : "أدخل رمز التحقق المرسل إلى بريدك وكلمة المرور الجديدة."}
@@ -110,14 +110,15 @@ export default function ForgotPasswordScreen() {
           {info ? (
             <View style={[styles.infoBox, { backgroundColor: colors.primary + "14", borderColor: colors.primary + "33" }]}>
               <Icon name="mail-outline" size={16} color={colors.primary} />
-              <Text style={[styles.infoText, { color: colors.primary }]}>{info}</Text>
+              <Text style={[styles.infoText, { color: colors.primary, textAlign: "right" }]}>{info}</Text>
             </View>
           ) : null}
 
           {step === "email" ? (
             <View style={styles.fieldGroup}>
-              <Text style={[styles.label, { color: colors.foreground }]}>البريد الإلكتروني</Text>
+              <Text style={[styles.label, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>البريد الإلكتروني</Text>
               <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
                 <TextInput
                   style={[styles.input, { color: colors.foreground }]}
                   placeholder="example@email.com"
@@ -131,14 +132,14 @@ export default function ForgotPasswordScreen() {
                   autoComplete="email"
                   onSubmitEditing={handleSendCode}
                 />
-                <Icon name="mail-outline" size={18} color={colors.mutedForeground} />
               </View>
             </View>
           ) : (
             <>
               <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: colors.foreground }]}>رمز التحقق</Text>
+                <Text style={[styles.label, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>رمز التحقق</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Icon name="keypad-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
                     style={[styles.input, { color: colors.foreground, letterSpacing: 6 }]}
                     placeholder="000000"
@@ -149,16 +150,13 @@ export default function ForgotPasswordScreen() {
                     keyboardType="number-pad"
                     maxLength={6}
                   />
-                  <Icon name="keypad-outline" size={18} color={colors.mutedForeground} />
                 </View>
               </View>
 
               <View style={styles.fieldGroup}>
-                <Text style={[styles.label, { color: colors.foreground }]}>كلمة المرور الجديدة</Text>
+                <Text style={[styles.label, { color: colors.foreground, textAlign: "right", alignSelf: "flex-end" }]}>كلمة المرور الجديدة</Text>
                 <View style={[styles.inputWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
-                    <Icon name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
-                  </TouchableOpacity>
+                  <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
                   <TextInput
                     style={[styles.input, { color: colors.foreground }]}
                     placeholder="••••••••"
@@ -172,7 +170,9 @@ export default function ForgotPasswordScreen() {
                     autoComplete="new-password"
                     onSubmitEditing={handleReset}
                   />
-                  <Icon name="lock-closed-outline" size={18} color={colors.mutedForeground} />
+                  <TouchableOpacity onPress={() => setShowPassword((v) => !v)}>
+                    <Icon name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={colors.mutedForeground} />
+                  </TouchableOpacity>
                 </View>
               </View>
             </>
@@ -181,7 +181,7 @@ export default function ForgotPasswordScreen() {
           {error ? (
             <View style={[styles.errorBox, { backgroundColor: colors.error + "18", borderColor: colors.error + "40" }]}>
               <Icon name="alert-circle-outline" size={16} color={colors.error} />
-              <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+              <Text style={[styles.errorText, { color: colors.error, textAlign: "right" }]}>{error}</Text>
             </View>
           ) : null}
 
@@ -207,7 +207,7 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -222,16 +222,26 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: "Tajawal_700Bold",
     textAlign: "right",
+    width: "100%",
+    writingDirection: "rtl",
     marginTop: 8,
   },
   subText: {
     fontSize: 14,
     fontFamily: "Tajawal_400Regular",
     textAlign: "right",
+    width: "100%",
+    writingDirection: "rtl",
     lineHeight: 22,
   },
-  fieldGroup: { gap: 6 },
-  label: { fontSize: 14, fontFamily: "Tajawal_500Medium", textAlign: "right" },
+  fieldGroup: { gap: 6, width: "100%" },
+  label: {
+    fontSize: 14,
+    fontFamily: "Tajawal_500Medium",
+    textAlign: "right",
+    width: "100%",
+    writingDirection: "rtl",
+  },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -253,12 +263,15 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
+    width: "100%",
   },
   infoText: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
     textAlign: "right",
+    width: "100%",
+    writingDirection: "rtl",
     lineHeight: 20,
   },
   errorBox: {
@@ -268,12 +281,15 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 10,
     borderWidth: 1,
+    width: "100%",
   },
   errorText: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
     textAlign: "right",
+    width: "100%",
+    writingDirection: "rtl",
   },
   submitBtn: {
     paddingVertical: 16,

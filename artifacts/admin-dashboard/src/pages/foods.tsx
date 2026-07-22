@@ -67,11 +67,9 @@ import {
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
+import { API_BASE, adminHeaders } from "@/lib/api";
 
-const adminHeaders = (): HeadersInit => {
-  const token = localStorage.getItem("tayyibati_admin_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+
 
 const PAGE_SIZE = 50;
 
@@ -641,13 +639,19 @@ function FoodDialog({
 }
 
 async function bulkDeleteFoods(payload: { ids?: number[]; status?: string }) {
-  const base = localStorage.getItem("tayyibati_api_url") || "";
-  const res = await fetch(`${base}/api/foods/bulk`, {
+  const res = await fetch(`${API_BASE}/api/foods/bulk`, {
     method: "DELETE",
-    headers: { "Content-Type": "application/json", ...adminHeaders() },
+    headers: {
+      "Content-Type": "application/json",
+      ...adminHeaders(),
+    },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("Bulk delete failed");
+
+  if (!res.ok) {
+    throw new Error("Bulk delete failed");
+  }
+
   return res.json() as Promise<{ deleted: number }>;
 }
 
@@ -675,6 +679,7 @@ export default function Foods() {
   };
 
   const { data: foods, isLoading } = useListFoods(queryParams);
+  console.log("Foods hook result:", foods);
 
   // Clear selection when page/filter changes
   useEffect(() => {

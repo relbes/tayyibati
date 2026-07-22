@@ -18,11 +18,8 @@ import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 import { Plus, Pencil, Trash2, Star, CheckCircle, FileText, Camera, Layers } from "lucide-react";
 
-const API_BASE = () => localStorage.getItem("tayyibati_api_url") || "";
-const adminHeaders = (): HeadersInit => {
-  const token = localStorage.getItem("tayyibati_admin_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
+import { API_BASE, adminHeaders } from "@/lib/api";
+
 
 interface Plan {
   id: number;
@@ -56,13 +53,13 @@ const EMPTY_FORM: PlanForm = {
 };
 
 async function fetchPlans(): Promise<Plan[]> {
-  const res = await fetch(`${API_BASE()}/api/plans`);
+  const res = await fetch(`${API_BASE}/api/plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
 
 async function createPlan(data: PlanForm): Promise<Plan> {
-  const res = await fetch(`${API_BASE()}/api/plans`, {
+  const res = await fetch(`${API_BASE}/api/plans`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({
@@ -81,7 +78,7 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
   if (typeof body.features === "string") {
     body.features = JSON.stringify(body.features.split("\n").filter(Boolean));
   }
-  const res = await fetch(`${API_BASE()}/api/plans/${id}`, {
+  const res = await fetch(`${API_BASE}/api/plans/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(body),
@@ -91,12 +88,12 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
 }
 
 async function deletePlan(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE()}/api/plans/${id}`, { method: "DELETE", headers: adminHeaders() });
+  const res = await fetch(`${API_BASE}/api/plans/${id}`, { method: "DELETE", headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to delete plan");
 }
 
 async function bulkUpdateLimits(dailyTextLimit: number, dailyImageLimit: number): Promise<Plan[]> {
-  const res = await fetch(`${API_BASE()}/api/plans/bulk-limits`, {
+  const res = await fetch(`${API_BASE}/api/plans/bulk-limits`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ dailyTextLimit, dailyImageLimit }),

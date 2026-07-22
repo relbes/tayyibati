@@ -69,12 +69,12 @@ export default function AdminScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Icon name="arrow-back" size={22} color={colors.foreground} />
-        </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.foreground }]}>لوحة الإدارة</Text>
         <TouchableOpacity onPress={() => setShowAdd(!showAdd)}>
           <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={[styles.title, { color: colors.foreground }]}>لوحة الإدارة</Text>
+        <TouchableOpacity onPress={() => router.back()}>
+          <Icon name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>
       </View>
 
@@ -194,7 +194,7 @@ export default function AdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "Tajawal_400Regular",
   },
-  statusRow: { flexDirection: "row", gap: 8, justifyContent: "flex-end" },
+  statusRow: { flexDirection: "row", gap: 8, justifyContent: "flex-start" },
   statusChip: {
     paddingHorizontal: 14,
     paddingVertical: 6,

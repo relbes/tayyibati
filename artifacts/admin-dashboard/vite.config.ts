@@ -4,8 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 import runtimeErrorOverlay from "@replit/vite-plugin-runtime-error-modal";
 
-const basePath = process.env.BASE_PATH ?? "/admin-dashboard/";
-
+const basePath = process.env.BASE_PATH ?? "/";
 const rawPort = process.env.PORT;
 const port = rawPort ? Number(rawPort) : 22133;
 
@@ -40,6 +39,8 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+	  sourcemap: true,
+
   },
   server: {
     port,

@@ -32,8 +32,21 @@ export async function sendPasswordResetEmail(to: string, code: string): Promise<
   });
 
   if (error) {
-    logger.error({ err: error, to }, "Failed to send password reset email");
-    throw new Error("Failed to send email");
+    const errObj = error as any;
+    logger.error(
+      {
+        to,
+        resendError: errObj,
+        status: errObj?.status ?? errObj?.statusCode,
+        message: errObj?.message,
+        code: errObj?.code,
+        stack: errObj?.stack,
+      },
+      "Failed to send password reset email"
+    );
+    const apiErr = new Error("Failed to send email") as any;
+    apiErr.resendError = errObj;
+    throw apiErr;
   }
 
   return { delivered: true };
@@ -63,8 +76,10 @@ async function getResendClient(): Promise<ResendLike | null> {
   try {
     const mod = await import("./resendClient");
     return await mod.getUncachableResendClient();
-  } catch {
-    return null;
+  } catch (err) {
+    console.error("getResendClient failed:");
+    console.error(err);
+    throw err;
   }
 }
 

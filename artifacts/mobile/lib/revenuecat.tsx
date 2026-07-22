@@ -49,10 +49,27 @@ function useSubscriptionContext() {
   });
 
   const offeringsQuery = useQuery({
-    queryKey: ["revenuecat", "offerings"],
-    queryFn: () => Purchases.getOfferings(),
-    staleTime: 300 * 1000,
-  });
+  queryKey: ["revenuecat", "offerings"],
+  queryFn: async () => {
+    const offerings = await Purchases.getOfferings();
+
+    console.log("========== REVENUECAT ==========");
+    console.log("Current offering:", offerings.current?.identifier);
+    console.log(
+      "Packages:",
+      offerings.current?.availablePackages?.map(p => ({
+        identifier: p.identifier,
+        product: p.product.identifier,
+        title: p.product.title,
+        price: p.product.priceString,
+      }))
+    );
+    console.log("===============================");
+
+    return offerings;
+  },
+  staleTime: 300 * 1000,
+});
 
   const purchaseMutation = useMutation({
     mutationFn: async (packageToPurchase: any) => {

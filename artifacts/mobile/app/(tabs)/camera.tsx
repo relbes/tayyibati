@@ -21,6 +21,7 @@ import { analyzeImage, analyzeText, AnalysisError } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { UsageWarningBanner } from "@/components/UsageWarningBanner";
+import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 
 export default function CameraScreen() {
   const colors = useColors();
@@ -30,11 +31,16 @@ export default function CameraScreen() {
   const { isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [pickedImage, setPickedImage] = useState<string | null>(null);
   const [result, setResult] = useState<any>(null);
+  const [authModalVisible, setAuthModalVisible] = useState(false);
   const [possibleFoods, setPossibleFoods] = useState<string[]>([]);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
   const pickImage = async (source: "camera" | "library") => {
     if (isAnalyzing) return;
+    if (!user) {
+      setAuthModalVisible(true);
+      return;
+    }
 
     let imageResult;
     if (source === "camera") {
@@ -110,6 +116,10 @@ export default function CameraScreen() {
 
   const handleSelectPossible = async (food: string) => {
     if (isAnalyzing) return;
+    if (!user) {
+      setAuthModalVisible(true);
+      return;
+    }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPossibleFoods([]);
     setIsAnalyzing(true);
@@ -468,12 +478,13 @@ export default function CameraScreen() {
           )}
         </View>
       </ScrollView>
+      <AuthRequiredDialog visible={authModalVisible} onClose={() => setAuthModalVisible(false)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: { flex: 1, direction: "rtl" },
   scroll: { flex: 1 },
   header: {
     paddingHorizontal: 16,
@@ -594,7 +605,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
-    justifyContent: "flex-end",
+    justifyContent: "flex-start",
     marginTop: 4,
   },
   possibleChip: {

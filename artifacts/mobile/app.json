@@ -21,13 +21,15 @@
         "NSCameraUsageDescription": "يستخدم التطبيق الكاميرا لتصوير الأطعمة والملصقات وتحليل مكوناتها وفق نظام الطيبات.",
         "NSPhotoLibraryUsageDescription": "يستخدم التطبيق معرض الصور لاختيار صور الأطعمة والملصقات وتحليل مكوناتها.",
         "NSPhotoLibraryAddUsageDescription": "يستخدم التطبيق معرض الصور لاختيار صور الأطعمة والملصقات وتحليل مكوناتها.",
-        "CFBundleLocalizations": ["ar"],
+        "CFBundleLocalizations": [
+          "ar"
+        ],
         "CFBundleDevelopmentRegion": "ar_SA"
       }
     },
     "android": {
       "package": "com.tayyibati.app",
-      "versionCode": 1,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#1B7A5E"
@@ -36,7 +38,8 @@
         "android.permission.CAMERA",
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.INTERNET",
-        "android.permission.ACCESS_NETWORK_STATE"
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
@@ -49,7 +52,10 @@
               "pathPrefix": "/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -78,7 +84,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "2620edc0-548e-47f8-9ccc-66b6548b475a"
       }
     },
     "notification": {

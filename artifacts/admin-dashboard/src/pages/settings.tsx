@@ -13,7 +13,8 @@ import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeO
 
 const STORAGE_KEY = "tayyibati_api_url";
 
-const API_BASE = () => localStorage.getItem(STORAGE_KEY) || "";
+const API_BASE = () =>
+    localStorage.getItem(STORAGE_KEY) || "https://api.tayyibati.xyz";
 const adminHeaders = (): HeadersInit => {
   const token = localStorage.getItem("tayyibati_admin_token");
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -22,13 +23,13 @@ const adminHeaders = (): HeadersInit => {
 interface ConfigRow { id: number; key: string; value: string; description: string | null; isPublic: string; }
 
 async function fetchConfig(): Promise<ConfigRow[]> {
-  const res = await fetch(`${API_BASE()}/api/config`, { headers: adminHeaders() });
+  const res = await fetch(`${API_BASE}/api/config`, { headers: adminHeaders() });
   if (!res.ok) throw new Error("Failed to fetch config");
   return res.json();
 }
 
 async function patchConfig(key: string, value: string): Promise<ConfigRow> {
-  const res = await fetch(`${API_BASE()}/api/config/${key}`, {
+  const res = await fetch(`${API_BASE}/api/config/${key}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ value }),

@@ -24,8 +24,6 @@ try {
   console.warn("RevenueCat init failed:", err?.message);
 }
 
-I18nManager.forceRTL(true);
-
 SplashScreen.preventAutoHideAsync();
 
 const queryClient = new QueryClient();
