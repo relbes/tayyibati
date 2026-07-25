@@ -2,7 +2,7 @@
   "expo": {
     "name": "طيباتي - Tayyibati",
     "slug": "mobile",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "تطبيق طيباتي يساعدك على التحقق من توافق أي طعام أو مكوّن مع نظام الطيبات الغذائي الصحي. ابحث عن الأطعمة أو صوّرها واكتشف هل هي مسموحة أم ممنوعة وفق نظام الطيبات.",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -29,7 +29,7 @@
     },
     "android": {
       "package": "com.tayyibati.app",
-      "versionCode": 5,
+      "versionCode": 7,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
         "backgroundColor": "#1B7A5E"

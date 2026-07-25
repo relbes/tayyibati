@@ -24,9 +24,15 @@ function getRevenueCatApiKey() {
 
 export function initializeRevenueCat() {
   const apiKey = getRevenueCatApiKey();
-  Purchases.setLogLevel(Purchases.LOG_LEVEL.DEBUG);
-  Purchases.configure({ apiKey });
-  console.log("RevenueCat configured");
+  Purchases.setLogLevel(
+    __DEV__ ? Purchases.LOG_LEVEL.DEBUG : Purchases.LOG_LEVEL.ERROR
+  );
+  try {
+    Purchases.configure({ apiKey });
+    console.log("RevenueCat configured");
+  } catch (err: any) {
+    console.warn("RevenueCat configure failed:", err?.message);
+  }
 }
 
 /**
@@ -49,27 +55,27 @@ function useSubscriptionContext() {
   });
 
   const offeringsQuery = useQuery({
-  queryKey: ["revenuecat", "offerings"],
-  queryFn: async () => {
-    const offerings = await Purchases.getOfferings();
+    queryKey: ["revenuecat", "offerings"],
+    queryFn: async () => {
+      const offerings = await Purchases.getOfferings();
 
-    console.log("========== REVENUECAT ==========");
-    console.log("Current offering:", offerings.current?.identifier);
-    console.log(
-      "Packages:",
-      offerings.current?.availablePackages?.map(p => ({
-        identifier: p.identifier,
-        product: p.product.identifier,
-        title: p.product.title,
-        price: p.product.priceString,
-      }))
-    );
-    console.log("===============================");
+      console.log("========== REVENUECAT ==========");
+      console.log("Current offering:", offerings.current?.identifier);
+      console.log(
+        "Packages:",
+        offerings.current?.availablePackages?.map(p => ({
+          identifier: p.identifier,
+          product: p.product.identifier,
+          title: p.product.title,
+          price: p.product.priceString,
+        }))
+      );
+      console.log("===============================");
 
-    return offerings;
-  },
-  staleTime: 300 * 1000,
-});
+      return offerings;
+    },
+    staleTime: 300 * 1000,
+  });
 
   const purchaseMutation = useMutation({
     mutationFn: async (packageToPurchase: any) => {

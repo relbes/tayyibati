@@ -192,7 +192,7 @@ export default function HomeScreen() {
        <View style={styles.tipsRow}>
          {[
            "🍕 بيتزا",
-           "🧪 E471",
+           "🍫 شوكولاتة",
            "🥩 جيلاتين",
            "🌭 هوت دوج",
          ].map((tip) => (
