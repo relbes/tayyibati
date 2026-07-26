@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { registerUser, loginUser, getUser, setSessionToken } from "@/lib/api";
+import { registerUser, loginUser, getUser, setSessionToken, loginWithGoogleApi } from "@/lib/api";
 import { loginRevenueCat } from "@/lib/revenuecat";
 
 interface User {
@@ -19,6 +19,7 @@ interface AuthContextType {
   signIn: (email: string, name: string, opts?: { provider?: "email" | "google"; avatar?: string; id?: string }) => Promise<void>;
   registerWithPassword: (email: string, name: string, password: string) => Promise<void>;
   loginWithPassword: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   updatePremium: (isPremium: boolean) => void;
   refreshUser: () => Promise<void>;
@@ -111,6 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loginRevenueCat(api.id);
   }, [persist]);
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    const api: ApiUser = await loginWithGoogleApi(idToken);
+    await persist(toUser(api), api.token);
+    loginRevenueCat(api.id);
+  }, [persist]);
+
   const signOut = useCallback(async () => {
     await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
     setSessionToken(null);
@@ -135,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, persist]);
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, signIn, registerWithPassword, loginWithPassword, signOut, updatePremium, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, signIn, registerWithPassword, loginWithPassword, loginWithGoogle, signOut, updatePremium, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,6 +9,7 @@ import { issueToken } from "../lib/session";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAdmin } from "./admin";
 import { getFreeMonthlyLimit } from "../lib/config";
+import { verifyGoogleIdToken } from "../lib/googleAuth";
 
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 const REVENUECAT_ENTITLEMENT = "premium";
@@ -606,6 +607,80 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to delete user");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/users/google", async (req, res) => {
+  try {
+    const { idToken } = req.body ?? {};
+    if (!idToken || typeof idToken !== "string") {
+      return void res.status(400).json({ error: "idToken is required" });
+    }
+
+    // 1. Verify Google token server-side (validates signature, exp, issuer, and audience)
+    const googleIdentity = await verifyGoogleIdToken(idToken);
+    const normalizedEmail = googleIdentity.email.trim().toLowerCase();
+
+    // 2. Resolve account by googleSub first
+    let [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.googleSub, googleIdentity.sub));
+
+    if (user) {
+      // User found by googleSub -> success
+    } else {
+      // 3. Fallback: Resolve account by email
+      const [existingByEmail] = await db
+        .select()
+        .from(usersTable)
+        .where(eq(usersTable.email, normalizedEmail));
+
+      if (existingByEmail) {
+        // Safe Account-Linking Policy:
+        // Prevent linking if this email already has a different Google account linked
+        if (existingByEmail.googleSub && existingByEmail.googleSub !== googleIdentity.sub) {
+          return void res.status(409).json({
+            error: "This email is associated with a different Google account.",
+          });
+        }
+
+        // Link Google ID to existing account without overwriting password or email provider settings
+        const [updated] = await db
+          .update(usersTable)
+          .set({ googleSub: googleIdentity.sub }) // Set googleSub only, keeping provider as is (e.g. 'email')
+          .where(eq(usersTable.id, existingByEmail.id))
+          .returning();
+        user = updated;
+      } else {
+        // 4. Register a new Google-backed user
+        const userId = stableIdFromEmail(normalizedEmail);
+        const [created] = await db
+          .insert(usersTable)
+          .values({
+            id: userId,
+            email: normalizedEmail,
+            name: googleIdentity.name || normalizedEmail.split("@")[0],
+            provider: "google", // Safe for newly created Google-only users
+            googleSub: googleIdentity.sub,
+            avatar: googleIdentity.picture || null,
+          })
+          .returning();
+        user = created;
+      }
+    }
+
+    // Reset login attempts & lockouts, then issue token
+    const [finalUser] = await db
+      .update(usersTable)
+      .set({ failedLoginAttempts: 0, lockedUntil: null })
+      .where(eq(usersTable.id, user.id))
+      .returning();
+
+    res.json({ ...toPublicUser(finalUser), token: issueToken(finalUser.id) });
+  } catch (err: any) {
+    req.log.error({ err }, "Google authentication verification failed");
+    res.status(401).json({ error: err.message || "Invalid Google token" });
   }
 });
 

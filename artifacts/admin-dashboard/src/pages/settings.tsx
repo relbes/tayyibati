@@ -34,14 +34,14 @@ async function fetchConfig(): Promise<ConfigRow[]> {
   return res.json();
 }
 
-async function patchConfig(key: string, value: string): Promise<ConfigRow> {
+async function patchConfig(key: string, value: string, isPublic?: boolean): Promise<ConfigRow> {
   const res = await fetch(`${API_BASE()}/api/config/${key}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
       ...adminHeaders(),
     },
-    body: JSON.stringify({ value }),
+    body: JSON.stringify({ value, isPublic }),
   });
 
   if (!res.ok) {
@@ -87,13 +87,13 @@ export default function Settings() {
   const { data: configRows = [] } = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 
   const patchMut = useMutation({
-    mutationFn: ({ key, value }: { key: string; value: string }) => patchConfig(key, value),
+    mutationFn: ({ key, value, isPublic }: { key: string; value: string; isPublic?: boolean }) => patchConfig(key, value, isPublic),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["config"] }); toast({ title: "Setting saved" }); },
     onError: () => toast({ title: "Failed to save setting", variant: "destructive" }),
   });
 
   const getConfig = (key: string) => configRows.find((r) => r.key === key)?.value ?? "";
-  const setConfig = (key: string, value: string) => patchMut.mutate({ key, value });
+  const setConfig = (key: string, value: string, isPublic?: boolean) => patchMut.mutate({ key, value, isPublic });
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
   const freeMonthlyLimit = getConfig("free_monthly_limit") || "10";
@@ -114,9 +114,9 @@ export default function Settings() {
   }, [configRows, brandingLoaded]);
 
   function handleBrandingSave() {
-    setConfig("app_name", branding.app_name.trim());
-    setConfig("app_description", branding.app_description.trim());
-    setConfig("app_logo_url", branding.app_logo_url.trim());
+    setConfig("app_name", branding.app_name.trim(), true);
+    setConfig("app_description", branding.app_description.trim(), true);
+    setConfig("app_logo_url", branding.app_logo_url.trim(), true);
   }
 
   const [apiKeyInput, setApiKeyInput] = useState("");
@@ -329,7 +329,7 @@ export default function Settings() {
         <CardContent className="space-y-3">
           <Toggle
             enabled={googleEnabled}
-            onChange={(v) => setConfig("google_login_enabled", v ? "true" : "false")}
+            onChange={(v) => setConfig("google_login_enabled", v ? "true" : "false", true)}
             label="Google Sign-In"
             desc='Show "تسجيل الدخول بـ Google" button on the login screen'
           />
@@ -386,7 +386,7 @@ export default function Settings() {
         <CardContent className="space-y-3">
           <Toggle
             enabled={subscriptionEnabled}
-            onChange={(v) => setConfig("subscription_enabled", v ? "true" : "false")}
+            onChange={(v) => setConfig("subscription_enabled", v ? "true" : "false", true)}
             label="Enable Premium Subscriptions"
             desc="Show upgrade plans and allow users to subscribe"
           />

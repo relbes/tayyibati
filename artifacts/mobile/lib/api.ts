@@ -261,6 +261,17 @@ export async function loginUser(payload: { email: string; password?: string }) {
   return res.json();
 }
 
+export async function loginWithGoogleApi(idToken: string) {
+  const base = BASE_URL;
+  const res = await fetch(`${base}/api/users/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  if (!res.ok) return parseAuthError(res, "تعذّر تسجيل الدخول بـ Google");
+  return res.json();
+}
+
 export async function getUser(id: string) {
   const base = BASE_URL;
   const res = await fetch(`${base}/api/users/${id}`);

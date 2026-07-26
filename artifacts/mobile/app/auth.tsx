@@ -65,7 +65,7 @@ export default function AuthScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn, registerWithPassword, loginWithPassword } = useAuth();
+  const { signIn, registerWithPassword, loginWithPassword, loginWithGoogle } = useAuth();
   const { tab: paramTab } = useLocalSearchParams<{ tab?: "login" | "register" }>();
   const [tab, setTab] = useState<"login" | "register">(paramTab === "register" ? "register" : "login");
 
@@ -93,7 +93,7 @@ export default function AuthScreen() {
       clientId: getGoogleClientId(),
       redirectUri,
       scopes: ["openid", "profile", "email"],
-      responseType: AuthSession.ResponseType.Token,
+      responseType: AuthSession.ResponseType.IdToken,
     },
     GOOGLE_DISCOVERY,
   );
@@ -115,31 +115,24 @@ export default function AuthScreen() {
 
   useEffect(() => {
     if (response?.type === "success") {
-      const accessToken = (response.params as Record<string, string>).access_token ?? "";
-      handleGoogleSuccess(accessToken);
-    } else if (response?.type === "error") {
+      const idToken = (response.authentication?.idToken || (response.params as Record<string, string>).id_token) ?? "";
+      handleGoogleSuccess(idToken);
+    } else if (response?.type === "error" || response?.type === "dismiss") {
       setGoogleLoading(false);
-      setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
+      if (response?.type === "error") {
+        setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
+      }
     }
   }, [response]);
 
-  const handleGoogleSuccess = async (accessToken: string) => {
-    if (!accessToken) { setGoogleLoading(false); return; }
+  const handleGoogleSuccess = async (idToken: string) => {
+    if (!idToken) { setGoogleLoading(false); return; }
     try {
-      const userRes = await fetch("https://www.googleapis.com/userinfo/v2/me", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!userRes.ok) throw new Error("Failed to fetch Google profile");
-      const profile = await userRes.json();
-      await signIn(profile.email, profile.name ?? profile.email.split("@")[0], {
-        provider: "google",
-        avatar: profile.picture,
-        id: "google_" + profile.id,
-      });
+      await loginWithGoogle(idToken);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } catch {
-      setError("حدث خطأ أثناء تسجيل الدخول بـ Google.");
+    } catch (err: any) {
+      setError(err?.message || "حدث خطأ أثناء تسجيل الدخول بـ Google.");
     } finally {
       setGoogleLoading(false);
     }
