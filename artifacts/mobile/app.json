@@ -76,7 +76,8 @@
           "photosPermission": "يستخدم التطبيق معرض الصور لاختيار صور الأطعمة والملصقات.",
           "cameraPermission": "يستخدم التطبيق الكاميرا لتصوير الأطعمة والملصقات."
         }
-      ]
+      ],
+      "@react-native-google-signin/google-signin"
     ],
     "experiments": {
       "typedRoutes": true,
