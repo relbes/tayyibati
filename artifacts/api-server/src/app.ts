@@ -55,11 +55,11 @@ const globalLimiter = rateLimit({
 
 const analysisLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 20,
+  max: 500,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: "Analysis rate limit exceeded. Please wait a moment." },
-  skip: () => isDev,
+  skip: () => process.env.NODE_ENV !== "production" || process.env.LOCAL_DEV === "true",
 });
 
 // Tight limit for auth endpoints — 10 attempts per 15 minutes per IP.
@@ -102,8 +102,7 @@ app.use(
     },
   }),
 );
-
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);

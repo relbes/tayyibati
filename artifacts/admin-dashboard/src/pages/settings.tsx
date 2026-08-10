@@ -11,10 +11,11 @@ import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles, Palette } from "lucide-react";
 
+import { getApiBaseUrl } from "@/lib/api";
+
 const STORAGE_KEY = "tayyibati_api_url";
 
-const API_BASE = () =>
-  localStorage.getItem(STORAGE_KEY) || "https://api.tayyibati.xyz";
+const API_BASE = () => getApiBaseUrl();
 const adminHeaders = (): HeadersInit => {
   const token = localStorage.getItem("tayyibati_admin_token");
   return token ? { Authorization: `Bearer ${token}` } : {};

@@ -3,23 +3,77 @@ import { View, Text, StyleSheet } from "react-native";
 import Svg, { Circle } from "react-native-svg";
 import { useColors } from "@/hooks/useColors";
 
-interface ScoreRingProps {
-  score: number;
+export interface ScoreRingProps {
+  score?: number | null | undefined;
   size?: number;
   strokeWidth?: number;
+  customLabel?: string;
+  customStrokeColor?: string;
+  displayValue?: string;
+  progressPercent?: number;
 }
 
-export function ScoreRing({ score, size = 120, strokeWidth = 10 }: ScoreRingProps) {
+export function ScoreRing({
+  score,
+  size = 120,
+  strokeWidth = 10,
+  customLabel,
+  customStrokeColor,
+  displayValue,
+  progressPercent,
+}: ScoreRingProps) {
   const colors = useColors();
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
-  const progress = (score / 100) * circumference;
+
+  const hasScore = score !== null && score !== undefined;
+  const hasCustom = progressPercent !== undefined || displayValue !== undefined;
+
+  if (!hasScore && !hasCustom) {
+    return (
+      <View style={styles.container}>
+        <Svg width={size} height={size}>
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={colors.border}
+            strokeWidth={strokeWidth}
+            fill="none"
+          />
+        </Svg>
+        <View style={[styles.center, { width: size, height: size }]}>
+          <Text style={[styles.score, { color: colors.mutedForeground }]}>—</Text>
+          <Text style={[styles.label, { color: colors.mutedForeground }]}>غير محدد</Text>
+        </View>
+      </View>
+    );
+  }
+
+  const pct = progressPercent ?? (hasScore ? score : 0);
+  const progress = Math.max(0, Math.min(circumference, (pct / 100) * circumference));
 
   const strokeColor =
-    score >= 70 ? colors.scoreHigh : score >= 40 ? colors.scoreMid : colors.scoreLow;
+    customStrokeColor ??
+    (hasScore
+      ? score >= 70
+        ? colors.scoreHigh
+        : score >= 40
+        ? colors.scoreMid
+        : colors.scoreLow
+      : colors.primary);
 
   const label =
-    score >= 70 ? "مسموح" : score >= 40 ? "مشروط" : "محظور";
+    customLabel ??
+    (hasScore
+      ? score >= 70
+        ? "مسموح"
+        : score >= 40
+        ? "مشروط"
+        : "محظور"
+      : "");
+
+  const valueText = displayValue ?? (hasScore ? `${score}` : "");
 
   return (
     <View style={styles.container}>
@@ -46,8 +100,8 @@ export function ScoreRing({ score, size = 120, strokeWidth = 10 }: ScoreRingProp
         />
       </Svg>
       <View style={[styles.center, { width: size, height: size }]}>
-        <Text style={[styles.score, { color: strokeColor }]}>{score}</Text>
-        <Text style={[styles.label, { color: colors.mutedForeground }]}>{label}</Text>
+        <Text style={[styles.score, { color: strokeColor }]}>{valueText}</Text>
+        {label ? <Text style={[styles.label, { color: colors.mutedForeground }]}>{label}</Text> : null}
       </View>
     </View>
   );
@@ -64,7 +118,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   score: {
-    fontSize: 28,
+    fontSize: 22,
     fontFamily: "Tajawal_700Bold",
   },
   label: {

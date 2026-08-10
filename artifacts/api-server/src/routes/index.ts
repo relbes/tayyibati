@@ -7,6 +7,8 @@ import usersRouter from "./users";
 import adminRouter from "./admin";
 import plansRouter from "./plans";
 import configRouter from "./config";
+import { adminKnowledgeReviewRouter } from "./adminKnowledgeReview";
+import { adminAiCacheRouter } from "./adminAiCache";
 
 const router: IRouter = Router();
 
@@ -18,5 +20,7 @@ router.use(analysisRouter);
 router.use(historyRouter);
 router.use(usersRouter);
 router.use(adminRouter);
+router.use("/admin/knowledge-review", adminKnowledgeReviewRouter);
+router.use("/admin/ai-cache", adminAiCacheRouter);
 
 export default router;

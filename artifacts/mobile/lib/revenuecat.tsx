@@ -29,7 +29,6 @@ export function initializeRevenueCat() {
   );
   try {
     Purchases.configure({ apiKey });
-    console.log("RevenueCat configured");
   } catch (err: any) {
     console.warn("RevenueCat configure failed:", err?.message);
   }
@@ -58,19 +57,6 @@ function useSubscriptionContext() {
     queryKey: ["revenuecat", "offerings"],
     queryFn: async () => {
       const offerings = await Purchases.getOfferings();
-
-      console.log("========== REVENUECAT ==========");
-      console.log("Current offering:", offerings.current?.identifier);
-      console.log(
-        "Packages:",
-        offerings.current?.availablePackages?.map(p => ({
-          identifier: p.identifier,
-          product: p.product.identifier,
-          title: p.product.title,
-          price: p.product.priceString,
-        }))
-      );
-      console.log("===============================");
 
       return offerings;
     },

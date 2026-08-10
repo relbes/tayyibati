@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   I18nManager,
 } from "react-native";
+import { isRTL } from "@/lib/i18n";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
@@ -126,7 +127,7 @@ export default function ForgotPasswordScreen() {
                   placeholderTextColor={colors.mutedForeground}
                   value={email}
                   onChangeText={setEmail}
-                  textAlign={I18nManager.isRTL ? "right" : "left"}
+                  textAlign={isRTL() ? "right" : "left"}
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -164,7 +165,7 @@ export default function ForgotPasswordScreen() {
                     placeholderTextColor={colors.mutedForeground}
                     value={newPassword}
                     onChangeText={setNewPassword}
-                    textAlign={I18nManager.isRTL ? "right" : "left"}
+                    textAlign={isRTL() ? "right" : "left"}
                     secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -208,7 +209,7 @@ export default function ForgotPasswordScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, direction: "rtl" },
+  container: { flex: 1 },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
@@ -222,29 +223,26 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 24,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "left",
+    textAlign: isRTL() ? "right" : "left",
     width: "100%",
-    writingDirection: "rtl",
     marginTop: 8,
   },
   subText: {
     fontSize: 14,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "left",
+    textAlign: isRTL() ? "right" : "left",
     width: "100%",
-    writingDirection: "rtl",
     lineHeight: 22,
   },
   fieldGroup: { gap: 6, width: "100%" },
   label: {
     fontSize: 14,
     fontFamily: "Tajawal_500Medium",
-    textAlign: "left",
+    textAlign: isRTL() ? "right" : "left",
     width: "100%",
-    writingDirection: "rtl",
   },
   inputWrap: {
-    flexDirection: "row",
+    flexDirection: isRTL() ? "row-reverse" : "row",
     alignItems: "center",
     borderRadius: 12,
     borderWidth: 1,
@@ -258,7 +256,7 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_400Regular",
   },
   infoBox: {
-    flexDirection: "row",
+    flexDirection: isRTL() ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
     padding: 12,
@@ -270,13 +268,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
-    textAlign: "left",
-    width: "100%",
-    writingDirection: "rtl",
+    textAlign: isRTL() ? "right" : "left",
     lineHeight: 20,
   },
   errorBox: {
-    flexDirection: "row",
+    flexDirection: isRTL() ? "row-reverse" : "row",
     alignItems: "center",
     gap: 8,
     padding: 12,
@@ -288,9 +284,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
     flex: 1,
-    textAlign: "left",
-    width: "100%",
-    writingDirection: "rtl",
+    textAlign: isRTL() ? "right" : "left",
   },
   submitBtn: {
     paddingVertical: 16,

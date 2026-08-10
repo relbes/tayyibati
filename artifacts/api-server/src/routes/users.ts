@@ -9,6 +9,7 @@ import { issueToken } from "../lib/session";
 import { requireAuth } from "../middleware/requireAuth";
 import { requireAdmin } from "./admin";
 import { getFreeMonthlyLimit } from "../lib/config";
+import { getUserPlanLimits } from "./analysis";
 
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 const REVENUECAT_ENTITLEMENT = "premium";
@@ -153,34 +154,11 @@ router.get("/users/usage", requireAuth, async (req, res) => {
       .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
 
     const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    const limits = await getUserPlanLimits(userId);
     const isPremium = account?.isPremium === "true" || row?.isPremium === "true";
 
-    let textLimit = 15;
-    let imageLimit = 3;
-
-    if (isPremium) {
-      textLimit = -1;
-      imageLimit = -1;
-    } else if (account?.planId != null) {
-      const [plan] = await db
-        .select()
-        .from(subscriptionPlansTable)
-        .where(eq(subscriptionPlansTable.id, account.planId));
-      if (plan) {
-        textLimit = plan.dailyTextLimit;
-        imageLimit = plan.dailyImageLimit;
-      }
-    } else {
-      const [freePlan] = await db
-        .select()
-        .from(subscriptionPlansTable)
-        .where(eq(subscriptionPlansTable.billingCycle, "free"))
-        .limit(1);
-      if (freePlan) {
-        textLimit = freePlan.dailyTextLimit;
-        imageLimit = freePlan.dailyImageLimit;
-      }
-    }
+    const textLimit = limits.textLimit;
+    const imageLimit = limits.imageLimit;
 
     const monthlyTextCount = row?.textCount ?? 0;
     const monthlyImageCount = row?.imageCount ?? 0;

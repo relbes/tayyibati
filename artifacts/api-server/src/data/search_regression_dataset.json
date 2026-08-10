@@ -1,0 +1,187 @@
+[
+  {
+    "id": 1,
+    "name": "تمر -> Food (never dish)",
+    "query": "تمر",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "التمر",
+    "expectedMatchType": "ALIAS",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 2,
+    "name": "مانجا -> المانجو",
+    "query": "مانجا",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "المانجو",
+    "expectedMatchType": "ALIAS",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 3,
+    "name": "شامورما -> شاورما (Fuzzy 85%)",
+    "query": "شامورما",
+    "mode": "TEXT",
+    "expectedEntityType": "dish",
+    "expectedCanonicalNameSub": "شاورما",
+    "expectedMatchType": "FUZZY",
+    "expectedConfidence": 85
+  },
+  {
+    "id": 4,
+    "name": "شاورما عربي -> Shawarma (Exact Alias 100%)",
+    "query": "شاورما عربي",
+    "mode": "TEXT",
+    "expectedEntityType": "dish",
+    "expectedCanonicalNameSub": "شاورما",
+    "expectedMatchType": "ALIAS",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 5,
+    "name": "زنجر -> NOT_FOUND (never زنجبيل)",
+    "query": "زنجر",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedMatchType": "NOT_FOUND",
+    "expectedConfidence": 0
+  },
+  {
+    "id": 6,
+    "name": "رز بني -> الأرز + modifier 'بني'",
+    "query": "رز بني",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "الأرز",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 7,
+    "name": "جميد كركي -> الجميد",
+    "query": "جميد كركي",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "الجميد",
+    "expectedMatchType": "ALIAS",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 8,
+    "name": "كبسة -> Ambiguous Multi-Dish Flow",
+    "query": "كبسة",
+    "mode": "TEXT",
+    "expectedEntityType": "dish",
+    "expectedCanonicalNameSub": "",
+    "expectedMatchType": "AMBIGUOUS"
+  },
+  {
+    "id": 9,
+    "name": "Pepsi -> Commercial Product (Exact 100%)",
+    "query": "Pepsi",
+    "mode": "TEXT",
+    "expectedEntityType": "product",
+    "expectedCanonicalNameSub": "ببسي",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 10,
+    "name": "Coca-Cola -> Commercial Product (Exact 100%)",
+    "query": "Coca-Cola",
+    "mode": "TEXT",
+    "expectedEntityType": "product",
+    "expectedCanonicalNameSub": "كوكاكولا",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 11,
+    "name": "Red Bull -> Commercial Product (Exact 100%)",
+    "query": "Red Bull",
+    "mode": "TEXT",
+    "expectedEntityType": "product",
+    "expectedCanonicalNameSub": "ريد بول",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 12,
+    "name": "Barcode Search -> Nutella",
+    "query": "629100123456",
+    "mode": "BARCODE",
+    "expectedEntityType": "product",
+    "expectedCanonicalNameSub": "نوتيلا",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 13,
+    "name": "Camera Candidate -> Mango",
+    "query": "المانجو",
+    "mode": "CAMERA",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "المانجو",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 14,
+    "name": "OCR Candidate -> Mango",
+    "query": "المانجو",
+    "mode": "OCR",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "المانجو",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 15,
+    "name": "بندورة -> طماطم (Generic Food Target)",
+    "query": "بندورة",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "الطماطم",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 16,
+    "name": "Unknown Brand -> Product Mode Strict Termination",
+    "query": "Unknown Brand 999",
+    "mode": "PRODUCT",
+    "expectedEntityType": "product",
+    "expectedConfidence": 0
+  },
+  {
+    "id": 17,
+    "name": "شاورما -> Standalone Dish Precedence (Exact 100%)",
+    "query": "شاورما",
+    "mode": "TEXT",
+    "expectedEntityType": "dish",
+    "expectedCanonicalNameSub": "شاورما",
+    "expectedMatchType": "EXACT",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 18,
+    "name": "تفاح -> Food Entity",
+    "query": "تفاح",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "التفاح",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 19,
+    "name": "خبز -> Generic Bread Food Entity",
+    "query": "خبز",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "الخبز",
+    "expectedConfidence": 100
+  },
+  {
+    "id": 20,
+    "name": "حمص -> Food / Dish Entity",
+    "query": "حمص",
+    "mode": "TEXT",
+    "expectedEntityType": "food",
+    "expectedCanonicalNameSub": "الحمص",
+    "expectedConfidence": 100
+  }
+]

@@ -16,7 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail, LockOpen, Lock } from "lucide-react";
+import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail, LockOpen, Lock, Download } from "lucide-react";
 
 import { API_BASE, adminHeaders } from "@/lib/api";
 
@@ -146,6 +146,41 @@ export default function Users() {
     onError: () => toast({ title: "Error", variant: "destructive" }),
   });
 
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/export/users`, {
+        headers: adminHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to export users CSV");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `tayyibati_users_${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: tr(lang, "exportSuccess"),
+        description: tr(lang, "exportUsersDesc"),
+      });
+    } catch (err: any) {
+      toast({
+        title: tr(lang, "exportFailed"),
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const openEdit = (user: User) => {
     setEditUser(user);
     setForm({ name: user.name, email: user.email, isPremium: user.isPremium, planId: user.planId != null ? String(user.planId) : NO_PLAN });
@@ -175,14 +210,20 @@ export default function Users() {
             {lang === "ar" ? "إدارة الحسابات والخطط والصلاحيات" : "Manage app accounts, plans, and access"}
           </p>
         </div>
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder={lang === "ar" ? "بحث بالاسم أو البريد..." : "Search by name or email..."}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button variant="outline" onClick={handleExportCsv} disabled={isExporting}>
+            <Download className="h-4 w-4 mr-1.5" />
+            {isExporting ? tr(lang, "exporting") : tr(lang, "exportCSV")}
+          </Button>
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder={lang === "ar" ? "بحث بالاسم أو البريد..." : "Search by name or email..."}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
         </div>
       </div>
 

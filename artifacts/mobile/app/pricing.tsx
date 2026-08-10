@@ -19,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/lib/revenuecat";
 import { syncPremium, getPlans } from "@/lib/api";
+import { isRTL } from "@/lib/i18n";
 
 interface Plan {
   id: number;
@@ -39,6 +40,7 @@ export default function PricingScreen() {
   const { offerings, isSubscribed, isLoading, purchase, restore, isPurchasing, isRestoring } =
     useSubscription();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const rtl = isRTL();
 
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
@@ -47,9 +49,6 @@ export default function PricingScreen() {
 
   const currentOffering = offerings?.current;
   const packages = currentOffering?.availablePackages ?? [];
-  console.log("Offerings:", JSON.stringify(offerings, null, 2));
-console.log("Current:", currentOffering);
-console.log("Packages:", packages);
 
   useEffect(() => {
     getPlans()
@@ -125,37 +124,56 @@ console.log("Packages:", packages);
   ];
 
   const PremiumCard = ({ pkg }: { pkg?: any }) => (
-    <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent }]}>
+    <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent, alignItems: rtl ? "flex-end" : "flex-start" }]}>
       <LinearGradient
         colors={[colors.accent + "22", colors.primary + "11"]}
         style={StyleSheet.absoluteFill}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
-      <View style={[styles.popularBadge, { backgroundColor: colors.accent }]}>
+      <View
+        style={[
+          styles.popularBadge,
+          {
+            backgroundColor: colors.accent,
+            right: rtl ? undefined : 14,
+            left: rtl ? 14 : undefined,
+          },
+        ]}
+      >
         <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
       </View>
       <Icon name="star" size={32} color={colors.accent} />
-      <Text style={[styles.planName, { color: colors.foreground, marginTop: 8 }]}>بريميوم</Text>
-      <View style={styles.priceRow}>
+      <Text style={[styles.planName, { color: colors.foreground, marginTop: 8, textAlign: rtl ? "right" : "left", width: "100%" }]}>بريميوم</Text>
+      <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
         <Text style={[styles.planAmount, { color: colors.accent }]}>{displayPrice}</Text>
         <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> / شهر</Text>
       </View>
       <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
-      <Text style={[styles.limitBadge, { color: colors.accent, backgroundColor: colors.accent + "15" }]}>
+      <Text
+        style={[
+          styles.limitBadge,
+          {
+            color: colors.accent,
+            backgroundColor: colors.accent + "15",
+            alignSelf: rtl ? "flex-end" : "flex-start",
+            textAlign: rtl ? "right" : "left",
+          },
+        ]}
+      >
         ∞ تحليلات غير محدودة
       </Text>
       {premiumFeatures.map((f) => (
-        <View key={f} style={styles.featureRow}>
+        <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
           <Icon name="checkmark-circle" size={18} color={colors.accent} />
-          <View style={styles.featureTextWrap}>
-            <Text style={[styles.featureTextText, { color: colors.foreground }]}>{f}</Text>
+          <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
+            <Text style={[styles.featureTextText, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
           </View>
         </View>
       ))}
       {isSubscribed ? (
         <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
-          <Text style={[styles.currentText, { color: colors.accent }]}>✓ خطتك الحالية</Text>
+          <Text style={[styles.currentText, { color: colors.accent, textAlign: "center" }]}>✓ خطتك الحالية</Text>
         </View>
       ) : pkg ? (
         <TouchableOpacity
@@ -178,12 +196,22 @@ console.log("Packages:", packages);
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <View style={{ width: 44 }} />
-        <Text style={[styles.title, { color: colors.foreground }]}>الباقات</Text>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Icon name="arrow-back" size={22} color={colors.foreground} />
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: topPadding + 8,
+            backgroundColor: colors.card,
+            borderBottomColor: colors.border,
+            flexDirection: rtl ? "row-reverse" : "row",
+          },
+        ]}
+      >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
+          <Icon name={rtl ? "arrow-back" : "arrow-forward"} size={22} color={colors.foreground} />
         </TouchableOpacity>
+        <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
+        <View style={{ width: 44 }} />
       </View>
 
       {isLoading || isPurchasing || isRestoring ? (
@@ -194,12 +222,28 @@ console.log("Packages:", packages);
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 16, direction: "rtl" }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 16 }} showsVerticalScrollIndicator={false}>
 
           {/* Status message */}
           {statusMsg && (
-            <View style={[styles.statusBox, { backgroundColor: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed + "20" : "#fdecea" }]}>
-              <Text style={[styles.statusText, { color: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed : "#c0392b" }]}>
+            <View
+              style={[
+                styles.statusBox,
+                {
+                  backgroundColor: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed + "20" : "#fdecea",
+                  flexDirection: rtl ? "row-reverse" : "row",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.statusText,
+                  {
+                    color: statusMsg.includes("🎉") || statusMsg.includes("✓") ? colors.allowed : "#c0392b",
+                    textAlign: rtl ? "right" : "left",
+                  },
+                ]}
+              >
                 {statusMsg}
               </Text>
               <TouchableOpacity onPress={() => setStatusMsg(null)}>
@@ -209,27 +253,37 @@ console.log("Packages:", packages);
           )}
 
           {/* Free plan */}
-          <View style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.planName, { color: colors.foreground }]}>مجاني</Text>
-            <View style={styles.priceRow}>
+          <View style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: rtl ? "flex-end" : "flex-start" }]}>
+            <Text style={[styles.planName, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>مجاني</Text>
+            <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
               <Text style={[styles.planAmount, { color: colors.foreground }]}>0</Text>
               <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> ريال / شهر</Text>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <Text style={[styles.limitBadge, { color: colors.primary, backgroundColor: colors.primary + "15" }]}>
+            <Text
+              style={[
+                styles.limitBadge,
+                {
+                  color: colors.primary,
+                  backgroundColor: colors.primary + "15",
+                  alignSelf: rtl ? "flex-end" : "flex-start",
+                  textAlign: rtl ? "right" : "left",
+                },
+              ]}
+            >
               15 نصي + 3 صور / شهر
             </Text>
             {freeFeatures.map((f) => (
-              <View key={f} style={styles.featureRow}>
+              <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
                 <Icon name="checkmark-circle" size={18} color={colors.allowed} />
-                <View style={styles.featureTextWrap}>
-                  <Text style={[styles.featureTextText, { color: colors.mutedForeground }]}>{f}</Text>
+                <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
+                  <Text style={[styles.featureTextText, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
                 </View>
               </View>
             ))}
             {!isSubscribed && (
               <View style={[styles.currentBadge, { backgroundColor: colors.muted }]}>
-                <Text style={[styles.currentText, { color: colors.mutedForeground }]}>✓ خطتك الحالية</Text>
+                <Text style={[styles.currentText, { color: colors.mutedForeground, textAlign: "center" }]}>✓ خطتك الحالية</Text>
               </View>
             )}
           </View>
@@ -256,7 +310,7 @@ console.log("Packages:", packages);
             <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
               سيتم خصم {selectedPkg?.product.priceString ?? displayPrice} من حسابك عبر متجر التطبيقات.
             </Text>
-            <View style={styles.modalButtons}>
+            <View style={[styles.modalButtons, { flexDirection: rtl ? "row-reverse" : "row" }]}>
               <Pressable
                 style={[styles.modalBtn, { backgroundColor: colors.muted }]}
                 onPress={() => setConfirmVisible(false)}
@@ -278,62 +332,56 @@ console.log("Packages:", packages);
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, direction: "rtl" },
+  container: { flex: 1 },
   header: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 16,
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  backBtn: { width: 44, alignItems: "flex-end" },
-  title: { fontSize: 18, fontFamily: "Tajawal_700Bold", textAlign: "center" },
+  backBtn: { width: 44, paddingVertical: 4 },
+  title: { fontSize: 18, fontFamily: "Tajawal_700Bold" },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14, fontFamily: "Tajawal_400Regular" },
   statusBox: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
     padding: 12,
     borderRadius: 12,
     gap: 8,
   },
-  statusText: { flex: 1, fontSize: 14, fontFamily: "Tajawal_500Medium", textAlign: "right" },
+  statusText: { flex: 1, fontSize: 14, fontFamily: "Tajawal_500Medium" },
   planCard: {
     padding: 20,
     borderRadius: 20,
     borderWidth: 1,
     gap: 10,
     overflow: "hidden",
-    alignItems: "flex-start",
   },
   premiumCard: { borderWidth: 2, position: "relative", paddingTop: 48 },
   popularBadge: {
     position: "absolute",
     top: 14,
-    end: 14,
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 8,
   },
   popularText: { color: "#fff", fontSize: 11, fontFamily: "Tajawal_700Bold" },
   planName: { fontSize: 22, fontFamily: "Tajawal_700Bold" },
-  priceRow: { flexDirection: "row", alignItems: "flex-end", justifyContent: "flex-start" },
+  priceRow: { alignItems: "flex-end", justifyContent: "flex-start" },
   planAmount: { fontSize: 36, fontFamily: "Tajawal_700Bold" },
   planCurrency: { fontSize: 14, fontFamily: "Tajawal_400Regular", paddingBottom: 6 },
   divider: { height: 1, marginVertical: 4, alignSelf: "stretch" },
   limitBadge: {
     fontSize: 13,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "center",
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 8,
     overflow: "hidden",
   },
   featureRow: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "flex-start",
     gap: 10,
@@ -341,7 +389,6 @@ const styles = StyleSheet.create({
   },
   featureTextWrap: {
     flex: 1,
-    alignItems: "flex-start",
   },
   featureTextText: {
     fontSize: 14,
@@ -357,7 +404,7 @@ const styles = StyleSheet.create({
   modalBox: { borderRadius: 20, padding: 24, gap: 16, width: "100%" },
   modalTitle: { fontSize: 18, fontFamily: "Tajawal_700Bold", textAlign: "center" },
   modalBody: { fontSize: 14, fontFamily: "Tajawal_400Regular", textAlign: "center", lineHeight: 22 },
-  modalButtons: { flexDirection: "row", gap: 12 },
+  modalButtons: { gap: 12 },
   modalBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: "center" },
   modalBtnText: { fontFamily: "Tajawal_700Bold", fontSize: 15 },
 });

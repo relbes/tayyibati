@@ -9,6 +9,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColorScheme } from "react-native";
 import { Icon } from "@/components/Icon";
+import { isRTL } from "@/lib/i18n";
 
 interface NavRoute { key: string; name: string }
 interface NavState { index: number; routes: NavRoute[] }
@@ -36,13 +37,14 @@ const PRIMARY_DARK = "#4DC49A";
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const scheme = useColorScheme();
   const insets = useSafeAreaInsets();
+  const rtl = isRTL();
 
   const isDark = scheme === "dark";
   const barBg = isDark ? "#1A2622" : "#FFFFFF";
   const borderColor = isDark ? "#2A3D35" : "#E5EFE9";
   const activeColor = isDark ? PRIMARY_DARK : PRIMARY;
   const inactiveColor = isDark ? "#5A7870" : "#8A9B95";
-  const bottomPad = Platform.OS === "android" ? 6 : Math.max(insets.bottom, 4);
+  const bottomPad = Platform.OS === "android" ? 6 : Math.max(insets.bottom, 6);
 
   return (
     <View
@@ -52,6 +54,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           backgroundColor: barBg,
           borderTopColor: borderColor,
           paddingBottom: bottomPad,
+          flexDirection: rtl ? "row-reverse" : "row",
         },
       ]}
     >
@@ -76,29 +79,32 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           return (
             <TouchableOpacity
               key={tab.name}
-              style={styles.tab}
+              style={styles.tabCamera}
               onPress={onPress}
-              activeOpacity={0.7}
+              activeOpacity={0.85}
             >
               <View
                 style={[
-                  styles.cameraCircle,
-                  { backgroundColor: isFocused ? activeColor : (isDark ? "#1E2F28" : "#EAF3EF") },
+                  styles.cameraFab,
+                  {
+                    backgroundColor: activeColor,
+                    shadowColor: activeColor,
+                  },
                 ]}
               >
                 <Icon
                   name={isFocused ? "camera" : "camera-outline"}
-                  size={26}
-                  color={isFocused ? "#fff" : activeColor}
-                  strokeWidth={1.8}
+                  size={28}
+                  color="#ffffff"
+                  strokeWidth={2}
                 />
               </View>
               <Text
                 style={[
-                  styles.label,
+                  styles.cameraLabel,
                   {
-                    color,
-                    fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_400Regular",
+                    color: isFocused ? activeColor : inactiveColor,
+                    fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_500Medium",
                   },
                 ]}
                 numberOfLines={1}
@@ -118,9 +124,9 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           >
             <Icon
               name={isFocused ? tab.iconFocused : tab.icon}
-              size={24}
+              size={22}
               color={color}
-              strokeWidth={isFocused ? 2.5 : 1.5}
+              strokeWidth={isFocused ? 2.2 : 1.5}
             />
             <Text
               style={[
@@ -143,30 +149,46 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
 const styles = StyleSheet.create({
   container: {
-    flexDirection: "row",
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 1,
     elevation: 16,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    alignItems: "flex-end",
   },
   tab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 10,
+    paddingTop: 8,
     paddingBottom: 4,
-    gap: 4,
-    minHeight: 62,
+    gap: 3,
+    minHeight: 56,
   },
-  cameraCircle: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
+  tabCamera: {
+    flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -8,
+    paddingBottom: 4,
+    minHeight: 56,
+  },
+  cameraFab: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: -24,
+    marginBottom: 2,
+    elevation: 6,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  cameraLabel: {
+    fontSize: 11,
+    textAlign: "center",
   },
   label: {
     fontSize: 11,

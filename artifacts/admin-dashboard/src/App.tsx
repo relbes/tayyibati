@@ -13,6 +13,7 @@ import Users from "@/pages/users";
 import Login from "@/pages/login";
 import { LangProvider, useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
+import { getApiBaseUrl } from "@/lib/api";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -158,7 +159,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
 
 async function verifyToken(token: string): Promise<boolean> {
   try {
-   const res = await fetch(`${localStorage.getItem("tayyibati_api_url") || "https://api.tayyibati.xyz"}/api/admin/me`, {headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${getApiBaseUrl()}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
     return res.ok;
   } catch {
     return false;

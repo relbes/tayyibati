@@ -16,6 +16,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getUserUsage, getPublicConfig } from "@/lib/api";
+import { isRTL } from "@/lib/i18n";
 
 interface UsageInfo {
   monthlyTextCount: number;
@@ -35,6 +36,7 @@ export default function ProfileScreen() {
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const rtl = isRTL();
 
   useEffect(() => {
     getPublicConfig()
@@ -72,7 +74,7 @@ export default function ProfileScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.foreground }]}>حسابي</Text>
+          <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>حسابي</Text>
         </View>
         <View style={styles.guestCenter}>
           <View style={[styles.avatarLarge, { backgroundColor: colors.muted }]}>
@@ -98,7 +100,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 100, direction: "rtl" }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <LinearGradient
           colors={[colors.primary, colors.primary + "BB"]}
@@ -123,13 +125,13 @@ export default function ProfileScreen() {
           {/* Usage Card */}
           {usage && !usage.isPremium && (
             <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.cardHeader}>
+              <View style={[styles.cardHeader, { flexDirection: rtl ? "row-reverse" : "row" }]}>
                 <Text style={[styles.cardTitle, { color: colors.foreground }]}>الاستخدام الشهري</Text>
                 <Icon name="analytics-outline" size={20} color={colors.primary} />
               </View>
 
               {/* Text searches */}
-              <View style={styles.usageRow}>
+              <View style={[styles.usageRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
                 <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>بحث نصي</Text>
                 <Text style={[styles.usageCount, { color: colors.primary }]}>
                   {usage.monthlyTextCount} / {usage.textLimit < 0 ? "∞" : usage.textLimit}
@@ -138,12 +140,12 @@ export default function ProfileScreen() {
               <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
                 <View style={[styles.progressFill, { width: `${textPercent}%` as any, backgroundColor: textPercent > 80 ? colors.error : colors.primary }]} />
               </View>
-              <Text style={[styles.usageRemaining, { color: colors.mutedForeground }]}>
+              <Text style={[styles.usageRemaining, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
                 {usage.textRemaining} بحث نصي متبقٍ هذا الشهر
               </Text>
 
               {/* Image searches */}
-              <View style={[styles.usageRow, { marginTop: 8 }]}>
+              <View style={[styles.usageRow, { flexDirection: rtl ? "row-reverse" : "row", marginTop: 8 }]}>
                 <Text style={[styles.usageLabel, { color: colors.mutedForeground }]}>تحليل صور</Text>
                 <Text style={[styles.usageCount, { color: colors.primary }]}>
                   {usage.monthlyImageCount} / {usage.imageLimit < 0 ? "∞" : usage.imageLimit}
@@ -152,27 +154,28 @@ export default function ProfileScreen() {
               <View style={[styles.progressTrack, { backgroundColor: colors.muted }]}>
                 <View style={[styles.progressFill, { width: `${imagePercent}%` as any, backgroundColor: imagePercent > 80 ? colors.error : colors.primary }]} />
               </View>
-              <Text style={[styles.usageRemaining, { color: colors.mutedForeground }]}>
+              <Text style={[styles.usageRemaining, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
                 {usage.imageRemaining} تحليل صور متبقٍ هذا الشهر
               </Text>
             </View>
           )}
 
-          {/* Upgrade Card */}
+          {/* Upgrade Card — icon on left for LTR, right for RTL; chevron on right for LTR, left for RTL */}
           {!user.isPremium && subscriptionEnabled && (
             <TouchableOpacity
-              style={[styles.upgradeCard, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40" }]}
+              style={[styles.upgradeCard, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "40", flexDirection: rtl ? "row-reverse" : "row" }]}
               activeOpacity={0.8}
               onPress={() => router.push("/pricing")}
             >
               <Icon name="star" size={28} color={colors.accent} />
-              <View style={styles.upgradeText}>
+              <View style={[styles.upgradeText, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
                 <Text style={[styles.upgradeTitle, { color: colors.foreground }]}>ترقية لـ Premium</Text>
                 <Text style={[styles.upgradeDesc, { color: colors.mutedForeground }]}>
                   تحليلات غير محدودة شهرياً
                 </Text>
               </View>
-              <Icon name="chevron-back" size={20} color={colors.accent} />
+              {/* chevron-forward for LTR, chevron-back for RTL (points toward the item) */}
+              <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={20} color={colors.accent} />
             </TouchableOpacity>
           )}
 
@@ -185,31 +188,31 @@ export default function ProfileScreen() {
           ].map((item) => (
             <TouchableOpacity
               key={item.label}
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: rtl ? "row-reverse" : "row" }]}
               onPress={() => item.route && router.push(item.route as any)}
             >
               <View style={[styles.menuIcon, { backgroundColor: colors.primary + "18" }]}>
                 <Icon name={item.icon} size={20} color={colors.primary} />
               </View>
-              <View style={styles.menuLabelWrap}>
+              <View style={[styles.menuLabelWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
                 <Text style={[styles.menuLabelText, { color: colors.foreground }]}>{item.label}</Text>
               </View>
-              <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
+              <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           ))}
 
           {/* Sign Out */}
           <TouchableOpacity
-            style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.error + "30" }]}
+            style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.error + "30", flexDirection: rtl ? "row-reverse" : "row" }]}
             onPress={handleSignOut}
           >
             <View style={[styles.menuIcon, { backgroundColor: colors.error + "18" }]}>
               <Icon name="log-out-outline" size={20} color={colors.error} />
             </View>
-            <View style={styles.menuLabelWrap}>
+            <View style={[styles.menuLabelWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
               <Text style={[styles.menuLabelText, { color: colors.error }]}>تسجيل الخروج</Text>
             </View>
-            <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
+            <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={18} color={colors.mutedForeground} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -218,7 +221,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, direction: "rtl" },
+  container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -227,7 +230,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
   },
   profileHeader: {
     paddingHorizontal: 20,
@@ -314,17 +316,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cardHeader: {
-    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
   },
   cardTitle: {
     fontSize: 15,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
   },
   usageRow: {
-    flexDirection: "row",
     alignItems: "baseline",
     justifyContent: "space-between",
   },
@@ -335,7 +334,6 @@ const styles = StyleSheet.create({
   usageLabel: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
   },
   progressTrack: {
     height: 6,
@@ -350,11 +348,8 @@ const styles = StyleSheet.create({
   usageRemaining: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
-    alignSelf: "flex-start",
   },
   upgradeCard: {
-    flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 16,
@@ -363,7 +358,6 @@ const styles = StyleSheet.create({
   },
   upgradeText: {
     flex: 1,
-    alignItems: "flex-start",
     gap: 2,
   },
   upgradeTitle: {
@@ -375,7 +369,6 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_400Regular",
   },
   menuItem: {
-    flexDirection: "row",
     alignItems: "center",
     gap: 12,
     padding: 14,
@@ -391,7 +384,6 @@ const styles = StyleSheet.create({
   },
   menuLabelWrap: {
     flex: 1,
-    alignItems: "flex-start",
   },
   menuLabelText: {
     fontSize: 15,

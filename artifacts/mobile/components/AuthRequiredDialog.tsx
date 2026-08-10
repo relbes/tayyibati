@@ -77,7 +77,6 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: "center",
     gap: 16,
-    direction: "rtl",
   },
   iconWrap: {
     width: 64,

@@ -68,8 +68,8 @@ import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 import { API_BASE, adminHeaders } from "@/lib/api";
-
-
+import { CategorySelect } from "@/components/CategorySelect";
+import { getCanonicalCategory, getCategoryLabel } from "@/lib/categories";
 
 const PAGE_SIZE = 50;
 
@@ -79,41 +79,10 @@ const STATUS_COLORS: Record<string, string> = {
   conditional: "bg-amber-100 text-amber-800 border-amber-200",
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  allowed: "Allowed",
-  forbidden: "Forbidden",
-  conditional: "Conditional",
-};
-
-const CATEGORIES = [
-  "Meat & Poultry",
-  "Seafood",
-  "Dairy",
-  "Grains & Bread",
-  "Vegetables",
-  "Fruits",
-  "Legumes",
-  "Nuts & Seeds",
-  "Oils & Fats",
-  "Beverages",
-  "Additives & Preservatives",
-  "Sweeteners",
-  "Spices & Herbs",
-  "Sauces & Condiments",
-  "Processed Foods",
-  "Snacks",
-  "Sweets & Desserts",
-  "Alcohol & Intoxicants",
-  "Insects",
-  "Reptiles & Amphibians",
-  "Wild Animals",
-  "Other",
-];
-
 const CSV_TEMPLATE = `nameAr,nameEn,category,status,reason,notes
-لحم الضأن,Lamb,Meat & Poultry,allowed,مسموح بشرط الذبح الشرعي,
-الكحول,Alcohol,Alcohol & Intoxicants,forbidden,ممنوع شرعاً,
-الجيلاتين,Gelatin,Additives & Preservatives,conditional,يعتمد على المصدر,يجب التحقق من المصدر`;
+لحم الضأن,Lamb,لحوم,allowed,مسموح بشرط الذبح الشرعي,
+الكحول,Alcohol,مشروبات,forbidden,ممنوع شرعاً,
+الجيلاتين,Gelatin,إضافات,conditional,يعتمد على المصدر,يجب التحقق من المصدر`;
 
 type ParsedRow = FoodInput & { _rowIndex: number; _error?: string };
 
@@ -146,7 +115,7 @@ function parseCSV(raw: string): { rows: ParsedRow[]; errors: string[] } {
     const cols = splitCSVLine(line);
     const nameAr = cols[nameArIdx]?.trim() ?? "";
     const nameEn = cols[nameEnIdx]?.trim() ?? "";
-    const category = cols[categoryIdx]?.trim() ?? "";
+    const category = getCanonicalCategory(cols[categoryIdx]?.trim() ?? "");
     const status = cols[statusIdx]?.trim().toLowerCase() ?? "";
     const reason = reasonIdx >= 0 ? cols[reasonIdx]?.trim() || null : null;
     const notes = notesIdx >= 0 ? cols[notesIdx]?.trim() || null : null;
@@ -216,6 +185,7 @@ function BulkImportDialog({
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] } | null>(null);
   const { toast } = useToast();
+  const { lang } = useLang();
   const queryClient = useQueryClient();
 
   const bulkMutation = useBulkCreateFoods({
@@ -271,14 +241,14 @@ function BulkImportDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && handleClose()}>
-      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto" dir={lang === "ar" ? "rtl" : "ltr"}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
-            Bulk Import Foods
+            {tr(lang, "bulkImport")}
           </DialogTitle>
           <DialogDescription>
-            Upload a CSV file or paste CSV data to add many foods at once.
+            {lang === "ar" ? "قم برفع ملف CSV أو لصق بيانات CSV لإضافة أطعمة متعددة." : "Upload a CSV file or paste CSV data to add many foods at once."}
           </DialogDescription>
         </DialogHeader>
 
@@ -287,13 +257,13 @@ function BulkImportDialog({
             <div className="flex items-center gap-2">
               <Button variant="outline" size="sm" onClick={downloadTemplate}>
                 <Download className="h-3.5 w-3.5 mr-1.5" />
-                Download Template
+                {lang === "ar" ? "تنزيل النموذج" : "Download Template"}
               </Button>
               <label>
                 <Button variant="outline" size="sm" asChild>
                   <span className="cursor-pointer">
                     <FileText className="h-3.5 w-3.5 mr-1.5" />
-                    Upload CSV File
+                    {lang === "ar" ? "رفع ملف CSV" : "Upload CSV File"}
                   </span>
                 </Button>
                 <input
@@ -313,9 +283,9 @@ function BulkImportDialog({
             </div>
 
             <div className="space-y-1.5">
-              <Label>Paste CSV Data</Label>
+              <Label>{lang === "ar" ? "لصق بيانات CSV" : "Paste CSV Data"}</Label>
               <Textarea
-                placeholder={`nameAr,nameEn,category,status,reason,notes\nلحم الضأن,Lamb,Meat & Poultry,allowed,,\nالكحول,Alcohol,Alcohol & Intoxicants,forbidden,ممنوع شرعاً,`}
+                placeholder={`nameAr,nameEn,category,status,reason,notes\nلحم الضأن,Lamb,لحوم,allowed,,\nالكحول,Alcohol,مشروبات,forbidden,ممنوع شرعاً,`}
                 value={csvText}
                 onChange={(e) => setCsvText(e.target.value)}
                 rows={10}
@@ -325,9 +295,9 @@ function BulkImportDialog({
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={handleClose}>Cancel</Button>
+              <Button variant="outline" onClick={handleClose}>{tr(lang, "cancel")}</Button>
               <Button onClick={handleParse} disabled={!csvText.trim()}>
-                Preview Import
+                {lang === "ar" ? "معاينة الاستيراد" : "Preview Import"}
               </Button>
             </DialogFooter>
           </div>
@@ -377,13 +347,13 @@ function BulkImportDialog({
                         <tr key={row._rowIndex} className="border-b hover:bg-muted/20">
                           <td className="px-3 py-2" dir="rtl">{row.nameAr}</td>
                           <td className="px-3 py-2">{row.nameEn}</td>
-                          <td className="px-3 py-2 text-muted-foreground">{row.category}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{getCategoryLabel(row.category, lang)}</td>
                           <td className="px-3 py-2">
                             <span className={cn(
                               "inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium",
                               STATUS_COLORS[row.status] ?? "bg-gray-100 text-gray-700",
                             )}>
-                              {STATUS_LABELS[row.status]}
+                              {tr(lang, row.status as any)}
                             </span>
                           </td>
                           <td className="px-3 py-2 text-muted-foreground truncate max-w-[120px]">
@@ -398,7 +368,7 @@ function BulkImportDialog({
             )}
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setStep("input")}>Back</Button>
+              <Button variant="outline" onClick={() => setStep("input")}>{tr(lang, "back")}</Button>
               <Button
                 onClick={handleImport}
                 disabled={parsed.length === 0 || bulkMutation.isPending}
@@ -473,35 +443,44 @@ function FoodDialog({
   food: Food | null;
   onSaved: () => void;
 }) {
+  const { lang } = useLang();
+  const { toast } = useToast();
+
   const [form, setForm] = useState<FoodFormData>(
     food
       ? {
           nameAr: food.nameAr,
           nameEn: food.nameEn,
-          category: food.category,
+          category: getCanonicalCategory(food.category),
           status: food.status as FoodFormData["status"],
           reason: food.reason ?? "",
           notes: food.notes ?? "",
         }
       : EMPTY_FORM,
   );
-  const { toast } = useToast();
 
   const createMutation = useCreateFood({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Food created successfully" });
+        toast({ title: tr(lang, "foodCreated") });
         onSaved();
         onClose();
       },
-      onError: () => toast({ title: "Failed to create food", variant: "destructive" }),
+      onError: (err: any) => {
+        const status = err?.status || err?.response?.status;
+        if (status === 409) {
+          toast({ title: tr(lang, "foodAlreadyExists"), variant: "destructive" });
+        } else {
+          toast({ title: tr(lang, "foodAlreadyExists"), variant: "destructive" });
+        }
+      },
     },
   });
 
   const updateMutation = useUpdateFood({
     mutation: {
       onSuccess: () => {
-        toast({ title: "Food updated successfully" });
+        toast({ title: tr(lang, "foodUpdated") });
         onSaved();
         onClose();
       },
@@ -515,10 +494,12 @@ function FoodDialog({
     e.preventDefault();
     if (!form.nameAr.trim() || !form.nameEn.trim() || !form.category) return;
 
+    const canonicalCategory = getCanonicalCategory(form.category);
+
     const payload: FoodInput = {
       nameAr: form.nameAr.trim(),
       nameEn: form.nameEn.trim(),
-      category: form.category,
+      category: canonicalCategory,
       status: form.status,
       reason: form.reason.trim() || null,
       notes: form.notes.trim() || null,
@@ -537,20 +518,20 @@ function FoodDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg" dir={lang === "ar" ? "rtl" : "ltr"}>
         <DialogHeader>
-          <DialogTitle>{food ? "Edit Food" : "Add New Food"}</DialogTitle>
+          <DialogTitle>{food ? tr(lang, "editFoodTitle") : tr(lang, "addFoodTitle")}</DialogTitle>
           <DialogDescription>
-            {food ? "Update the food's information below." : "Fill in the details to add a new food to the database."}
+            {food ? tr(lang, "editFoodSub") : tr(lang, "addFoodSub")}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label htmlFor="nameAr">Arabic Name *</Label>
+              <Label htmlFor="nameAr">{tr(lang, "foodNameAr")} *</Label>
               <Input
                 id="nameAr"
-                placeholder="e.g. لحم البقر"
+                placeholder={lang === "ar" ? "مثال: لحم البقر" : "e.g. Beef"}
                 value={form.nameAr}
                 onChange={(e) => set("nameAr", e.target.value)}
                 dir="rtl"
@@ -558,12 +539,13 @@ function FoodDialog({
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="nameEn">English Name *</Label>
+              <Label htmlFor="nameEn">{tr(lang, "foodNameEn")} *</Label>
               <Input
                 id="nameEn"
-                placeholder="e.g. Beef"
+                placeholder={lang === "ar" ? "مثال: Beef" : "e.g. Beef"}
                 value={form.nameEn}
                 onChange={(e) => set("nameEn", e.target.value)}
+                dir="ltr"
                 required
               />
             </div>
@@ -571,65 +553,61 @@ function FoodDialog({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <Label>Category *</Label>
-              <Select value={form.category} onValueChange={(v) => set("category", v)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map((c) => (
-                    <SelectItem key={c} value={c}>
-                      {c}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label htmlFor="food-category">{tr(lang, "foodCategory")} *</Label>
+              <CategorySelect
+                id="food-category"
+                value={form.category}
+                onChange={(v) => set("category", v)}
+                lang={lang}
+              />
             </div>
             <div className="space-y-1.5">
-              <Label>Status *</Label>
+              <Label htmlFor="food-status">{tr(lang, "foodStatus")} *</Label>
               <Select
                 value={form.status}
                 onValueChange={(v) => set("status", v as FoodFormData["status"])}
               >
-                <SelectTrigger>
+                <SelectTrigger id="food-status">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="allowed">✓ Allowed</SelectItem>
-                  <SelectItem value="forbidden">✗ Forbidden</SelectItem>
-                  <SelectItem value="conditional">⚠ Conditional</SelectItem>
+                <SelectContent dir={lang === "ar" ? "rtl" : "ltr"}>
+                  <SelectItem value="allowed">✓ {tr(lang, "allowed")}</SelectItem>
+                  <SelectItem value="forbidden">✗ {tr(lang, "forbidden")}</SelectItem>
+                  <SelectItem value="conditional">⚠ {tr(lang, "conditional")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="reason">Reason / Ruling</Label>
+            <Label htmlFor="reason">{tr(lang, "foodReason")}</Label>
             <Input
               id="reason"
-              placeholder="Islamic ruling or reason…"
+              placeholder={lang === "ar" ? "السبب الشرعي أو التحليلي..." : "Reason or ruling..."}
               value={form.reason}
               onChange={(e) => set("reason", e.target.value)}
+              dir={lang === "ar" ? "rtl" : "ltr"}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="notes">Notes</Label>
+            <Label htmlFor="notes">{tr(lang, "foodNotes")}</Label>
             <Textarea
               id="notes"
-              placeholder="Additional notes or conditions…"
+              placeholder={lang === "ar" ? "ملاحظات إضافية..." : "Additional notes..."}
               value={form.notes}
               onChange={(e) => set("notes", e.target.value)}
               rows={2}
+              dir={lang === "ar" ? "rtl" : "ltr"}
             />
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="gap-2">
             <Button type="button" variant="outline" onClick={onClose} disabled={busy}>
-              Cancel
+              {tr(lang, "cancel")}
             </Button>
             <Button type="submit" disabled={busy || !form.nameAr || !form.nameEn || !form.category}>
-              {busy ? "Saving…" : food ? "Save Changes" : "Create Food"}
+              {busy ? "..." : food ? tr(lang, "save") : tr(lang, "createFoodBtn")}
             </Button>
           </DialogFooter>
         </form>
@@ -658,6 +636,7 @@ async function bulkDeleteFoods(payload: { ids?: number[]; status?: string }) {
 export default function Foods() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [offset, setOffset] = useState(0);
   const [dialogFood, setDialogFood] = useState<Food | null | "new">(null);
   const [deleteTarget, setDeleteTarget] = useState<Food | null>(null);
@@ -676,21 +655,56 @@ export default function Foods() {
     ...(statusFilter !== "all"
       ? { status: statusFilter as "allowed" | "forbidden" | "conditional" }
       : {}),
+    ...(categoryFilter ? { category: categoryFilter } : {}),
   };
 
   const { data: foods, isLoading } = useListFoods(queryParams);
-  console.log("Foods hook result:", foods);
+
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportCsv = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/export/foods`, {
+        headers: adminHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to export foods CSV");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      a.download = `tayyibati_foods_${today}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      toast({
+        title: tr(lang, "exportSuccess"),
+        description: tr(lang, "exportFoodsDesc"),
+      });
+    } catch (err: any) {
+      toast({
+        title: tr(lang, "exportFailed"),
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   // Clear selection when page/filter changes
   useEffect(() => {
     setSelectedIds(new Set());
-  }, [offset, search, statusFilter]);
+  }, [offset, search, statusFilter, categoryFilter]);
 
   const deleteMutation = useDeleteFood({
     mutation: {
       onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: getListFoodsQueryKey() });
-        toast({ title: "Food deleted" });
+        toast({ title: tr(lang, "foodDeleted") });
         setDeleteTarget(null);
       },
       onError: () => toast({ title: "Failed to delete", variant: "destructive" }),
@@ -712,10 +726,14 @@ export default function Foods() {
     setOffset(0);
   }
 
+  function handleCategoryFilter(val: string) {
+    setCategoryFilter(val);
+    setOffset(0);
+  }
+
   const hasPrev = offset > 0;
   const hasNext = (foods?.length ?? 0) === PAGE_SIZE;
 
-  // Selection helpers
   const allPageIds = foods?.map((f) => f.id) ?? [];
   const allSelected = allPageIds.length > 0 && allPageIds.every((id) => selectedIds.has(id));
   const someSelected = allPageIds.some((id) => selectedIds.has(id));
@@ -757,11 +775,11 @@ export default function Foods() {
   }
 
   const bulkDeleteLabel = bulkDeletePayload?.status
-    ? `Delete all "${STATUS_LABELS[bulkDeletePayload.status]}" foods`
+    ? `Delete all "${tr(lang, bulkDeletePayload.status as any)}" foods`
     : `Delete ${bulkDeletePayload?.ids?.length ?? 0} selected food${(bulkDeletePayload?.ids?.length ?? 0) !== 1 ? "s" : ""}`;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6" dir={lang === "ar" ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold">{tr(lang, "foodDb")}</h1>
@@ -770,6 +788,10 @@ export default function Foods() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={handleExportCsv} disabled={isExporting}>
+            <Download className="h-4 w-4 mr-1.5" />
+            {isExporting ? tr(lang, "exporting") : tr(lang, "exportCSV")}
+          </Button>
           <Button variant="outline" onClick={() => setBulkOpen(true)}>
             <Upload className="h-4 w-4 mr-1.5" />
             {tr(lang, "bulkImport")}
@@ -781,12 +803,12 @@ export default function Foods() {
         </div>
       </div>
 
-      <div className="flex gap-3 flex-wrap">
+      <div className="flex gap-3 flex-wrap items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="search"
-            placeholder="Search foods…"
+            placeholder={lang === "ar" ? "بحث عن طعام..." : "Search foods…"}
             className="pl-9"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
@@ -796,20 +818,27 @@ export default function Foods() {
           <SelectTrigger className="w-40">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="allowed">Allowed</SelectItem>
-            <SelectItem value="forbidden">Forbidden</SelectItem>
-            <SelectItem value="conditional">Conditional</SelectItem>
+          <SelectContent dir={lang === "ar" ? "rtl" : "ltr"}>
+            <SelectItem value="all">{lang === "ar" ? "جميع الحالات" : "All Statuses"}</SelectItem>
+            <SelectItem value="allowed">{tr(lang, "allowed")}</SelectItem>
+            <SelectItem value="forbidden">{tr(lang, "forbidden")}</SelectItem>
+            <SelectItem value="conditional">{tr(lang, "conditional")}</SelectItem>
           </SelectContent>
         </Select>
+        <div className="w-48">
+          <CategorySelect
+            value={categoryFilter}
+            onChange={handleCategoryFilter}
+            lang={lang}
+            allowAll
+          />
+        </div>
       </div>
 
-      {/* Bulk action toolbar */}
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/5 border border-primary/20">
           <span className="text-sm font-medium text-primary">
-            {selectedIds.size} selected
+            {selectedIds.size} {lang === "ar" ? "محدد" : "selected"}
           </span>
           <div className="flex-1" />
           <Button
@@ -819,7 +848,7 @@ export default function Foods() {
             onClick={() => setSelectedIds(new Set())}
           >
             <X className="h-3 w-3 mr-1" />
-            Clear
+            {tr(lang, "clear")}
           </Button>
           <Button
             size="sm"
@@ -829,7 +858,7 @@ export default function Foods() {
             onClick={() => setBulkDeletePayload({ ids: Array.from(selectedIds) })}
           >
             <Trash2 className="h-3 w-3 mr-1.5" />
-            Delete {selectedIds.size} selected
+            {tr(lang, "delete")} ({selectedIds.size})
           </Button>
         </div>
       )}
@@ -848,20 +877,20 @@ export default function Foods() {
                       className={cn(someSelected && !allSelected && "data-[state=unchecked]:bg-muted")}
                     />
                   </th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Arabic</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">English</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Category</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Status</th>
-                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">Reason</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{tr(lang, "foodNameAr")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{tr(lang, "foodNameEn")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{tr(lang, "foodCategory")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{tr(lang, "foodStatus")}</th>
+                  <th className="px-4 py-3 text-left font-medium text-muted-foreground">{tr(lang, "foodReason")}</th>
                   <th className="px-4 py-3 text-right font-medium text-muted-foreground">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground font-medium gap-1 px-2">
-                          Actions
+                          {tr(lang, "actions")}
                           <ChevronDown className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
+                      <DropdownMenuContent align="end" dir={lang === "ar" ? "rtl" : "ltr"}>
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive text-xs"
                           onClick={() => setBulkDeletePayload({ status: "forbidden" })}
@@ -904,7 +933,7 @@ export default function Foods() {
                 ) : foods?.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
-                      No foods found
+                      {lang === "ar" ? "لا توجد أطعمة" : "No foods found"}
                     </td>
                   </tr>
                 ) : (
@@ -929,9 +958,9 @@ export default function Foods() {
                       <td className="px-4 py-3 font-medium" dir="rtl">
                         {food.nameAr}
                       </td>
-                      <td className="px-4 py-3">{food.nameEn}</td>
+                      <td className="px-4 py-3" dir="ltr">{food.nameEn}</td>
                       <td className="px-4 py-3 text-muted-foreground text-xs">
-                        {food.category}
+                        {getCategoryLabel(food.category, lang)}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -940,7 +969,7 @@ export default function Foods() {
                             STATUS_COLORS[food.status] ?? "bg-gray-100 text-gray-700",
                           )}
                         >
-                          {STATUS_LABELS[food.status] ?? food.status}
+                          {tr(lang, food.status as any)}
                         </span>
                       </td>
                       <td className="px-4 py-3 max-w-xs">
@@ -978,8 +1007,8 @@ export default function Foods() {
           <div className="flex items-center justify-between px-4 py-3 border-t">
             <p className="text-xs text-muted-foreground">
               {isLoading
-                ? "Loading…"
-                : `Showing ${offset + 1}–${offset + (foods?.length ?? 0)}`}
+                ? (lang === "ar" ? "جاري التحميل..." : "Loading…")
+                : `${lang === "ar" ? "عرض" : "Showing"} ${offset + 1}–${offset + (foods?.length ?? 0)}`}
             </p>
             <div className="flex gap-2">
               <Button
@@ -989,7 +1018,7 @@ export default function Foods() {
                 onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
               >
                 <ChevronLeft className="h-4 w-4" />
-                Previous
+                {lang === "ar" ? "السابق" : "Previous"}
               </Button>
               <Button
                 variant="outline"
@@ -997,7 +1026,7 @@ export default function Foods() {
                 disabled={!hasNext}
                 onClick={() => setOffset(offset + PAGE_SIZE)}
               >
-                Next
+                {lang === "ar" ? "التالي" : "Next"}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </div>
@@ -1018,23 +1047,24 @@ export default function Foods() {
 
       {/* Single delete confirmation */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent dir={lang === "ar" ? "rtl" : "ltr"}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete "{deleteTarget?.nameEn}"?</AlertDialogTitle>
+            <AlertDialogTitle>{lang === "ar" ? `حذف "${deleteTarget?.nameAr}"؟` : `Delete "${deleteTarget?.nameEn}"?`}</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <strong>{deleteTarget?.nameAr}</strong> from the
-              database. This action cannot be undone.
+              {lang === "ar"
+                ? `سيتم حذف ${deleteTarget?.nameAr} نهائياً من قاعدة البيانات.`
+                : `This will permanently remove ${deleteTarget?.nameEn} from the database.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogCancel>{tr(lang, "cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               onClick={() =>
                 deleteTarget && deleteMutation.mutate({ id: deleteTarget.id })
               }
             >
-              Delete
+              {tr(lang, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1042,21 +1072,21 @@ export default function Foods() {
 
       {/* Bulk delete confirmation */}
       <AlertDialog open={!!bulkDeletePayload} onOpenChange={(v) => !v && setBulkDeletePayload(null)}>
-        <AlertDialogContent>
+        <AlertDialogContent dir={lang === "ar" ? "rtl" : "ltr"}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Bulk Delete</AlertDialogTitle>
+            <AlertDialogTitle>{lang === "ar" ? "تأكيد الحذف الجماعي" : "Confirm Bulk Delete"}</AlertDialogTitle>
             <AlertDialogDescription>
-              {bulkDeleteLabel}. This action is permanent and cannot be undone.
+              {bulkDeleteLabel}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isBulkDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel disabled={isBulkDeleting}>{tr(lang, "cancel")}</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive hover:bg-destructive/90"
               disabled={isBulkDeleting}
               onClick={() => bulkDeletePayload && executeBulkDelete(bulkDeletePayload)}
             >
-              {isBulkDeleting ? "Deleting…" : "Delete"}
+              {isBulkDeleting ? "..." : tr(lang, "delete")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

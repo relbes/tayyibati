@@ -194,7 +194,7 @@ export default function AdminScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, direction: "rtl" },
+  container: { flex: 1 },
   header: {
     flexDirection: "row",
     alignItems: "center",

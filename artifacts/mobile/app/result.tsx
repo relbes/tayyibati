@@ -45,7 +45,11 @@ export default function ResultScreen() {
         contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
       >
-        <AnalysisResultCard report={currentReport} />
+        <AnalysisResultCard
+          report={currentReport}
+          onRetry={() => router.replace("/")}
+          onGoHome={() => router.replace("/")}
+        />
       </ScrollView>
     </View>
   );

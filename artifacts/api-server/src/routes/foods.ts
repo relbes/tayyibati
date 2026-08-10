@@ -1,11 +1,203 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { db } from "@workspace/db";
-import { foodsTable } from "@workspace/db";
+import { foodsTable, usersTable } from "@workspace/db";
 import { eq, ilike, and, or, sql, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { requireAdmin } from "./admin";
+import { requireAuth } from "../middleware/requireAuth";
+
+import { getKnowledgeCache, normalizeName, stripArticle } from "../lib/knowledgeCache";
+import { CanonicalSearchEngine, SearchMode } from "../lib/canonicalSearchEngine";
 
 const router = Router();
+
+// Category taxonomy translation helper
+const CATEGORY_TRANSLATIONS: Record<string, { ar: string; en: string }> = {
+  "لحوم": { ar: "لحوم", en: "Meat & Poultry" },
+  "مأكولات بحرية": { ar: "مأكولات بحرية", en: "Seafood" },
+  "ألبان": { ar: "ألبان", en: "Dairy" },
+  "حبوب": { ar: "حبوب", en: "Grains" },
+  "خضروات": { ar: "خضروات", en: "Vegetables" },
+  "فواكه": { ar: "فواكه", en: "Fruits" },
+  "بقوليات": { ar: "بقوليات", en: "Legumes" },
+  "مكسرات وبذور": { ar: "مكسرات وبذور", en: "Nuts & Seeds" },
+  "زيوت": { ar: "زيوت", en: "Oils" },
+  "دهون": { ar: "دهون", en: "Fats" },
+  "مشروبات": { ar: "مشروبات", en: "Beverages" },
+  "إضافات": { ar: "إضافات", en: "Additives" },
+  "توابل": { ar: "توابل", en: "Spices" },
+  "صلصات": { ar: "صلصات", en: "Sauces" },
+  "أعشاب": { ar: "أعشاب", en: "Herbs" },
+  "حلويات": { ar: "حلويات", en: "Sweets" },
+  "محليات": { ar: "محليات", en: "Sweeteners" },
+  "نكهات": { ar: "نكهات", en: "Flavors" },
+  "بروتين": { ar: "بروتين", en: "Protein" },
+  "أخرى": { ar: "أخرى", en: "Other" },
+  "مواد كيميائية": { ar: "مواد كيميائية", en: "Chemicals" },
+  "ألوان": { ar: "ألوان", en: "Colorings" },
+};
+
+let cachedFreeBrowsePayload: any = null;
+let cachedPremiumBrowsePayload: any = null;
+let lastCacheFoodCount = -1;
+
+function getBrowseCatalogPayloads(allFoods: any[]) {
+  if (
+    cachedFreeBrowsePayload &&
+    cachedPremiumBrowsePayload &&
+    lastCacheFoodCount === allFoods.length
+  ) {
+    return { freePayload: cachedFreeBrowsePayload, premiumPayload: cachedPremiumBrowsePayload };
+  }
+
+  const FREE_APPROVED_CATEGORIES = ["خضروات", "فواكه", "حبوب"];
+
+  // 1. FREE Payload (3 categories x 10 foods)
+  const freeCategories: any[] = [];
+  for (const catName of FREE_APPROVED_CATEGORIES) {
+    const catFoods = allFoods
+      .filter((f) => f.category === catName)
+      .sort((a, b) => a.id - b.id)
+      .slice(0, 10);
+
+    const trans = CATEGORY_TRANSLATIONS[catName] || { ar: catName, en: catName };
+    freeCategories.push({
+      categoryKey: catName,
+      nameAr: trans.ar,
+      nameEn: trans.en,
+      foods: catFoods.map((f) => ({
+        id: f.id,
+        nameAr: f.nameAr,
+        nameEn: f.nameEn,
+        status: f.status,
+      })),
+    });
+  }
+
+  cachedFreeBrowsePayload = {
+    isPremium: false,
+    totalCategories: freeCategories.length,
+    totalFoods: freeCategories.reduce((sum, c) => sum + c.foods.length, 0),
+    totalDatabase: allFoods.length,
+    categories: freeCategories,
+  };
+
+  // 2. PREMIUM Payload (All DB categories)
+  const groupedMap = new Map<string, any[]>();
+  for (const f of allFoods) {
+    const catName = f.category?.trim() || "أخرى";
+    if (!groupedMap.has(catName)) groupedMap.set(catName, []);
+    groupedMap.get(catName)!.push(f);
+  }
+
+  const premiumCategories: any[] = [];
+  for (const [catName, catFoods] of groupedMap.entries()) {
+    const sortedFoods = [...catFoods].sort((a, b) => a.id - b.id);
+    const trans = CATEGORY_TRANSLATIONS[catName] || { ar: catName, en: catName };
+
+    premiumCategories.push({
+      categoryKey: catName,
+      nameAr: trans.ar,
+      nameEn: trans.en,
+      foods: sortedFoods.map((f) => ({
+        id: f.id,
+        nameAr: f.nameAr,
+        nameEn: f.nameEn,
+        status: f.status,
+      })),
+    });
+  }
+
+  cachedPremiumBrowsePayload = {
+    isPremium: true,
+    totalCategories: premiumCategories.length,
+    totalFoods: premiumCategories.reduce((sum, c) => sum + c.foods.length, 0),
+    totalDatabase: allFoods.length,
+    categories: premiumCategories,
+  };
+
+  lastCacheFoodCount = allFoods.length;
+  return { freePayload: cachedFreeBrowsePayload, premiumPayload: cachedPremiumBrowsePayload };
+}
+
+router.get("/foods/browse", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return void res.status(401).json({ error: "Authentication required" });
+    }
+
+    // 1. Check User Premium Status from DB
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    const isPremium = String(user?.isPremium) === "true" || (user as any)?.isPremium === true;
+
+    // 2. Serve from server-side memory catalog cache
+    const cache = await getKnowledgeCache();
+    const { freePayload, premiumPayload } = getBrowseCatalogPayloads(cache.foods || []);
+
+    res.json(isPremium ? premiumPayload : freePayload);
+  } catch (err) {
+    req.log.error({ err }, "Failed to browse foods");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/foods/autocomplete", async (req, res) => {
+  try {
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (q.length < 2) {
+      return void res.json({ suggestions: [], searchOutcome: "NOT_FOUND" });
+    }
+
+    const searchRes = await CanonicalSearchEngine.search(q, { mode: SearchMode.AUTOCOMPLETE });
+
+    const suggestions: Array<{
+      labelAr: string;
+      labelEn: string;
+      query: string;
+      entityType: string;
+      canonicalId: number | string;
+    }> = [];
+
+    if (searchRes.searchOutcome === "FOUND") {
+      suggestions.push({
+        labelAr: searchRes.canonicalName,
+        labelEn: searchRes.canonicalName,
+        query: searchRes.canonicalName,
+        entityType: searchRes.canonicalEntityType,
+        canonicalId: searchRes.canonicalId,
+      });
+    } else if (searchRes.searchOutcome === "AMBIGUOUS" && searchRes.candidateDishes) {
+      for (const cand of searchRes.candidateDishes) {
+        suggestions.push({
+          labelAr: cand.canonicalName,
+          labelEn: cand.canonicalName,
+          query: cand.canonicalName,
+          entityType: cand.canonicalEntityType,
+          canonicalId: cand.canonicalId,
+        });
+      }
+    }
+
+    // Deduplicate suggestions by labelAr & entityType
+    const seen = new Set<string>();
+    const uniqueSuggestions = suggestions.filter((s) => {
+      const key = `${s.entityType}:${s.canonicalId}:${s.labelAr}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return void res.json({
+      searchOutcome: searchRes.searchOutcome,
+      suggestions: uniqueSuggestions,
+    });
+  } catch (err) {
+    console.error("[AUTOCOMPLETE API ERROR]", err);
+    req.log.error({ err }, "Autocomplete failed");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 router.get("/foods/stats", async (req, res) => {
   try {
@@ -160,9 +352,32 @@ router.post("/foods", requireAdmin, async (req, res) => {
     if (!nameAr || !nameEn || !category || !status) {
       return void res.status(400).json({ error: "Missing required fields" });
     }
+
+    const trimmedAr = String(nameAr).trim();
+    const trimmedEn = String(nameEn).trim();
+    const normInput = normalizeName(trimmedAr);
+
+    const allFoods = await db.select({ id: foodsTable.id, nameAr: foodsTable.nameAr }).from(foodsTable);
+    const isDuplicate = allFoods.some((f) => normalizeName(f.nameAr) === normInput);
+
+    if (isDuplicate) {
+      return void res.status(409).json({
+        error: "food_already_exists",
+        message: "This food already exists in the database.",
+        messageAr: "هذا الطعام موجود بالفعل في قاعدة البيانات.",
+      });
+    }
+
     const [food] = await db
       .insert(foodsTable)
-      .values({ nameAr, nameEn, category, status, reason, notes })
+      .values({
+        nameAr: trimmedAr,
+        nameEn: trimmedEn,
+        category: String(category).trim(),
+        status,
+        reason: reason ? String(reason).trim() : null,
+        notes: notes ? String(notes).trim() : null,
+      })
       .returning();
     res.status(201).json(food);
   } catch (err) {

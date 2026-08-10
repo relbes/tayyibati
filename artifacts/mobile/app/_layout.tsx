@@ -11,11 +11,12 @@ import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { I18nManager } from "react-native";
+import { isRTL } from "@/lib/i18n";
 
-// Force RTL layout direction for Arabic language support
+// We disable native I18nManager RTL and handle layout manually via layoutDirection.ts
 try {
-  I18nManager.allowRTL(true);
-  I18nManager.forceRTL(true);
+  I18nManager.allowRTL(false);
+  I18nManager.forceRTL(false);
 } catch (e) {
   console.warn("RTL initialization failed:", e);
 }
@@ -23,6 +24,7 @@ try {
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { AnalysisProvider } from "@/context/AnalysisContext";
+import { DeveloperModeProvider } from "@/context/DeveloperModeContext";
 import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
 
 try {
@@ -64,20 +66,22 @@ export default function RootLayout() {
   if (!fontsLoaded && !fontError) return null;
 
   return (
-    <SafeAreaProvider>
-      <ErrorBoundary>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <SubscriptionProvider>
             <AnalysisProvider>
-              <SubscriptionProvider>
+              <DeveloperModeProvider>
                 <GestureHandlerRootView style={{ flex: 1 }}>
-                  <RootLayoutNav />
+                  <SafeAreaProvider>
+                    <RootLayoutNav />
+                  </SafeAreaProvider>
                 </GestureHandlerRootView>
-              </SubscriptionProvider>
+              </DeveloperModeProvider>
             </AnalysisProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </ErrorBoundary>
-    </SafeAreaProvider>
+          </SubscriptionProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }

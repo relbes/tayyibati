@@ -1,8 +1,9 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
-import { analysisHistoryTable, userUsageTable } from "@workspace/db";
-import { desc, sql, count, avg } from "drizzle-orm";
+import { analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable } from "@workspace/db";
+import { desc, sql, count, avg, eq, and } from "drizzle-orm";
+import { getUserPlanLimits } from "./analysis";
 
 const router = Router();
 
@@ -153,6 +154,144 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get admin stats");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// CSV Export Helpers
+function escapeCsvCell(value: any): string {
+  if (value === null || value === undefined) return '""';
+  let str = typeof value === "object" ? JSON.stringify(value) : String(value);
+  str = str.replace(/"/g, '""');
+  return `"${str}"`;
+}
+
+function buildCsv(headers: string[], rows: any[][]): string {
+  const headerRow = headers.map(escapeCsvCell).join(",");
+  const dataRows = rows.map((r) => r.map(escapeCsvCell).join(","));
+  return "\uFEFF" + [headerRow, ...dataRows].join("\r\n");
+}
+
+router.get("/admin/export/foods", requireAdmin, async (req, res) => {
+  try {
+    const foods = await db.select().from(foodsTable).orderBy(foodsTable.id);
+
+    const headers = [
+      "id",
+      "name_ar",
+      "name_en",
+      "category",
+      "status",
+      "food_type",
+      "parent_food_id",
+      "reason",
+      "notes",
+      "is_exception",
+      "created_at",
+      "updated_at",
+    ];
+
+    const rows = foods.map((f) => [
+      f.id,
+      f.nameAr,
+      f.nameEn,
+      f.category,
+      f.status,
+      f.foodType,
+      f.parentFoodId ?? "",
+      f.reason ?? "",
+      f.notes ?? "",
+      f.isException ? "true" : "false",
+      f.createdAt ? new Date(f.createdAt).toISOString() : "",
+      f.updatedAt ? new Date(f.updatedAt).toISOString() : "",
+    ]);
+
+    const csvContent = buildCsv(headers, rows);
+    const today = new Date().toISOString().slice(0, 10);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="tayyibati_foods_${today}.csv"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    req.log.error({ err }, "Failed to export foods CSV");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/export/users", requireAdmin, async (req, res) => {
+  try {
+    const users = await db.select().from(usersTable).orderBy(usersTable.id);
+    const plans = await db.select().from(subscriptionPlansTable);
+    const planMap = new Map(plans.map((p) => [p.id, p]));
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+
+    const headers = [
+      "id",
+      "email",
+      "name",
+      "provider",
+      "is_premium",
+      "plan_name",
+      "monthly_text_count",
+      "text_limit",
+      "text_remaining",
+      "monthly_image_count",
+      "image_limit",
+      "image_remaining",
+      "created_at",
+      "updated_at",
+    ];
+
+    const rows = await Promise.all(
+      users.map(async (u) => {
+        const [usageRow] = await db
+          .select()
+          .from(userUsageTable)
+          .where(and(eq(userUsageTable.userId, u.id), eq(userUsageTable.date, currentMonth)));
+
+        const limits = await getUserPlanLimits(u.id);
+        const isPremium = u.isPremium === "true" || usageRow?.isPremium === "true";
+
+        let planName = isPremium ? "بريميوم" : "مجاني";
+        if (!isPremium && u.planId != null && planMap.has(u.planId)) {
+          planName = planMap.get(u.planId)?.name || planName;
+        }
+
+        const monthlyTextCount = usageRow?.textCount ?? 0;
+        const monthlyImageCount = usageRow?.imageCount ?? 0;
+        const textLimit = limits.textLimit;
+        const imageLimit = limits.imageLimit;
+        const textRemaining = textLimit < 0 ? 9999 : Math.max(0, textLimit - monthlyTextCount);
+        const imageRemaining = imageLimit < 0 ? 9999 : Math.max(0, imageLimit - monthlyImageCount);
+
+        return [
+          u.id,
+          u.email,
+          u.name ?? "",
+          u.provider ?? "email",
+          isPremium ? "true" : "false",
+          planName,
+          monthlyTextCount,
+          textLimit < 0 ? "unlimited" : textLimit,
+          textRemaining,
+          monthlyImageCount,
+          imageLimit < 0 ? "unlimited" : imageLimit,
+          imageRemaining,
+          u.createdAt ? new Date(u.createdAt).toISOString() : "",
+          u.updatedAt ? new Date(u.updatedAt).toISOString() : "",
+        ];
+      })
+    );
+
+    const csvContent = buildCsv(headers, rows);
+    const today = new Date().toISOString().slice(0, 10);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="tayyibati_users_${today}.csv"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    req.log.error({ err }, "Failed to export users CSV");
     res.status(500).json({ error: "Internal server error" });
   }
 });

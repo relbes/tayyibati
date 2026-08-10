@@ -1,0 +1,173 @@
+/**
+ * Tayyibati Admin AI Cache API Endpoints (Phase 6 - Step 4.5)
+ *
+ * Backend endpoints for managing ai_food_knowledge_cache table:
+ * GET /api/admin/ai-cache/statistics
+ * GET /api/admin/ai-cache?page=1&pageSize=50
+ * GET /api/admin/ai-cache/:id
+ * POST /api/admin/ai-cache/:id/delete (Soft delete)
+ */
+
+import { Router } from "express";
+import { db, aiFoodKnowledgeCacheTable } from "@workspace/db";
+import { eq, and, gt, lte, desc, sql } from "drizzle-orm";
+import { aiCacheClearMemory } from "../lib/ai/aiCache";
+import { AI_CONFIG } from "../lib/config";
+
+export const adminAiCacheRouter = Router();
+
+// GET /api/admin/ai-cache/statistics
+adminAiCacheRouter.get("/statistics", async (_req, res) => {
+  try {
+    const allRecords = await db.select().from(aiFoodKnowledgeCacheTable);
+    const now = new Date();
+
+    let totalEntries = 0;
+    let expiredEntries = 0;
+    let totalHitCount = 0;
+    let totalConfidence = 0;
+    let activeEntriesCount = 0;
+
+    let oldestEntry: Date | null = null;
+    let newestEntry: Date | null = null;
+
+    for (const r of allRecords) {
+      if (r.isDeleted) continue;
+      totalEntries++;
+
+      if (r.expiresAt && r.expiresAt <= now) {
+        expiredEntries++;
+      } else {
+        activeEntriesCount++;
+        totalHitCount += r.hitCount || 0;
+        totalConfidence += r.confidence || 0;
+
+        if (!oldestEntry || r.createdAt < oldestEntry) oldestEntry = r.createdAt;
+        if (!newestEntry || r.createdAt > newestEntry) newestEntry = r.createdAt;
+      }
+    }
+
+    const averageConfidence = activeEntriesCount > 0
+      ? Number((totalConfidence / activeEntriesCount).toFixed(2))
+      : 0;
+
+    const averageHitCount = activeEntriesCount > 0
+      ? Number((totalHitCount / activeEntriesCount).toFixed(2))
+      : 0;
+
+    const topQueries = [...allRecords]
+      .filter((r) => !r.isDeleted)
+      .sort((a, b) => (b.hitCount || 0) - (a.hitCount || 0))
+      .slice(0, 5)
+      .map((r) => ({
+        query: r.originalQuery,
+        inputType: r.inputType,
+        hitCount: r.hitCount,
+        confidence: r.confidence,
+      }));
+
+    res.json({
+      success: true,
+      provider: AI_CONFIG.provider,
+      model: AI_CONFIG.model,
+      cacheVersion: AI_CONFIG.cacheVersion,
+      cacheTtlDays: AI_CONFIG.cacheTtlDays,
+      totalEntries,
+      expiredEntries,
+      cacheHits: totalHitCount,
+      cacheMisses: totalEntries, // Entries created from misses
+      averageConfidence,
+      averageHitCount,
+      topQueries,
+      oldestEntry,
+      newestEntry,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to fetch AI cache statistics" });
+  }
+});
+
+// GET /api/admin/ai-cache?page=1&pageSize=50
+adminAiCacheRouter.get("/", async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
+    const pageSize = Math.max(1, Math.min(200, parseInt(String(req.query.pageSize || "50"), 10) || 50));
+
+    const allRecords = await db
+      .select()
+      .from(aiFoodKnowledgeCacheTable)
+      .where(eq(aiFoodKnowledgeCacheTable.isDeleted, false));
+
+    const sorted = allRecords.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    const totalItems = sorted.length;
+    const totalPages = Math.ceil(totalItems / pageSize) || 1;
+    const currentPage = Math.max(1, Math.min(page, totalPages));
+    const startIndex = (currentPage - 1) * pageSize;
+    const items = sorted.slice(startIndex, startIndex + pageSize);
+
+    res.json({
+      success: true,
+      page: currentPage,
+      pageSize,
+      totalItems,
+      totalPages,
+      items,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to fetch AI cache list" });
+  }
+});
+
+// GET /api/admin/ai-cache/:id
+adminAiCacheRouter.get("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, error: "Invalid cache item ID" });
+    }
+
+    const [item] = await db
+      .select()
+      .from(aiFoodKnowledgeCacheTable)
+      .where(and(eq(aiFoodKnowledgeCacheTable.id, id), eq(aiFoodKnowledgeCacheTable.isDeleted, false)))
+      .limit(1);
+
+    if (!item) {
+      return res.status(404).json({ success: false, error: "AI cache item not found" });
+    }
+
+    res.json({ success: true, item });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to fetch AI cache item" });
+  }
+});
+
+// POST /api/admin/ai-cache/:id/delete (Soft delete)
+adminAiCacheRouter.post("/:id/delete", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return res.status(400).json({ success: false, error: "Invalid cache item ID" });
+    }
+
+    const [updated] = await db
+      .update(aiFoodKnowledgeCacheTable)
+      .set({
+        isDeleted: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(aiFoodKnowledgeCacheTable.id, id))
+      .returning();
+
+    if (!updated) {
+      return res.status(404).json({ success: false, error: "AI cache item not found" });
+    }
+
+    aiCacheClearMemory(); // Evict memory cache
+
+    res.json({ success: true, item: updated, message: "Cache item soft deleted successfully" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to delete AI cache item" });
+  }
+});

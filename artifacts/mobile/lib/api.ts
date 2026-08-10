@@ -11,28 +11,89 @@ const BASE_URL =
 
 setBaseUrl(BASE_URL);
 
+export const NETWORK_ERROR_USER_MSG =
+  "تعذر الاتصال بالخادم.\nتحقق من اتصال الشبكة أو حاول مرة أخرى.";
+
+export class NetworkError extends Error {
+  isNetworkError: boolean;
+  constructor(message = NETWORK_ERROR_USER_MSG) {
+    super(message);
+    this.name = "NetworkError";
+    this.isNetworkError = true;
+  }
+}
+
+/**
+ * Executes fetch with automatic 1-retry delay for transient network errors.
+ * Distinguishes network failures from server HTTP errors.
+ * Never exposes raw internal errors to the user.
+ */
+export async function fetchWithRetry(
+  input: string | URL | Request,
+  init?: RequestInit,
+  maxRetries = 1,
+  delayMs = 800
+): Promise<Response> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fetch(input, init);
+    } catch (err: any) {
+      attempt++;
+
+      // AbortController cancellations (e.g. autocomplete) should throw original AbortError
+      if (err?.name === "AbortError") {
+        throw err;
+      }
+
+      if (attempt > maxRetries) {
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          console.error(
+            `[API Network Error] Network request failed after ${attempt} attempt(s) for ${input.toString()}:`,
+            err
+          );
+        }
+        throw new NetworkError(NETWORK_ERROR_USER_MSG);
+      }
+
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.warn(
+          `[API Network Retry] Transient error on ${input.toString()}. Retrying attempt #${attempt + 1} in ${delayMs}ms...`,
+          err
+        );
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 export class AnalysisError extends Error {
   status: number;
   limitReached: boolean;
-  constructor(message: string, status: number, limitReached = false) {
+  code?: string;
+  constructor(message: string, status: number, limitReached = false, code?: string) {
     super(message);
     this.name = "AnalysisError";
     this.status = status;
     this.limitReached = limitReached;
+    this.code = code;
   }
 }
 
 async function readAnalysisError(res: Response, fallback: string): Promise<AnalysisError> {
   let message = fallback;
   let limitReached = res.status === 429;
+  let code: string | undefined = undefined;
   try {
     const body = await res.json();
     if (body?.message) message = body.message;
-    if (body?.error === "limit_reached") limitReached = true;
+    if (body?.code) code = body.code;
+    if (body?.error === "limit_reached" || res.status === 429) limitReached = true;
   } catch {
     // ignore non-JSON bodies
   }
-  return new AnalysisError(message, res.status, limitReached);
+  return new AnalysisError(message, res.status, limitReached, code);
 }
 
 // ---------------------------------------------------------------------------
@@ -56,13 +117,27 @@ function authHeader(): Record<string, string> {
 
 export async function analyzeText(query: string) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/analysis/text`, {
+  const res = await fetchWithRetry(`${base}/api/analysis/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify({ query }),
   });
-  if (!res.ok) throw await readAnalysisError(res, `Analysis failed: ${res.status}`);
-  return res.json();
+  const data = await res.json();
+
+  return data.report || data;
+}
+
+export async function analyzeDish(dishId: number) {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/analysis/dish`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ dishId }),
+  });
+  if (!res.ok) throw await readAnalysisError(res, "حدث خطأ أثناء تحليل الطبق، يرجى المحاولة مرة أخرى.");
+  const data = await res.json();
+
+  return data.report || data;
 }
 
 export async function analyzeImage(
@@ -71,13 +146,14 @@ export async function analyzeImage(
   analysisType: "food" | "label",
 ) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/analysis/image`, {
+  const res = await fetchWithRetry(`${base}/api/analysis/image`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
     body: JSON.stringify({ imageBase64, mimeType, analysisType }),
   });
-  if (!res.ok) throw await readAnalysisError(res, `Image analysis failed: ${res.status}`);
-  return res.json();
+  if (!res.ok) throw await readAnalysisError(res, "تعذر تحليل الصورة، يرجى المحاولة مرة أخرى.");
+  const data = await res.json();
+  return data.report || data;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,20 +162,20 @@ export async function analyzeImage(
 
 export async function getHistory(limit = 20, offset = 0) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/history?limit=${limit}&offset=${offset}`, {
+  const res = await fetchWithRetry(`${base}/api/history?limit=${limit}&offset=${offset}`, {
     headers: authHeader(),
   });
-  if (!res.ok) throw new Error("Failed to fetch history");
+  if (!res.ok) throw new Error("تعذر تحميل السجل.");
   return res.json();
 }
 
 export async function deleteHistoryItem(id: number) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/history/${id}`, {
+  const res = await fetchWithRetry(`${base}/api/history/${id}`, {
     method: "DELETE",
     headers: authHeader(),
   });
-  if (!res.ok) throw new Error("Failed to delete history item");
+  if (!res.ok) throw new Error("تعذر حذف العنصر من السجل.");
 }
 
 // ---------------------------------------------------------------------------
@@ -108,21 +184,64 @@ export async function deleteHistoryItem(id: number) {
 
 export async function getUserUsage() {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/usage`, {
+  const res = await fetchWithRetry(`${base}/api/users/usage`, {
     headers: authHeader(),
   });
-  if (!res.ok) throw new Error("Failed to fetch usage");
+  if (!res.ok) throw new Error("تعذر تحميل بيانات الاستخدام.");
   return res.json();
 }
 
-// ---------------------------------------------------------------------------
-// Foods (public)
-// ---------------------------------------------------------------------------
+export interface BrowseCategoryFoodItem {
+  id: number;
+  nameAr: string;
+  nameEn: string;
+  status: "allowed" | "forbidden" | "conditional";
+}
+
+export interface BrowseCategoryGroup {
+  categoryKey: string;
+  nameAr: string;
+  nameEn: string;
+  foods: BrowseCategoryFoodItem[];
+}
+
+export interface BrowseFoodsResponse {
+  isPremium: boolean;
+  totalCategories: number;
+  totalFoods: number;
+  totalDatabase: number;
+  categories: BrowseCategoryGroup[];
+}
+
+export async function browseFoods(): Promise<BrowseFoodsResponse> {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/foods/browse`, {
+    headers: authHeader(),
+  });
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error("UNAUTHENTICATED");
+    }
+    throw new Error("فشل في تحميل قائمة الأغذية.");
+  }
+  return res.json();
+}
 
 export async function getFoodStats() {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/foods/stats`);
-  if (!res.ok) throw new Error("Failed to fetch stats");
+  const res = await fetchWithRetry(`${base}/api/foods/stats`);
+  if (!res.ok) throw new Error("تعذر تحميل الإحصائيات.");
+  return res.json();
+}
+
+export async function fetchAutocomplete(q: string, abortSignal?: AbortSignal) {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(
+    `${base}/api/foods/autocomplete?q=${encodeURIComponent(q)}`,
+    { signal: abortSignal },
+    0 // 0 retries for autocomplete to keep typing fast
+  );
+  if (!res.ok) throw new Error("Failed to fetch autocomplete");
   return res.json();
 }
 
@@ -134,7 +253,7 @@ export async function listFoods(params: { search?: string; status?: string; cate
   if (params.category) qs.set("category", params.category);
   if (params.limit) qs.set("limit", String(params.limit));
   if (params.offset) qs.set("offset", String(params.offset));
-  const res = await fetch(`${base}/api/foods?${qs.toString()}`);
+  const res = await fetchWithRetry(`${base}/api/foods?${qs.toString()}`);
   if (!res.ok) throw new Error("Failed to fetch foods");
   return res.json();
 }
@@ -148,7 +267,7 @@ export async function createFood(data: {
   notes?: string;
 }) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/foods`, {
+  const res = await fetchWithRetry(`${base}/api/foods`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -162,7 +281,7 @@ export async function updateFood(
   data: Partial<{ nameAr: string; nameEn: string; category: string; status: string; reason: string; notes: string }>
 ) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/foods/${id}`, {
+  const res = await fetchWithRetry(`${base}/api/foods/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -173,7 +292,7 @@ export async function updateFood(
 
 export async function deleteFood(id: number) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/foods/${id}`, { method: "DELETE" });
+  const res = await fetchWithRetry(`${base}/api/foods/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete food");
 }
 
@@ -183,7 +302,7 @@ export async function deleteFood(id: number) {
 
 export async function getPlans() {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/plans`);
+  const res = await fetchWithRetry(`${base}/api/plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
@@ -241,7 +360,7 @@ export async function registerUser(payload: {
   id?: string;
 }) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/register`, {
+  const res = await fetchWithRetry(`${base}/api/users/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -252,7 +371,7 @@ export async function registerUser(payload: {
 
 export async function loginUser(payload: { email: string; password?: string }) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/login`, {
+  const res = await fetchWithRetry(`${base}/api/users/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -263,14 +382,14 @@ export async function loginUser(payload: { email: string; password?: string }) {
 
 export async function getUser(id: string) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/${id}`);
+  const res = await fetchWithRetry(`${base}/api/users/${id}`);
   if (!res.ok) throw new Error("Failed to fetch user");
   return res.json();
 }
 
 export async function enrollUserPlan(id: string, planId: number, isPremium: boolean) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/${id}/plan`, {
+  const res = await fetchWithRetry(`${base}/api/users/${id}/plan`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ planId, isPremium }),
@@ -279,14 +398,9 @@ export async function enrollUserPlan(id: string, planId: number, isPremium: bool
   return res.json();
 }
 
-/**
- * Calls the server to verify the user's RevenueCat entitlement and update isPremium in the DB.
- * Must be called after a successful purchase or restore — server-side verification prevents
- * users from gaining premium access without actually paying.
- */
 export async function syncPremium(): Promise<{ isPremium: boolean }> {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/me/sync-premium`, {
+  const res = await fetchWithRetry(`${base}/api/users/me/sync-premium`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
   });
@@ -296,14 +410,14 @@ export async function syncPremium(): Promise<{ isPremium: boolean }> {
 
 export async function getPublicConfig(): Promise<Record<string, string>> {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/config/public`);
+  const res = await fetchWithRetry(`${base}/api/config/public`);
   if (!res.ok) throw new Error("Failed to fetch config");
   return res.json();
 }
 
 export async function forgotPassword(email: string) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/forgot-password`, {
+  const res = await fetchWithRetry(`${base}/api/users/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
@@ -314,7 +428,7 @@ export async function forgotPassword(email: string) {
 
 export async function resetPasswordWithCode(email: string, code: string, newPassword: string) {
   const base = BASE_URL;
-  const res = await fetch(`${base}/api/users/reset-password-with-code`, {
+  const res = await fetchWithRetry(`${base}/api/users/reset-password-with-code`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, code, newPassword }),

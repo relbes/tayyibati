@@ -1,10 +1,21 @@
+/**
+ * Tayyibati Analysis Route Gateway
+ *
+ * ARCHITECTURE GOVERNANCE:
+ * - See docs/ANALYSIS_PIPELINE_SPEC.md for complete 10-stage pipeline
+ * - See docs/ARCHITECTURE_RULES.md (Rules 1-8)
+ * - See docs/ENGINEERING_PRINCIPLES.md (Knowledge Before AI, Cache First)
+ */
 import { Router } from "express";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
 import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable, subscriptionPlansTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { optionalAuth } from "../middleware/requireAuth";
+import { requireAuth } from "../middleware/requireAuth";
 import { getFreeMonthlyLimit } from "../lib/config";
+import { UnifiedAnalysisEngine } from "../lib/unifiedAnalysisEngine";
+import { analyzeDishCompatibility } from "../lib/dishCompatibilityEngine";
+import { CanonicalSearchEngine } from "../lib/canonicalSearchEngine";
 
 const router = Router();
 
@@ -31,18 +42,15 @@ async function isUserPremium(userId: string): Promise<boolean> {
   }
 }
 
-/**
- * Returns the user's plan limits.
- * Priority: assigned plan → free plan in DB → config fallback.
- * -1 means unlimited.
- */
-async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; imageLimit: number }> {
-  const freeText = await getFreeMonthlyLimit();
-  const hardFallback = { textLimit: freeText, imageLimit: Math.ceil(freeText / 2) };
+export async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; imageLimit: number }> {
   try {
     const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
 
-    if (account?.planId) {
+    if (account?.isPremium === "true") {
+      return { textLimit: -1, imageLimit: -1 };
+    }
+
+    if (account?.planId != null) {
       const [plan] = await db
         .select()
         .from(subscriptionPlansTable)
@@ -50,7 +58,7 @@ async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; i
       if (plan) return { textLimit: plan.dailyTextLimit, imageLimit: plan.dailyImageLimit };
     }
 
-    // No plan assigned — use the free plan's limits from the DB
+    // Primary source: free plan from subscription_plans table in DB
     const [freePlan] = await db
       .select()
       .from(subscriptionPlansTable)
@@ -58,9 +66,10 @@ async function getUserPlanLimits(userId: string): Promise<{ textLimit: number; i
       .limit(1);
     if (freePlan) return { textLimit: freePlan.dailyTextLimit, imageLimit: freePlan.dailyImageLimit };
 
-    return hardFallback;
+    const freeText = await getFreeMonthlyLimit();
+    return { textLimit: freeText, imageLimit: Math.ceil(freeText / 2) };
   } catch {
-    return hardFallback;
+    return { textLimit: 15, imageLimit: 3 };
   }
 }
 
@@ -157,7 +166,37 @@ export interface IngredientResult {
 
 export interface AnalysisReport {
   query: string;
-  compatibilityScore: number;
+  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD";
+
+  primaryRuling?: {
+    status: "allowed" | "forbidden" | "conditional" | "unknown";
+    nameAr: string;
+    nameEn: string;
+    dbReason: string | null;
+    dbNotes: string | null;
+    isInherited: boolean;
+    inheritsFrom?: { nameAr: string; nameEn: string };
+  };
+
+  subtypes?: {
+    allowed: IngredientResult[];
+    forbidden: IngredientResult[];
+    conditional: IngredientResult[];
+  };
+
+  categoryItems?: {
+    allowed: IngredientResult[];
+    forbidden: IngredientResult[];
+    conditional: IngredientResult[];
+  };
+
+  ingredients?: IngredientResult[];
+
+  compatibilityScore: number | null;
+  /** 0-100: fraction of all ingredients that are known. null if no ingredients. Drops when unknowns exist. */
+  ingredientConfidence?: number | null;
+  scoreAvailable?: boolean;
+
   allowed: IngredientResult[];
   forbidden: IngredientResult[];
   conditional: IngredientResult[];
@@ -166,54 +205,107 @@ export interface AnalysisReport {
   suggestions: string[];
   analysisType: "text" | "image" | "label";
   notFound?: boolean;
-  possibleFoods?: string[];
+  imageRecognition?: {
+    status: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN" | "INSUFFICIENT_IMAGE";
+    imageType: "SINGLE_FOOD" | "MULTIPLE_FOODS" | "DISH" | "PACKAGED_PRODUCT" | "AMBIGUOUS";
+    candidates: {
+      nameAr: string;
+      nameEn: string;
+      recognitionScore: number;
+      resolution?: {
+        resolved: boolean;
+        canonicalNameAr: string;
+        canonicalNameEn: string;
+        resolutionType: string;
+      };
+    }[];
+    visibleComponents: string[];
+    likelyIngredients: string[];
+    confirmedIngredients: string[];
+  };
 }
 
 type FoodRow = typeof foodsTable.$inferSelect;
 
-/**
- * Builds an extraction-only prompt.
- * The AI identifies food names from the query/image but does NOT classify them.
- * All classification is done server-side using the Foods Database exclusively.
- */
-function buildExtractionPrompt(mode: "text" | "image" | "label"): string {
-  const extractionInstr =
-    mode === "label"
-      ? `استخرج قائمة المكونات الكاملة من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). ترجم كل مكوّن للعربية.`
-      : mode === "image"
-        ? `حلّل الصورة: حدّد الطبق وكل مكوّناته. قواعد التسمية للصور:
-- استخدم الاسم القياسي القصير للمكوّن لا وصفه البصري (مثال: اكتب "شوكولاتة" لا "كرات شوكولاتة بنية"، اكتب "دجاج" لا "قطعة دجاج مقلية").
-- اذكر نوع المكوّن الجوهري فقط: "شوكولاتة بيضاء"، "شوكولاتة داكنة"، "لحم بقري"، "دجاج"، إلخ.
-- كن دقيقاً في نوع اللحم: لحم بقري / دجاج / غنم / أرنب / سمك.
-- اذكر المكونات الضمنية المعتادة للطبق أيضاً.
-- إذا كانت الصورة غامضة، أضف "possibleFoods".`
-        : `حلّل نص المستخدم: حدّد الطبق/الصنف وكل مكوّناته (الظاهرة والضمنية). تعامل مع جميع اللهجات العربية وأخطاء الإملاء وأسماء العلامات التجارية. كن دقيقاً في نوع اللحم — حدّده: لحم بقري، دجاج، غنم، أرنب، سمك، إلخ.`;
+function buildTextExtractionPrompt(): string {
+  return `أنت مساعد متخصص في استخراج أسماء الأطعمة والمكونات وتحليل نية المستخدم.
 
-  return `أنت مساعد متخصص في استخراج أسماء الأطعمة والمكونات.
-
-مهمتك الوحيدة: ${extractionInstr}
+مهمتك: حلّل نص المستخدم: حدّد الطبق/الصنف وكل مكوّناته (الظاهرة والضمنية). تعامل مع جميع اللهجات العربية وأخطاء الإملاء وأسماء العلامات التجارية. كن دقيقاً في نوع اللحم — حدّده: لحم بقري، دجاج، غنم، أرنب، سمك، إلخ.
 
 قواعد صارمة:
 • استخرج أسماء المكونات والأطعمة فقط — لا تُصنّف أي منها ولا تحكم عليه.
 • لا تستخدم معرفتك المسبقة لتحديد ما إذا كان الطعام مسموحاً أو ممنوعاً.
-• مهمتك هي الاستخراج والتسمية فقط، وليس التقييم.
 • كل مكوّن يجب أن يكون اسماً قياسياً قابلاً للبحث، لا وصفاً بصرياً.
+
+1. حدد نية المستخدم "userIntent" من بين الخيارات التالية فقط:
+   - "SPECIFIC_INGREDIENT" (مكون محدد مثل "زيت زيتون")
+   - "BROAD_FOOD_CATEGORY" (فئة طعام عامة مثل "خبز"، "جبنة"، "أرز"، "شوربة"، "قهوة")
+   - "SPECIFIC_DISH" (طبق محدد مثل "منسف دجاج"، "شاورما لحم")
+   - "AMBIGUOUS_DISH_FOOD" (طبق/طعام غامض أو غير محدد مثل "منسف"، "مقلوبة")
+   - "PRODUCT_BRAND" (منتج تجاري)
+   - "INGREDIENT_LIST" (قائمة مكونات)
+   - "FREE_FORM_MEAL" (وصف وجبة حرة)
+   - "UNKNOWN" (غير معروف)
+
+2. حدد ما إذا كان البحث غامضاً أو عاماً "isAmbiguous" (true أو false). يكون true فقط عند البحث عن فئات عامة أو أطباق غير محددة (مثل "خبز"، "جبنة"، "منسف").
+
+3. إذا كان البحث غامضاً (isAmbiguous = true)، اقترح قائمة تصل إلى 5 خيارات/أنواع مختلفة متعلقة بالبحث في "aiRefinementSuggestions" (مثال لـ "خبز": خبز عربي، خبز أسمر، خبز صاج، توست، إلخ).
+   - تحذير: لا تولد أي اقتراحات للمكونات أو الأطباق المحددة (مثل "صدور دجاج" أو "زيت زيتون" أو "خبز شراك")، اتركها قائمة فارغة في هذه الحالات.
 
 أعِد JSON صالحاً فقط بهذا الشكل:
 {
   "isFood": true,
+  "userIntent": "نية المستخدم",
+  "isAmbiguous": true_or_false,
   "dishName": "اسم الطبق أو الصنف بالعربية",
   "items": [
     {"nameAr": "الاسم بالعربية", "nameEn": "English name"}
   ],
-  "possibleFoods": ["احتمال1 بالعربية", "احتمال2"]
+  "aiRefinementSuggestions": [
+    {"labelAr": "النوع بالعربية", "labelEn": "English name", "query": "الاستعلام للبحث"}
+  ]
 }
 
 قواعد الإخراج:
-• isFood=false فقط إذا لم تكن الصورة/النص متعلقة بطعام إطلاقاً (سيارة، شخص، كلام عشوائي). عندها أعِد items فارغة.
-• possibleFoods: أضفه فقط عند الغموض الحقيقي (صورة غير واضحة). لا تضعه إذا كان الطعام واضحاً.
-• كن شاملاً: اذكر جميع المكونات الظاهرة والضمنية المعتادة للطبق.`;
+• isFood=false فقط إذا لم تكن الصورة/النص متعلقة بطعام إطلاقاً.`;
 }
+
+function buildImageExtractionPrompt(mode: "image" | "label"): string {
+  const isLabel = mode === "label";
+  return `أنت مساعد متخصص في تحليل الصور والأطعمة والمكونات بدقة عالية.
+
+مهمتك: ${isLabel ? "استخراج قائمة المكونات الكاملة والبيانات من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). ترجم كل مكوّن للعربية." : "تحليل الصورة: حدّد الطعام الرئيسي والطبق وكل مكوناته الظاهرة، واستنتج المكونات المحتملة للوصفة."}
+
+قواعد التسمية والمخرجات:
+- استخدم الاسم القياسي القصير للمكوّن (مثال: اكتب "شوكولاتة" لا "كرات شوكولاتة بنية").
+- اذكر نوع المكوّن بدقة (لحم بقري، لحم غنم، دجاج، حليب بقر، إلخ).
+- لا تقيّم الأطعمة أو تُطلق أحكاماً عليها، مهمتك التعرف فقط.
+
+أعِد JSON صالحاً فقط بهذا الشكل بدقة:
+{
+  "isFood": true,
+  "imageRecognition": {
+    "imageType": "SINGLE_FOOD" | "MULTIPLE_FOODS" | "DISH" | "PACKAGED_PRODUCT" | "AMBIGUOUS",
+    "candidates": [
+      {
+        "nameAr": "الاسم بالعربية",
+        "nameEn": "English name",
+        "recognitionScore": 0.85
+      }
+    ],
+    "visibleComponents": ["مكون مرئي 1", "مكون مرئي 2"],
+    "likelyIngredients": ["مكون محتمل 1", "مكون محتمل 2"],
+    "confirmedIngredients": ["مكون مؤكد 1 (استخدمه فقط في حال قراءة الملصقات بوضوح)"]
+  }
+}
+
+قواعد صارمة:
+1. recognitionScore: تقدير من 0.0 إلى 1.0 لمدى ثقتك أن الطعام في الصورة هو هذا الكيان (0.9=واضح جداً، 0.3=احتمال ضعيف).
+2. candidates: قدّم من 1 إلى 3 احتمالات للطبق الرئيسي في الصورة. إذا كانت الصورة غامضة، ضع الاحتمالات الواردة.
+3. imageType: إذا كان هناك عدة أطعمة منفصلة بوضوح في نفس الطبق (مثلاً أرز في جهة ولحم في جهة أخرى وسلطة منفصلة)، اجعله "MULTIPLE_FOODS" واذكرها جميعاً في visibleComponents.
+4. isFood=false فقط إذا كانت الصورة لا تحوي طعاماً إطلاقاً.`;
+}
+
 
 const FREQUENCIES: ReadonlyArray<NonNullable<IngredientFrequency>> = ["basic", "daily", "weekly", "occasional"];
 
@@ -234,7 +326,21 @@ interface ExtractionResult {
   isFood: boolean;
   dishName: string;
   rawItems: { nameAr: string; nameEn: string }[];
-  possibleFoods: string[];
+  userIntent?: string;
+  isAmbiguous?: boolean;
+  aiRefinementSuggestions?: { labelAr: string; labelEn: string; query?: string }[];
+  
+  imageRecognition?: {
+    imageType: "SINGLE_FOOD" | "MULTIPLE_FOODS" | "DISH" | "PACKAGED_PRODUCT" | "AMBIGUOUS";
+    candidates: {
+      nameAr: string;
+      nameEn: string;
+      recognitionScore: number;
+    }[];
+    visibleComponents: string[];
+    likelyIngredients: string[];
+    confirmedIngredients: string[];
+  };
 }
 
 function parseExtraction(content: string): ExtractionResult {
@@ -242,7 +348,7 @@ function parseExtraction(content: string): ExtractionResult {
   try {
     parsed = JSON.parse(content || "{}");
   } catch {
-    return { isFood: false, dishName: "", rawItems: [], possibleFoods: [] };
+    return { isFood: false, dishName: "", rawItems: [] };
   }
 
   const rawItems = Array.isArray(parsed.items) ? parsed.items : [];
@@ -257,15 +363,45 @@ function parseExtraction(content: string): ExtractionResult {
     })
     .filter((x): x is { nameAr: string; nameEn: string } => x !== null);
 
-  const possibleFoods = Array.isArray(parsed.possibleFoods)
-    ? parsed.possibleFoods.filter((s) => typeof s === "string" && s.trim().length > 0).slice(0, 6)
-    : [];
+  const aiRefinementSuggestions = Array.isArray(parsed.aiRefinementSuggestions)
+    ? parsed.aiRefinementSuggestions
+        .map((s: any) => {
+          if (typeof s !== "object" || s === null) return null;
+          return {
+            labelAr: typeof s.labelAr === "string" ? s.labelAr.trim() : "",
+            labelEn: typeof s.labelEn === "string" ? s.labelEn.trim() : "",
+            query: typeof s.query === "string" ? s.query.trim() : "",
+          };
+        })
+        .filter((x) => x !== null && x.labelAr.length > 0)
+    : undefined;
+
+  let imageRecognition: ExtractionResult["imageRecognition"] = undefined;
+  if (parsed.imageRecognition && typeof parsed.imageRecognition === "object") {
+    const ir = parsed.imageRecognition as Record<string, any>;
+    imageRecognition = {
+      imageType: typeof ir.imageType === "string" ? ir.imageType as any : "AMBIGUOUS",
+      candidates: Array.isArray(ir.candidates)
+        ? ir.candidates.map((c: any) => ({
+            nameAr: typeof c.nameAr === "string" ? c.nameAr : "",
+            nameEn: typeof c.nameEn === "string" ? c.nameEn : "",
+            recognitionScore: typeof c.recognitionScore === "number" ? c.recognitionScore : 0.5
+          }))
+        : [],
+      visibleComponents: Array.isArray(ir.visibleComponents) ? ir.visibleComponents.map(String) : [],
+      likelyIngredients: Array.isArray(ir.likelyIngredients) ? ir.likelyIngredients.map(String) : [],
+      confirmedIngredients: Array.isArray(ir.confirmedIngredients) ? ir.confirmedIngredients.map(String) : [],
+    };
+  }
 
   return {
     isFood: parsed.isFood !== false,
     dishName: typeof parsed.dishName === "string" ? parsed.dishName.trim() : "",
     rawItems: items,
-    possibleFoods,
+    userIntent: typeof parsed.userIntent === "string" ? parsed.userIntent : undefined,
+    isAmbiguous: typeof parsed.isAmbiguous === "boolean" ? parsed.isAmbiguous : undefined,
+    aiRefinementSuggestions: aiRefinementSuggestions as any[],
+    imageRecognition,
   };
 }
 
@@ -501,37 +637,125 @@ function classifyFromDb(
   });
 }
 
-function scoreFromResults(
-  allowed: IngredientResult[],
-  forbidden: IngredientResult[],
-  conditional: IngredientResult[],
-  unknown: IngredientResult[],
-): number {
-  const total = allowed.length + forbidden.length + conditional.length + unknown.length;
-  if (total === 0) return 100;
-  const forbiddenPenalty = (forbidden.length / total) * 100;
-  const conditionalPenalty = (conditional.length / total) * 30;
-  const unknownPenalty = (unknown.length / total) * 10;
-  let score = Math.max(0, Math.round(100 - forbiddenPenalty - conditionalPenalty - unknownPenalty));
-  if (forbidden.length > 0) score = Math.min(score, 30);
-  return score;
-}
 
-function buildReportFromExtraction(
-  result: ExtractionResult,
+import { DecisionEngine } from "../lib/decisionEngine.js";
+import {
+  getKnowledgeCache,
+  resolveEntity,
+  resolveWithInheritance,
+  resolveFoodIdentity,
+  resolveUnresolvedTermsWithAI,
+  rerankImageCandidates,
+  buildVariantSuggestions,
+  buildUnifiedSuggestions,
+  Provenance,
+  EvidenceClass,
+  UserIntent,
+  type ResolvedEntity,
+  type DishCandidate,
+  type IngredientHypothesis,
+  type EffectiveRecipe,
+  type RefinementSuggestion
+} from "../lib/knowledgeCache";
+
+export function buildReportFromHypotheses(
+  hypotheses: IngredientHypothesis[],
   query: string,
   analysisType: AnalysisReport["analysisType"],
-  allFoods: FoodRow[],
+  resolvedEntity: ResolvedEntity | null,
+  resolvedVariant: any | null,
+  knowledgeCache: any,
+  userIntent?: UserIntent,
+  isAmbiguous?: boolean,
+  aiSuggestions?: { labelAr: string; labelEn: string; query?: string }[],
 ): AnalysisReport {
-  const items = classifyFromDb(result.rawItems, allFoods);
-  const allowed = items.filter((i) => i.status === "allowed");
-  const forbidden = items.filter((i) => i.status === "forbidden");
-  const conditional = items.filter((i) => i.status === "conditional");
-  const unknown = items.filter((i) => i.status === "unknown");
+  // Map hypotheses to allowed, forbidden, conditional, unknown arrays
+  const allowed: any[] = [];
+  const forbidden: any[] = [];
+  const conditional: any[] = [];
+  const unknown: any[] = [];
 
-  const score = scoreFromResults(allowed, forbidden, conditional, unknown);
+  for (const h of hypotheses) {
+    const foodId = h.resolvedFood?.id || (h.inferredEntity?.foodId ?? null);
+    const foodRow = h.resolvedFood || (foodId && knowledgeCache?.foods ? knowledgeCache.foods.find((f: any) => f.id === foodId) : null);
+    const dbReason = foodRow?.reason ?? null;
+    const dbNotes = foodRow?.notes ?? null;
 
-  // Build summary entirely from DB results — no AI-generated text
+    let matchType: "EXACT" | "ALIAS" | "VARIANT" | "PARENT_ENTITY" | "RECIPE_INFERRED" | "FUZZY" | "UNKNOWN" = "EXACT";
+    if (!foodRow && !h.inferredEntity) {
+      matchType = "UNKNOWN";
+    } else if (h.observedEntity && h.inferredEntity && h.observedEntity.id !== h.inferredEntity.id) {
+      matchType = "RECIPE_INFERRED";
+    } else if (h.observedEntity) {
+      if (h.observedEntity.matchScore === 60) {
+        matchType = "PARENT_ENTITY";
+      } else if (h.observedEntity.matchScore === 90) {
+        matchType = "ALIAS";
+      } else {
+        matchType = "EXACT";
+      }
+    } else if (h.resolvedFood) {
+      matchType = "EXACT";
+    } else {
+      matchType = "UNKNOWN";
+    }
+
+    const matchedEntity = h.inferredEntity ? {
+      id: h.inferredEntity.id,
+      nameAr: h.inferredEntity.nameAr,
+      nameEn: h.inferredEntity.nameEn,
+      type: h.inferredEntity.type,
+    } : null;
+
+    let confidence: "HIGH" | "MEDIUM" | "LOW" = "HIGH";
+    if (matchType === "EXACT" || matchType === "ALIAS" || matchType === "VARIANT") {
+      confidence = "HIGH";
+    } else if (matchType === "PARENT_ENTITY" || matchType === "FUZZY") {
+      confidence = "MEDIUM";
+    } else {
+      confidence = "LOW";
+    }
+
+    const itemResult = {
+      name: h.rawNameEn || h.inferredEntity?.nameEn || h.rawNameAr,
+      nameAr: h.rawNameAr || h.inferredEntity?.nameAr || h.rawNameEn,
+      status: h.compatibilityStatus,
+      frequency: null,
+      reason: dbReason || (h.compatibilityStatus === "unknown" ? "هذا الطعام غير متوفر في قاعدة بيانات طيباتي" : null),
+      notes: dbNotes,
+      
+      // Diagnostic and explainability properties
+      dbReason,
+      dbNotes,
+      matchType,
+      matchedEntity,
+
+      // Raw observed names
+      rawNameAr: h.rawNameAr || null,
+      rawNameEn: h.rawNameEn || null,
+
+      // Additive properties for UI/API compatibility
+      observedEntity: h.observedEntity,
+      observationProvenance: h.observationProvenance,
+      inferredEntity: h.inferredEntity,
+      inferenceProvenance: h.inferenceProvenance,
+      contextSupport: h.contextSupport,
+      recipeProvenance: h.recipeProvenance,
+      evidenceClass: h.evidenceClass,
+      confidence: h.resolvedFood ? "HIGH" : confidence,
+      visualConfidence: h.visualConfidence,
+    };
+
+    if (h.compatibilityStatus === "allowed") allowed.push(itemResult);
+    else if (h.compatibilityStatus === "forbidden") forbidden.push(itemResult);
+    else if (h.compatibilityStatus === "conditional") conditional.push(itemResult);
+    else unknown.push(itemResult);
+  }
+
+  // SSoT: scoring delegated exclusively to DecisionEngine
+  const { compatibilityScore: score } = DecisionEngine.computeScores(allowed.length, forbidden.length, conditional.length, unknown.length);
+
+  // Build summary explanation
   const parts: string[] = [];
   if (forbidden.length > 0)
     parts.push(`يحتوي على مكونات ممنوعة: ${forbidden.map((f) => f.nameAr).join("، ")}`);
@@ -541,114 +765,291 @@ function buildReportFromExtraction(
     parts.push("جميع المكونات الموجودة في قاعدة البيانات مسموح بها");
   if (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0 && unknown.length > 0)
     parts.push("لم يتم العثور على أي من المكونات في قاعدة بيانات طيباتي");
-  const explanation = parts.join(". ") || "تم تحليل المكونات";
+  
+  let explanation = parts.join(". ");
+  if (!explanation) {
+    if (score === null || (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0)) {
+      explanation = "لم نتمكن من التعرف على هذه المادة أو العثور على معلومات كافية لتحليل مدى ملاءمتها.";
+    } else if (isAmbiguous) {
+      explanation = "الرجاء تحديد نوع الطعام من الاقتراحات للحصول على تحليل دقيق لمدى ملاءمته.";
+    } else {
+      explanation = "تم تحليل المكونات";
+    }
+  }
 
-  // Suggest allowed DB items from the same category as any forbidden item
-  const forbiddenCategories = new Set(
-    forbidden.flatMap((fi) => {
-      const row = allFoods.find(
-        (f) =>
-          normalizeName(f.nameAr) === normalizeName(fi.nameAr) ||
-          normalizeName(f.nameEn) === normalizeName(fi.name),
-      );
-      return row?.category ? [row.category] : [];
-    }),
-  );
-  const suggestions = forbiddenCategories.size > 0
-    ? allFoods
-        .filter((f) => f.status === "allowed" && forbiddenCategories.has(f.category))
-        .slice(0, 6)
-        .map((f) => f.nameAr)
-    : [];
+  // Build hybrid unified suggestions
+  const refinementSuggestions = buildUnifiedSuggestions(resolvedEntity, aiSuggestions || [], knowledgeCache);
+  const relevantVariants = refinementSuggestions.map(s => ({
+    nameAr: s.labelAr,
+    query: s.query
+  }));
+
+  // Determine overall confidence
+  let overallConfidence: "HIGH" | "MEDIUM" | "LOW" = "HIGH";
+  let overallConfidenceReasonCode: "EXACT_MATCH" | "ALIAS_MATCH" | "VARIANT_MATCH" | "PARENT_ENTITY" | "FALLBACK_AI" | "NO_FOOD_FOUND" | "AMBIGUOUS" = "EXACT_MATCH";
+
+  if (isAmbiguous) {
+    overallConfidence = "MEDIUM";
+    overallConfidenceReasonCode = "AMBIGUOUS";
+  } else if (resolvedEntity) {
+    if (resolvedVariant) {
+      overallConfidence = "HIGH";
+      overallConfidenceReasonCode = "VARIANT_MATCH";
+    } else if (resolvedEntity.matchScore === 90) {
+      overallConfidence = "HIGH";
+      overallConfidenceReasonCode = "ALIAS_MATCH";
+    } else if (resolvedEntity.matchScore === 60) {
+      overallConfidence = "MEDIUM";
+      overallConfidenceReasonCode = "PARENT_ENTITY";
+    } else {
+      overallConfidence = "HIGH";
+      overallConfidenceReasonCode = "EXACT_MATCH";
+    }
+  } else if (hypotheses.length > 0) {
+    overallConfidence = "MEDIUM";
+    overallConfidenceReasonCode = "FALLBACK_AI";
+  } else {
+    overallConfidence = "LOW";
+    overallConfidenceReasonCode = "NO_FOOD_FOUND";
+  }
+
+  const isUnknownFood = score === null || (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0);
+  const effectiveIsAmbiguous = isUnknownFood || (hypotheses.length === 0 && refinementSuggestions.length === 0) ? false : !!isAmbiguous;
 
   return {
-    query: result.dishName || query,
+    query: resolvedVariant?.nameAr || query,
     compatibilityScore: score,
     allowed,
     forbidden,
     conditional,
     unknown,
     explanation,
-    suggestions,
+    suggestions: [],
     analysisType,
-    possibleFoods: result.possibleFoods?.length ? result.possibleFoods : undefined,
+    resultMode: isUnknownFood ? "UNKNOWN_FOOD" : (effectiveIsAmbiguous ? "AMBIGUOUS_FOOD" : "EXACT_FOOD"),
+    // Additive report options
+    ...({
+      resolvedDish: resolvedEntity && (resolvedEntity.type === "dish" || resolvedEntity.type === "dessert")
+        ? { nameAr: resolvedEntity.nameAr, nameEn: resolvedEntity.nameEn, type: resolvedEntity.type }
+        : undefined,
+      resolvedVariant: resolvedVariant
+        ? { nameAr: resolvedVariant.nameAr, nameEn: resolvedVariant.nameEn, variantKey: resolvedVariant.variantKey }
+        : undefined,
+      userIntent,
+      isAmbiguous: effectiveIsAmbiguous,
+      refinementSuggestions: effectiveIsAmbiguous ? refinementSuggestions : [],
+      relevantVariants,
+      hypotheses,
+      overallConfidence: isUnknownFood ? "LOW" : overallConfidence,
+      overallConfidenceReasonCode: isUnknownFood ? "NO_FOOD_FOUND" : overallConfidenceReasonCode,
+    } as any),
   };
 }
 
 function buildNotFoundReport(query: string, analysisType: AnalysisReport["analysisType"]): AnalysisReport {
   return {
     query,
-    compatibilityScore: 0,
+    compatibilityScore: null,
     allowed: [],
     forbidden: [],
     conditional: [],
     unknown: [],
-    explanation: "لم يتم التعرف على طعام في هذا الإدخال. حاول بصورة أوضح أو اكتب اسم الطعام.",
+    explanation: "لم نتمكن من التعرف على هذه المادة أو العثور على معلومات كافية لتحليل مدى ملاءمتها.",
     suggestions: [],
     analysisType,
+    resultMode: "UNKNOWN_FOOD",
     notFound: true,
+    ...({
+      overallConfidence: "LOW",
+      overallConfidenceReasonCode: "NO_FOOD_FOUND",
+    } as any),
   };
 }
 
-// optionalAuth extracts userId from the verified Bearer token.
-// Body/query userId fields are intentionally ignored to prevent cross-user quota abuse.
-router.post("/analysis/text", optionalAuth, async (req, res) => {
+router.post("/analysis/text", requireAuth, async (req, res) => {
+  const tStart = performance.now();
+  let queryText = "";
   try {
     const { query } = req.body as { query: string };
-    if (!query?.trim()) return void res.status(400).json({ error: "query is required" });
+    queryText = typeof query === "string" ? query.trim() : "";
 
-    const userId = req.userId ?? null;
+    if (!queryText) return void res.status(400).json({ error: "query is required" });
 
-    if (userId) {
-      const usage = await checkAndIncrementUsage(userId, "text");
-      if (!usage.allowed) {
-        return void res.status(429).json({
-          error: "limit_reached",
-          message: "لقد وصلت إلى حد البحث النصي لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
-        });
-      }
+    const userId = req.userId!;
+
+    const usage = await checkAndIncrementUsage(userId, "text");
+    if (!usage.allowed) {
+      return void res.status(429).json({
+        error: "limit_reached",
+        code: "TEXT_LIMIT_REACHED",
+        message: "لقد وصلت إلى حد البحث النصي لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
+      });
     }
 
-    const allFoods = await db.select().from(foodsTable);
-    const openai = await getOpenAIClient();
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: buildExtractionPrompt("text") },
-        { role: "user", content: query.trim() },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1000,
-      temperature: 0,
+    // Execute Universal Pipeline via UnifiedAnalysisEngine
+    const unifiedResult = await UnifiedAnalysisEngine.analyze({
+      query: queryText,
+      inputType: "text",
+      userId,
     });
 
-    const result = parseExtraction(completion.choices[0].message.content || "{}");
-
-    if (!result.isFood || result.rawItems.length === 0) {
-      return void res.json(buildNotFoundReport(query.trim(), "text"));
-    }
-
-    const report = buildReportFromExtraction(result, query.trim(), "text", allFoods);
+    const report = unifiedResult.report;
+    const durationMs = Math.round(performance.now() - tStart);
 
     if (userId) {
-      await db.insert(analysisHistoryTable).values({
+      db.insert(analysisHistoryTable).values({
         userId,
         query: report.query,
         analysisType: "text",
         compatibilityScore: report.compatibilityScore,
-        report,
+        report: report as any,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
     }
 
-    res.json(report);
+    const jsonResponse = {
+      report,
+      usage: { currentMonthCount: usage.count, limit: usage.limit, remaining: usage.remaining },
+      performance: { durationMs, cacheHit: true },
+    };
+
+    const isDebug = process.env.SEARCH_DEBUG === "true" || process.env.NODE_ENV === "development";
+    if (isDebug) {
+      const dishRes = unifiedResult.dishAnalysisResult;
+      const canonicalDish = dishRes?.dish;
+      const diag = (dishRes as any)?.searchResult?.diagnostics || (unifiedResult as any).diagnostics || {};
+      const resolvedIngs = dishRes ? dishRes.ingredientAnalysis.map((i) => i.canonicalFoodAr) : [];
+
+      const traceBlock = [
+        "\n========================================================",
+        "SEARCH TRACE",
+        "========================================================",
+        "Query:",
+        queryText,
+        "",
+        "Normalized:",
+        CanonicalSearchEngine.normalize(queryText),
+        "",
+        "Food Alias Matches:",
+        `${diag.foodAliasMatches || 0}${diag.foodAliasDetails?.length ? " -> " + diag.foodAliasDetails.join(", ") : ""}`,
+        "",
+        "Food Matches:",
+        `${diag.foodMatches || 0}${diag.foodDetails?.length ? " -> " + diag.foodDetails.join(", ") : ""}`,
+        "",
+        "Dish Alias Matches:",
+        `${diag.dishAliasMatches || 0}${diag.dishAliasDetails?.length ? " -> " + diag.dishAliasDetails.join(", ") : ""}`,
+        "",
+        "Dish Matches:",
+        `${diag.dishMatches || 0}${diag.dishDetails?.length ? " -> " + diag.dishDetails.join(", ") : ""}`,
+        "",
+        "Selected Dish:",
+        `ID: ${canonicalDish?.id ?? diag.canonicalId ?? "N/A"}`,
+        `Name: ${canonicalDish?.nameAr ?? diag.canonicalName ?? report.query}`,
+        "",
+        "Recipe Loaded:",
+        dishRes && dishRes.dish ? "YES" : "NO",
+        "",
+        "Ingredient Count:",
+        dishRes ? dishRes.ingredientAnalysis.length : 0,
+        "",
+        "Resolved Ingredients:",
+        resolvedIngs.length > 0 ? resolvedIngs.join(", ") : "None",
+        "",
+        "Decision:",
+        report.primaryRuling?.status || dishRes?.finalCompatibility || "unknown",
+        "",
+        "Compatibility Score:",
+        report.compatibilityScore !== null ? report.compatibilityScore : "N/A",
+        "",
+        "Final JSON:",
+        JSON.stringify(jsonResponse, null, 2),
+        "========================================================\n"
+      ].join("\n");
+
+      console.log(traceBlock);
+    }
+
+    return void res.json(jsonResponse);
   } catch (err) {
+    console.error("ANALYSIS_TEXT_ERROR", {
+      query: queryText,
+      error: err,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
     req.log.error({ err }, "Failed to analyze text");
     res.status(500).json({ error: "Analysis failed" });
   }
 });
 
-router.post("/analysis/image", optionalAuth, async (req, res) => {
+router.post("/analysis/dish", requireAuth, async (req, res) => {
+  const tStart = performance.now();
+  try {
+    const { dishId } = req.body as { dishId: number };
+    const idNum = Number(dishId);
+    if (!idNum || isNaN(idNum)) {
+      return void res.status(400).json({ error: "dishId is required and must be a number" });
+    }
+
+    const userId = req.userId!;
+
+    const usage = await checkAndIncrementUsage(userId, "text");
+    if (!usage.allowed) {
+      return void res.status(429).json({
+        error: "limit_reached",
+        code: "TEXT_LIMIT_REACHED",
+        message: "لقد وصلت إلى حد البحث النصي لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
+      });
+    }
+
+    const unifiedResult = await UnifiedAnalysisEngine.analyze({
+      dishId: idNum,
+      inputType: "text",
+      userId,
+    });
+
+    const report = unifiedResult.report;
+    const durationMs = Math.round(performance.now() - tStart);
+
+    if (userId) {
+      db.insert(analysisHistoryTable).values({
+        userId,
+        query: report.query,
+        analysisType: "text",
+        compatibilityScore: report.compatibilityScore,
+        report: report as any,
+      }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+    }
+
+    return void res.json({
+      report,
+      usage: { currentMonthCount: usage.count, limit: usage.limit, remaining: usage.remaining },
+      performance: { durationMs, cacheHit: true },
+    });
+  } catch (err) {
+    console.error("ANALYSIS_DISH_ERROR", err);
+    res.status(500).json({ error: "Analysis by dishId failed" });
+  }
+});
+
+function evaluateImageRecognition(ir: NonNullable<ExtractionResult["imageRecognition"]>) {
+  if (ir.imageType === "MULTIPLE_FOODS") return "CONFIDENT";
+  if (!ir.candidates || ir.candidates.length === 0) {
+    if (ir.visibleComponents.length > 0 || ir.likelyIngredients.length > 0 || ir.confirmedIngredients.length > 0) return "AMBIGUOUS";
+    return "UNKNOWN";
+  }
+
+  const top = ir.candidates[0];
+  if (top.recognitionScore > 0.8) {
+    if (ir.candidates.length > 1 && top.recognitionScore - ir.candidates[1].recognitionScore < 0.15) {
+      return "AMBIGUOUS";
+    }
+    return "CONFIDENT";
+  }
+  
+  if (top.recognitionScore < 0.3) return "UNKNOWN";
+  return "AMBIGUOUS";
+}
+
+router.post("/analysis/image", requireAuth, async (req, res) => {
   try {
     const { imageBase64, mimeType, analysisType } = req.body as {
       imageBase64: string;
@@ -657,16 +1058,15 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
     };
     if (!imageBase64 || !mimeType) return void res.status(400).json({ error: "imageBase64 and mimeType required" });
 
-    const userId = req.userId ?? null;
+    const userId = req.userId!;
 
-    if (userId) {
-      const usage = await checkAndIncrementUsage(userId, "image");
-      if (!usage.allowed) {
-        return void res.status(429).json({
-          error: "limit_reached",
-          message: "لقد وصلت إلى حد تحليل الصور لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
-        });
-      }
+    const usage = await checkAndIncrementUsage(userId, "image");
+    if (!usage.allowed) {
+      return void res.status(429).json({
+        error: "limit_reached",
+        code: "IMAGE_LIMIT_REACHED",
+        message: "لقد وصلت إلى حد تحليل الصور لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
+      });
     }
 
     const isLabel = analysisType === "label";
@@ -674,22 +1074,21 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
     const imageAnalysisType = isLabel ? "label" : "image";
     const queryLabel = isLabel ? "مسح ملصق المنتج" : "تحليل صورة الطعام";
 
-    const allFoods = await db.select().from(foodsTable);
-    const openai = await getOpenAIClient();
+    const promptMode = isLabel ? "label" : "image";
+    const promptText = buildImageExtractionPrompt(promptMode);
 
+    const openai = await getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
-        { role: "system", content: buildExtractionPrompt(mode) },
+        { role: "system", content: promptText },
         {
           role: "user",
           content: [
             { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
             {
               type: "text",
-              text: isLabel
-                ? "استخرج كل المكونات من ملصق المنتج."
-                : "ما الأطعمة والمكونات في هذه الصورة؟",
+              text: isLabel ? "استخرج كل المكونات من ملصق المنتج." : "ما الأطعمة والمكونات في هذه الصورة؟",
             },
           ],
         },
@@ -704,22 +1103,171 @@ router.post("/analysis/image", optionalAuth, async (req, res) => {
     if (!result.isFood) {
       return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
     }
-    if (result.rawItems.length === 0 && result.possibleFoods.length > 0) {
-      return void res.json({ ...buildNotFoundReport(queryLabel, imageAnalysisType), possibleFoods: result.possibleFoods, notFound: false });
-    }
-    if (result.rawItems.length === 0) {
+
+    const ir = result.imageRecognition;
+    if (!ir) {
       return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
     }
 
-    const report = buildReportFromExtraction(result, queryLabel, imageAnalysisType, allFoods);
+    const status = evaluateImageRecognition(ir);
+    const knowledgeCache = await getKnowledgeCache();
+
+    // Enrich candidates
+    const enrichedCandidates = ir.candidates.map(c => {
+      const resolution = resolveWithInheritance(c.nameAr, knowledgeCache);
+      return {
+        ...c,
+        resolution: resolution ? {
+          resolved: true,
+          canonicalNameAr: resolution.primaryFood?.nameAr || resolution.resolvedEntity?.nameAr || c.nameAr,
+          canonicalNameEn: resolution.primaryFood?.nameEn || resolution.resolvedEntity?.nameEn || c.nameEn,
+          resolutionType: resolution.matchType
+        } : undefined
+      };
+    });
+    ir.candidates = enrichedCandidates as any;
+
+    if (status === "AMBIGUOUS" || status === "UNKNOWN" || status === "INSUFFICIENT_IMAGE") {
+      const report: AnalysisReport = {
+        query: queryLabel,
+        analysisType: imageAnalysisType,
+        scoreAvailable: false,
+        compatibilityScore: null,
+        allowed: [], forbidden: [], conditional: [], unknown: [],
+        explanation: status === "AMBIGUOUS" ? "قد يكون الطعام أحد الخيارات التالية" : "لم نتمكن من تحديد الطعام بدقة",
+        suggestions: [],
+        imageRecognition: { ...ir, status, candidates: enrichedCandidates }
+      };
+      return void res.json(report);
+    }
+
+    // CONFIDENT state
+    // We run resolution on either the top candidate (if single food/dish) or all visible components (if multiple foods)
+    let finalQuery = queryLabel;
+    let componentsToResolve: string[] = [];
+
+    if (ir.imageType === "MULTIPLE_FOODS" && ir.visibleComponents.length > 0) {
+      componentsToResolve = ir.visibleComponents;
+      finalQuery = "وجبة متعددة الأصناف";
+    } else if (ir.candidates.length > 0) {
+      componentsToResolve = [ir.candidates[0].nameAr];
+      finalQuery = ir.candidates[0].nameAr;
+    } else if (ir.confirmedIngredients.length > 0) {
+      componentsToResolve = ir.confirmedIngredients;
+      finalQuery = "ملصق منتج";
+    } else {
+      // Fallback
+      componentsToResolve = ir.visibleComponents.length > 0 ? ir.visibleComponents : (ir.likelyIngredients.length > 0 ? ir.likelyIngredients : []);
+    }
+
+    const allowed: IngredientResult[] = [];
+    const forbidden: IngredientResult[] = [];
+    const conditional: IngredientResult[] = [];
+    const unknown: IngredientResult[] = [];
+    let primaryRuling: AnalysisReport["primaryRuling"] = undefined;
+    let resultMode: AnalysisReport["resultMode"] = "COMPOSITE_FOOD";
+
+    // If it's a single dish/food and we have a strong db ruling for it directly:
+    if (componentsToResolve.length === 1) {
+      const resolution = resolveWithInheritance(componentsToResolve[0], knowledgeCache);
+      if (resolution && (resolution.matchType === "EXACT_FOOD" || resolution.matchType === "SPECIFIC_INHERITED")) {
+         resultMode = resolution.matchType as any;
+         primaryRuling = {
+           status: resolution.food.status,
+           nameAr: resolution.food.nameAr,
+           nameEn: resolution.food.nameEn,
+           dbReason: resolution.food.reason,
+           dbNotes: resolution.food.notes,
+           isInherited: resolution.matchType === "SPECIFIC_INHERITED",
+           inheritsFrom: resolution.inheritedFromCategory ? { nameAr: resolution.inheritedFromCategory.nameAr, nameEn: resolution.inheritedFromCategory.nameEn } : undefined
+         };
+         if (resolution.food.status === "allowed") allowed.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "allowed", reason: resolution.food.reason });
+         else if (resolution.food.status === "forbidden") forbidden.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "forbidden", reason: resolution.food.reason });
+         else if (resolution.food.status === "conditional") conditional.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "conditional", reason: resolution.food.reason });
+      }
+    }
+
+    // If we didn't get a primary ruling, we resolve each component/ingredient using the shared food identity resolver
+    if (!primaryRuling) {
+       let items = ir.confirmedIngredients.length > 0 ? ir.confirmedIngredients : (ir.visibleComponents.length > 0 ? ir.visibleComponents : ir.likelyIngredients);
+       if (componentsToResolve.length > 1) items = componentsToResolve;
+       
+       // Step 1: Batch deterministic resolution of all image-extracted ingredients
+       const deterministicResolved = new Map<string, any>();
+       const unresolvedStrings: string[] = [];
+
+       for (const comp of items) {
+          const identity = resolveFoodIdentity(comp, knowledgeCache);
+          if (identity) {
+             deterministicResolved.set(comp, identity);
+          } else {
+             unresolvedStrings.push(comp);
+          }
+       }
+
+       // Step 2: Controlled AI identity interpretation fallback for any unresolved ingredients (batched)
+       let aiResolved = new Map<string, any>();
+       if (unresolvedStrings.length > 0) {
+          aiResolved = await resolveUnresolvedTermsWithAI(unresolvedStrings, knowledgeCache, getOpenAIClient);
+       }
+
+       // Step 3: Map each ingredient to its resolved DB food ruling
+       for (const comp of items) {
+          const identity = deterministicResolved.get(comp) || aiResolved.get(comp);
+          if (identity) {
+             const f = identity.food;
+             const st = f.status as IngredientStatus;
+             const resObj = { name: f.nameEn || comp, nameAr: comp, status: st, reason: f.reason || null, notes: f.notes || null };
+             if (st === "allowed") allowed.push(resObj);
+             else if (st === "forbidden") forbidden.push(resObj);
+             else if (st === "conditional") conditional.push(resObj);
+             else unknown.push(resObj);
+          } else {
+             unknown.push({ name: comp, nameAr: comp, status: "unknown", reason: null });
+          }
+       }
+    }
+
+    // SSoT: scoring delegated exclusively to DecisionEngine
+    const { compatibilityScore: finalScore, ingredientConfidence, scoreAvailable } = DecisionEngine.computeScores(
+      allowed.length, forbidden.length, conditional.length, unknown.length
+    );
+    let explanation = "تم التعرف على الطعام.";
+
+    if (forbidden.length > 0 || primaryRuling?.status === "forbidden") {
+       explanation = primaryRuling?.dbReason || "تحتوي الوجبة على مكونات ممنوعة.";
+    } else if (conditional.length > 0 || primaryRuling?.status === "conditional") {
+       explanation = primaryRuling?.dbReason || "تحتوي الوجبة على مكونات مشبوهة أو تعتمد على طريقة التحضير.";
+    } else if (unknown.length > 0 && !primaryRuling) {
+       explanation = "النتيجة غير مكتملة، نحتاج لمعلومات إضافية حول بعض المكونات.";
+    } else if (allowed.length > 0 || primaryRuling?.status === "allowed") {
+       explanation = primaryRuling?.dbReason || "مسموح حسب المعلومات المتوفرة.";
+    }
+
+    const report: AnalysisReport = {
+      query: finalQuery,
+      analysisType: imageAnalysisType,
+      scoreAvailable,
+      compatibilityScore: finalScore,
+      ingredientConfidence,
+      resultMode,
+      primaryRuling,
+      allowed,
+      forbidden,
+      conditional,
+      unknown,
+      explanation,
+      suggestions: [],
+      imageRecognition: { ...ir, status: "CONFIDENT", candidates: enrichedCandidates }
+    };
 
     if (userId) {
       await db.insert(analysisHistoryTable).values({
         userId,
         query: report.query,
         analysisType: imageAnalysisType,
-        compatibilityScore: report.compatibilityScore,
-        report,
+        compatibilityScore: report.compatibilityScore ?? 0,
+        report: report as any,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
     }
 

@@ -113,6 +113,22 @@ export const T = {
   foodCreated: { ar: "تم إضافة الطعام", en: "Food created" },
   foodUpdated: { ar: "تم تحديث الطعام", en: "Food updated" },
   foodDeleted: { ar: "تم حذف الطعام", en: "Food deleted" },
+  exporting: { ar: "جاري التصدير...", en: "Exporting..." },
+  exportSuccess: { ar: "تم التصدير بنجاح", en: "Export complete" },
+  exportFailed: { ar: "فشل التصدير", en: "Export failed" },
+  exportFoodsDesc: { ar: "تم تنزيل جميع سجلات الأطعمة كملف CSV", en: "Downloaded all food records as CSV" },
+  exportUsersDesc: { ar: "تم تنزيل جميع سجلات المستخدمين كملف CSV", en: "Downloaded all user records as CSV" },
+  addFoodTitle: { ar: "إضافة طعام جديد", en: "Add New Food" },
+  addFoodSub: { ar: "أدخل تفاصيل الطعام لإضافته إلى قاعدة البيانات.", en: "Fill in the details to add a new food to the database." },
+  editFoodTitle: { ar: "تعديل طعام", en: "Edit Food" },
+  editFoodSub: { ar: "تعديل تفاصيل سجل الطعام.", en: "Update details of the food record." },
+  foodNameAr: { ar: "الاسم بالعربية", en: "Arabic Name" },
+  foodNameEn: { ar: "الاسم بالإنجليزية", en: "English Name" },
+  foodCategory: { ar: "التصنيف", en: "Category" },
+  foodReason: { ar: "السبب", en: "Reason" },
+  foodNotes: { ar: "ملاحظات", en: "Notes" },
+  foodAlreadyExists: { ar: "هذا الطعام موجود بالفعل في قاعدة البيانات.", en: "This food already exists in the database." },
+  createFoodBtn: { ar: "إنشاء الطعام", en: "Create Food" },
 
   // Settings page
   apiConnection: { ar: "إعدادات الاتصال", en: "API Connection" },
@@ -123,6 +139,13 @@ export const T = {
   freeDailyLimit: { ar: "الحد الشهري المجاني (قديم)", en: "Free Monthly Limit (legacy)" },
 } as const;
 
-export function tr(lang: Lang, key: keyof typeof T): string {
-  return T[key][lang];
+export function tr(lang: Lang, key: keyof typeof T | (string & {})): string {
+  const entry = (T as Record<string, { ar: string; en: string }>)[key];
+  if (!entry) {
+    if (import.meta.env.DEV) {
+      console.warn(`[i18n] Missing translation key: ${String(key)}`);
+    }
+    return String(key);
+  }
+  return entry[lang] ?? entry.en ?? String(key);
 }

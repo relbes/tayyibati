@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAnalysis } from "@/context/AnalysisContext";
 import { getHistory, deleteHistoryItem } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { isRTL } from "@/lib/i18n";
 
 export default function HistoryScreen() {
   const colors = useColors();
@@ -27,6 +28,7 @@ export default function HistoryScreen() {
   const { setCurrentReport } = useAnalysis();
   const qc = useQueryClient();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const rtl = isRTL();
 
   const { data: items = [], isLoading, refetch } = useQuery({
     queryKey: ["history", user?.id],
@@ -65,28 +67,32 @@ export default function HistoryScreen() {
   };
 
   const renderItem = ({ item }: { item: any }) => {
-    const score = item.compatibilityScore;
-    const scoreColor = score >= 70 ? colors.scoreHigh : score >= 40 ? colors.scoreMid : colors.scoreLow;
+    const rawScore = item.report?.compatibilityScore ?? item.compatibilityScore;
+    const isUnknown = item.report?.resultMode === "UNKNOWN_FOOD" || rawScore === null || rawScore === undefined;
+    const score = isUnknown ? null : rawScore;
+    const scoreColor = score === null ? colors.mutedForeground : score >= 70 ? colors.scoreHigh : score >= 40 ? colors.scoreMid : colors.scoreLow;
 
     return (
       <TouchableOpacity
-        style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: rtl ? "row-reverse" : "row" }]}
         onPress={() => handleView(item)}
         activeOpacity={0.7}
       >
-        {/* RIGHT - Score Circle */}
-        <View style={styles.rightSection}>
+        {/* For Arabic: Score circle on RIGHT = first in row-reverse */}
+        <View style={styles.scoreSection}>
           <View style={[styles.scoreCircle, { backgroundColor: scoreColor + "20", borderColor: scoreColor + "40" }]}>
-            <Text style={[styles.scoreText, { color: scoreColor }]}>{score}</Text>
+            <Text style={[styles.scoreText, { color: scoreColor, fontSize: score === null ? 14 : 16 }]}>
+              {score === null ? "—" : score}
+            </Text>
           </View>
         </View>
 
         {/* CENTER - Food details */}
-        <View style={styles.centerSection}>
-          <Text style={[styles.itemQuery, { color: colors.foreground }]} numberOfLines={1}>
+        <View style={[styles.centerSection, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
+          <Text style={[styles.itemQuery, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]} numberOfLines={1}>
             {item.query}
           </Text>
-          <View style={styles.itemMeta}>
+          <View style={[styles.itemMeta, { flexDirection: rtl ? "row-reverse" : "row" }]}>
             <Icon name={typeIcon(item.analysisType)} size={13} color={colors.mutedForeground} />
             <Text style={[styles.itemDate, { color: colors.mutedForeground }]}>
               {new Date(item.createdAt).toLocaleDateString("ar-SA")}
@@ -94,8 +100,8 @@ export default function HistoryScreen() {
           </View>
         </View>
 
-        {/* LEFT - Delete Icon */}
-        <View style={styles.leftSection}>
+        {/* For Arabic: Delete icon on LEFT = last in row-reverse */}
+        <View style={styles.deleteSection}>
           <TouchableOpacity onPress={() => handleDelete(item.id)} style={styles.deleteBtn}>
             <Icon name="trash-outline" size={18} color={colors.error} />
           </TouchableOpacity>
@@ -107,9 +113,9 @@ export default function HistoryScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.foreground }]}>سجل التحليلات</Text>
+        <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>سجل التحليلات</Text>
         {user && (
-          <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+          <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
             {items.length} تحليل
           </Text>
         )}
@@ -155,7 +161,7 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, direction: "rtl" },
+  container: { flex: 1 },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 14,
@@ -165,23 +171,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
-    alignSelf: "flex-start",
   },
   subtitle: {
     fontSize: 13,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
-    alignSelf: "flex-start",
   },
   item: {
-    flexDirection: "row",
     alignItems: "center",
     padding: 14,
     borderRadius: 14,
     borderWidth: 1,
     gap: 12,
-    direction: "rtl",
   },
   scoreCircle: {
     width: 48,
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Tajawal_700Bold",
   },
-  rightSection: {
+  scoreSection: {
     width: 56,
     alignItems: "center",
     justifyContent: "center",
@@ -203,9 +203,8 @@ const styles = StyleSheet.create({
   centerSection: {
     flex: 1,
     gap: 4,
-    alignItems: "flex-start",
   },
-  leftSection: {
+  deleteSection: {
     width: 40,
     alignItems: "center",
     justifyContent: "center",
@@ -213,18 +212,14 @@ const styles = StyleSheet.create({
   itemQuery: {
     fontSize: 15,
     fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
   },
   itemMeta: {
-    flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    justifyContent: "flex-start",
   },
   itemDate: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
-    textAlign: "right",
   },
   deleteBtn: {
     padding: 6,

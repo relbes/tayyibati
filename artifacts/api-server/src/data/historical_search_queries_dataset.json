@@ -1,0 +1,92 @@
+[
+  {
+    "id": 1,
+    "userQuery": "شاورما دجاج",
+    "expectedEntityType": "dish",
+    "expectedCanonicalName": "شاورما"
+  },
+  {
+    "id": 2,
+    "userQuery": "أرز ابيض",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "الأرز"
+  },
+  {
+    "id": 3,
+    "userQuery": "عصير برتقال",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "عصير البرتقال"
+  },
+  {
+    "id": 4,
+    "userQuery": "لبن زبادي",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "اللبن"
+  },
+  {
+    "id": 5,
+    "userQuery": "سلطة خضراء",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "السلطة"
+  },
+  {
+    "id": 6,
+    "userQuery": "شامورما",
+    "expectedEntityType": "dish",
+    "expectedCanonicalName": "شاورما"
+  },
+  {
+    "id": 7,
+    "userQuery": "تفاح أحمر",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "التفاح"
+  },
+  {
+    "id": 8,
+    "userQuery": "Pepsi",
+    "expectedEntityType": "product",
+    "expectedCanonicalName": "ببسي"
+  },
+  {
+    "id": 9,
+    "userQuery": "نوتيلا",
+    "expectedEntityType": "product",
+    "expectedCanonicalName": "نوتيلا"
+  },
+  {
+    "id": 10,
+    "userQuery": "كبسة لحم",
+    "expectedEntityType": "dish",
+    "expectedCanonicalName": "الكبسة"
+  },
+  {
+    "id": 11,
+    "userQuery": "تمر مجهول",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "التمر"
+  },
+  {
+    "id": 12,
+    "userQuery": "مانجو طازجة",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "المانجو"
+  },
+  {
+    "id": 13,
+    "userQuery": "جميد بلدي",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "الجميد"
+  },
+  {
+    "id": 14,
+    "userQuery": "بهارات منسف",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "البهارات"
+  },
+  {
+    "id": 15,
+    "userQuery": "خبز شراك",
+    "expectedEntityType": "food",
+    "expectedCanonicalName": "الخبز"
+  }
+]

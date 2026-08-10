@@ -1,0 +1,129 @@
+{
+  "version": "1.0.0",
+  "description": "Tayyibati Production Golden Search Reference Dataset",
+  "testCases": [
+    {
+      "id": "TC_001",
+      "category": "known_food",
+      "query": "تمر",
+      "inputType": "text",
+      "expectedSearchPath": "local_db",
+      "expectedEntityType": "food",
+      "expectedCanonicalName": "التمر",
+      "expectedResultMode": "SINGLE_FOOD",
+      "allowAI": false
+    },
+    {
+      "id": "TC_002",
+      "category": "known_food",
+      "query": "تفاح",
+      "inputType": "text",
+      "expectedSearchPath": "local_db",
+      "expectedEntityType": "food",
+      "expectedCanonicalName": "التفاح",
+      "expectedResultMode": "SINGLE_FOOD",
+      "allowAI": false
+    },
+    {
+      "id": "TC_003",
+      "category": "known_dish",
+      "query": "مجدرة",
+      "inputType": "text",
+      "expectedSearchPath": "local_db",
+      "expectedEntityType": "dish",
+      "expectedCanonicalName": "مجدرة",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": false
+    },
+    {
+      "id": "TC_004",
+      "category": "known_product",
+      "query": "رد بول",
+      "inputType": "text",
+      "expectedSearchPath": "local_db",
+      "expectedEntityType": "dish",
+      "expectedCanonicalName": "رد بول",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": false
+    },
+    {
+      "id": "TC_005",
+      "category": "unknown_food_ai_fallback",
+      "query": "دراغونفروت زيكس 999",
+      "inputType": "text",
+      "expectedSearchPath": "openai_extractor",
+      "expectedEntityType": "food",
+      "expectedCanonicalName": "دراغونفروت زيكس 999",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": true
+    },
+    {
+      "id": "TC_006",
+      "category": "unknown_dish_ai_fallback",
+      "query": "ماتشا تشوكو بوبس 999",
+      "inputType": "text",
+      "expectedSearchPath": "openai_extractor",
+      "expectedEntityType": "dish",
+      "expectedCanonicalName": "ماتشا تشوكو بوبس 999",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": true
+    },
+    {
+      "id": "TC_007",
+      "category": "unknown_product_ai_fallback",
+      "query": "فلوريتا ديلوكس 999",
+      "inputType": "text",
+      "expectedSearchPath": "openai_extractor",
+      "expectedEntityType": "product",
+      "expectedCanonicalName": "فلوريتا ديلوكس 999",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": true
+    },
+    {
+      "id": "TC_008",
+      "category": "barcode_unmapped",
+      "query": "8888888888888",
+      "barcode": "8888888888888",
+      "inputType": "barcode",
+      "expectedSearchPath": "barcode_unmapped",
+      "expectedEntityType": "product",
+      "expectedCanonicalName": "8888888888888",
+      "expectedResultMode": "NOT_FOUND",
+      "allowAI": false
+    },
+    {
+      "id": "TC_009",
+      "category": "ocr_label_fallback",
+      "query": "مكونات: حليب مجفف، سكر، زيت نخل، فانيلا 999",
+      "rawOcrText": "مكونات: حليب مجفف، سكر، زيت نخل، فانيلا 999",
+      "inputType": "ocr",
+      "expectedSearchPath": "openai_extractor",
+      "expectedEntityType": "product",
+      "expectedCanonicalName": "منتج غلاف تجاري",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": true
+    },
+    {
+      "id": "TC_010",
+      "category": "camera_visual_fallback",
+      "query": "طبق سلطة خضراء مخصصة 999",
+      "inputType": "camera",
+      "expectedSearchPath": "openai_extractor",
+      "expectedEntityType": "dish",
+      "expectedCanonicalName": "طبق سلطة خضراء مخصصة 999",
+      "expectedResultMode": "COMPOSITE_FOOD",
+      "allowAI": true
+    },
+    {
+      "id": "TC_011",
+      "category": "autocomplete_query",
+      "query": "تفاح",
+      "inputType": "autocomplete",
+      "expectedSearchPath": "local_db",
+      "expectedEntityType": "food",
+      "expectedCanonicalName": "التفاح",
+      "expectedResultMode": "SINGLE_FOOD",
+      "allowAI": false
+    }
+  ]
+}

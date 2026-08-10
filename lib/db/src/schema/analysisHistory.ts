@@ -7,7 +7,7 @@ export const analysisHistoryTable = pgTable("analysis_history", {
   userId: text("user_id").notNull(),
   query: text("query").notNull(),
   analysisType: text("analysis_type", { enum: ["text", "image", "label"] }).notNull(),
-  compatibilityScore: integer("compatibility_score").notNull(),
+  compatibilityScore: integer("compatibility_score"),
   report: jsonb("report").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
