@@ -51,3 +51,47 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+# ============================================
+# Tayyibati Release Ignore Rules
+# ============================================
+
+# Generated Android/iOS builds
+*.apk
+*.aab
+*.apks
+
+# Expo/EAS
+artifacts/mobile/eas-inspect/
+artifacts/mobile/.expo/
+
+# Scratch & temporary files
+scratch/
+artifacts/mobile/scratch/
+*.tmp
+*.bak
+
+# Generated reports
+git_status_before_release.txt
+
+# Temporary audit outputs
+*_report.json
+*_summary.json
+
+# Local logs
+*.log
+
+# Android Studio
+*.iml
+.gradle/
+local.properties
+
+# Build outputs
+artifacts/mobile/android/app/build/
+artifacts/mobile/android/build/
+artifacts/mobile/ios/build/
+
+# Temporary backup folders
+android-backup/
+
+# OS files
+Desktop.ini
