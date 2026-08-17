@@ -1,32 +1,71 @@
 ﻿export const TayyibatiTheme = {
   colors: {
-    background: "#FAFAF8",
+    // ─────────────────────────────────────────────
+    // Base
+    // ─────────────────────────────────────────────
+    background: "#FCFCFA",
     surface: "#FFFFFF",
-    primary: "#16A34A",
-    primaryDark: "#15803D",
-    primarySoft: "#EAF7EF",
+    surfaceWarm: "#FFFDF7",
+
+    // ─────────────────────────────────────────────
+    // Tayyibati Green
+    // ─────────────────────────────────────────────
+    primary: "#0B8F55",
+    primaryDark: "#087344",
+    primaryDarker: "#075C38",
+    primarySoft: "#EFF8E9",
+    primaryMuted: "#DFF1D5",
+
+    // ─────────────────────────────────────────────
+    // Supporting accents
+    // ─────────────────────────────────────────────
     orange: "#F59E0B",
+    orangeDark: "#E88900",
     orangeSoft: "#FFF7E6",
-    danger: "#EF4444",
-    dangerSoft: "#FEF2F2",
-    purple: "#8B5CF6",
-    purpleSoft: "#F5F3FF",
-    blue: "#3B82F6",
-    blueSoft: "#EFF6FF",
-    text: "#111827",
-    textSecondary: "#6B7280",
-    textTertiary: "#9CA3AF",
-    border: "#E5E7EB",
-    borderSoft: "#EEF2F0",
+
+    danger: "#EF476F",
+    dangerDark: "#D9365A",
+    dangerSoft: "#FFF0F3",
+
+    purple: "#7B61C9",
+    purpleDark: "#6549B2",
+    purpleSoft: "#F5F0FF",
+
+    blue: "#168FD3",
+    blueDark: "#0877B8",
+    blueSoft: "#EEF8FF",
+
+    lime: "#8BC34A",
+    limeSoft: "#F2F8E9",
+
+    // ─────────────────────────────────────────────
+    // Typography
+    // ─────────────────────────────────────────────
+    text: "#171B18",
+    textSecondary: "#606861",
+    textTertiary: "#929A94",
+    textOnPrimary: "#FFFFFF",
+
+    // ─────────────────────────────────────────────
+    // Borders
+    // ─────────────────────────────────────────────
+    border: "#E5EAE5",
+    borderSoft: "#EEF2ED",
+
+    // ─────────────────────────────────────────────
+    // Utility
+    // ─────────────────────────────────────────────
     white: "#FFFFFF",
     black: "#000000",
+    transparent: "transparent",
   },
 
   radius: {
-    small: 10,
+    small: 12,
     medium: 16,
     large: 22,
     xlarge: 28,
+    xxlarge: 32,
     pill: 999,
     circle: 999,
   },
@@ -39,6 +78,7 @@
     xl: 20,
     xxl: 24,
     xxxl: 32,
+    huge: 40,
   },
 
   typography: {
@@ -47,6 +87,7 @@
       medium: "Tajawal_500Medium",
       bold: "Tajawal_700Bold",
     },
+
     size: {
       xs: 12,
       sm: 14,
@@ -55,23 +96,50 @@
       xl: 22,
       xxl: 28,
       display: 32,
+      hero: 36,
+    },
+
+    lineHeight: {
+      sm: 20,
+      md: 24,
+      lg: 28,
+      xl: 32,
+      display: 42,
     },
   },
 
   shadows: {
     card: {
       shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.06,
+      shadowOffset: {
+        width: 0,
+        height: 2,
+      },
+      shadowOpacity: 0.045,
       shadowRadius: 8,
       elevation: 2,
     },
+
     floating: {
       shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.14,
-      shadowRadius: 12,
+      shadowOffset: {
+        width: 0,
+        height: 5,
+      },
+      shadowOpacity: 0.12,
+      shadowRadius: 14,
       elevation: 6,
+    },
+
+    search: {
+      shadowColor: "#000000",
+      shadowOffset: {
+        width: 0,
+        height: 3,
+      },
+      shadowOpacity: 0.07,
+      shadowRadius: 12,
+      elevation: 4,
     },
   },
 } as const;
