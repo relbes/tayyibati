@@ -107,8 +107,29 @@ export const GENERIC_DESCRIPTORS = new Set([
   "مشوي", "مشويه", "مقلي", "مقليه", "خام", "ناعم", "ناعمه", "خشن", "خشنه", "كامل", "كامله",
   // Sizes
   "كبير", "كبيره", "صغير", "صغيره", "متوسط", "متوسطه", "طويل", "طويله", "قصير", "قصيره",
+  // General Category Modifiers & Quantifiers
+  "بجميع", "بكل", "اشكاله", "اشكالها", "انواعه", "انواعها", "اشكال", "انواع", "مختلف", "كافة", "جميع",
   // Dish & Recipe Associations
   "منسف", "شراك", "كبسه", "كبسة", "برياني", "مندي", "مجدرة", "مجدره", "فتوش", "تبولة", "تبوله"
+]);
+
+/**
+ * Dedicated protein-specific descriptors for search and entity extraction.
+ */
+export const PROTEIN_DESCRIPTORS = new Set([
+  "لحم",
+  "لحوم",
+  "دجاج",
+  "دجاجه",
+  "ضان",
+  "ضاني",
+  "خروف",
+  "بقر",
+  "بقري",
+  "جمل",
+  "ديك",
+  "رومي",
+  "غنم",
 ]);
 
 export interface BaseEntityExtractionResult {
@@ -136,7 +157,12 @@ export function extractBaseEntityWithModifiers(query: string | null | undefined)
     const stripped = stripArticle(w);
     if (ARABIC_STOP_WORDS.has(w)) continue;
 
-    if (GENERIC_DESCRIPTORS.has(w) || GENERIC_DESCRIPTORS.has(stripped)) {
+    if (
+      GENERIC_DESCRIPTORS.has(w) ||
+      GENERIC_DESCRIPTORS.has(stripped) ||
+      PROTEIN_DESCRIPTORS.has(w) ||
+      PROTEIN_DESCRIPTORS.has(stripped)
+    ) {
       modifiers.push(w);
     } else {
       baseTokens.push(w);
@@ -167,4 +193,42 @@ export function extractBaseEntityWithModifiers(query: string | null | undefined)
 export function extractBaseEntity(query: string | null | undefined): string | null {
   const res = extractBaseEntityWithModifiers(query);
   return res ? res.baseEntity : null;
+}
+
+export interface QueryValidationResult {
+  isValid: boolean;
+  cleanedQuery: string;
+  reason?: "EMPTY" | "PUNCTUATION_ONLY" | "TOO_SHORT" | "NO_ALPHABETIC_CONTENT";
+}
+
+/**
+ * Generic query validator and confidence gate helper.
+ * Rejects empty, whitespace-only, punctuation-only ("###"), and single-character noise inputs ("a", ".").
+ */
+export function isMeaningfulQuery(input: string | null | undefined): QueryValidationResult {
+  if (!input || typeof input !== "string") {
+    return { isValid: false, cleanedQuery: "", reason: "EMPTY" };
+  }
+
+  const trimmed = input.trim();
+  if (!trimmed) {
+    return { isValid: false, cleanedQuery: "", reason: "EMPTY" };
+  }
+
+  // Strip punctuation, numbers, symbols to isolate alphabetic/Arabic text
+  const alphaContent = trimmed
+    .replace(/[\u064B-\u0652\u0640\u0670]/g, "") // strip diacritics
+    .replace(/[.,!?:;_\-\/\\#$%\^&\*\(\)\+=\[\]\{\}<>~`"'|\d]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!alphaContent) {
+    return { isValid: false, cleanedQuery: "", reason: "PUNCTUATION_ONLY" };
+  }
+
+  if (alphaContent.length < 2) {
+    return { isValid: false, cleanedQuery: alphaContent, reason: "TOO_SHORT" };
+  }
+
+  return { isValid: true, cleanedQuery: alphaContent };
 }

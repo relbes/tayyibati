@@ -15,7 +15,29 @@ async function buildAll() {
   await rm(distDir, { recursive: true, force: true });
 
   await esbuild({
-    entryPoints: [path.resolve(artifactDir, "src/index.ts")],
+    entryPoints: [
+      path.resolve(artifactDir, "src/index.ts"),
+      path.resolve(artifactDir, "src/scratch_test.ts"),
+      path.resolve(artifactDir, "src/test_phase8_step2_2_verify.ts"),
+      path.resolve(artifactDir, "src/inspect_db.ts"),
+      path.resolve(artifactDir, "src/api_verify.ts"),
+      path.resolve(artifactDir, "src/inspect_openai.ts"),
+      path.resolve(artifactDir, "src/runPlansMigration.ts"),
+      path.resolve(artifactDir, "src/inspect_search.ts"),
+      path.resolve(artifactDir, "src/check_shawarma_dishes.ts"),
+      path.resolve(artifactDir, "src/test_dish_equivalence_verification.ts"),
+      path.resolve(artifactDir, "src/test_search_separation.ts"),
+      path.resolve(artifactDir, "src/test_food_selection_flow.ts"),
+      path.resolve(artifactDir, "src/trace_runtime_search_flow.ts"),
+      path.resolve(artifactDir, "src/inspect_rice_family_members.ts"),
+      path.resolve(artifactDir, "src/inspect_bread_resolution.ts"),
+      path.resolve(artifactDir, "src/test_display_title_preservation.ts"),
+      path.resolve(artifactDir, "src/verify_e2e_titles.ts"),
+      path.resolve(artifactDir, "src/test_invalid_query_guard.ts"),
+      path.resolve(artifactDir, "src/test_food_family_ui_mode.ts"),
+      path.resolve(artifactDir, "src/scratch_inspect_dates.ts"),
+      path.resolve(artifactDir, "src/test_catalog_api_sync.ts")
+    ],
     platform: "node",
     bundle: true,
     format: "esm",

@@ -27,6 +27,10 @@ import {
   FileText,
   Camera,
   Tag,
+  Utensils,
+  Sparkles,
+  Bot,
+  Search,
 } from "lucide-react";
 
 const TEAL = "hsl(162, 64%, 29%)";
@@ -34,6 +38,7 @@ const GOLD = "hsl(43, 53%, 54%)";
 const RED = "hsl(0, 67%, 55%)";
 const GREEN = "hsl(145, 45%, 49%)";
 const BLUE = "hsl(208, 40%, 54%)";
+const PURPLE = "hsl(270, 50%, 55%)";
 
 function StatCard({
   title,
@@ -108,49 +113,10 @@ export default function Overview() {
   return (
     <div className="p-6 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">نظرة عامة</h1>
+        <h1 className="text-2xl font-bold">لوحة التحكم والنظرة العامة</h1>
         <p className="text-muted-foreground text-sm mt-0.5">
           إحصائيات مباشرة لمنصة طيباتي
         </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-        {loadingFoods ? (
-          <>
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-            <StatCardSkeleton />
-          </>
-        ) : (
-          <>
-            <StatCard
-              title="إجمالي الأغذية"
-              value={foodStats?.total ?? 0}
-              icon={Database}
-              color={TEAL}
-              sub={`${foodStats?.categories ?? 0} فئة`}
-            />
-            <StatCard
-              title="مسموح"
-              value={foodStats?.allowed ?? 0}
-              icon={CheckCircle}
-              color={GREEN}
-            />
-            <StatCard
-              title="ممنوع"
-              value={foodStats?.forbidden ?? 0}
-              icon={XCircle}
-              color={RED}
-            />
-            <StatCard
-              title="مشروط"
-              value={foodStats?.conditional ?? 0}
-              icon={AlertCircle}
-              color={GOLD}
-            />
-          </>
-        )}
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -159,27 +125,48 @@ export default function Overview() {
             <StatCardSkeleton />
             <StatCardSkeleton />
             <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
+            <StatCardSkeleton />
           </>
         ) : (
           <>
             <StatCard
-              title="إجمالي التحليلات"
-              value={adminStats?.totalAnalyses ?? 0}
-              icon={Activity}
+              title="الأغذية (Foods)"
+              value={(adminStats as any)?.totalFoods ?? foodStats?.total ?? 0}
+              icon={Database}
+              color={TEAL}
+              sub={`${foodStats?.categories ?? 0} فئة`}
+            />
+            <StatCard
+              title="الأطباق (Dishes)"
+              value={(adminStats as any)?.totalDishes ?? 0}
+              icon={Utensils}
               color={BLUE}
+            />
+            <StatCard
+              title="مراجعة المعرفة المعلقة"
+              value={(adminStats as any)?.pendingKnowledge ?? 0}
+              icon={Sparkles}
+              color={GOLD}
+            />
+            <StatCard
+              title="مراجعات الذكاء الاصطناعي"
+              value={(adminStats as any)?.pendingAiReviews ?? 0}
+              icon={Bot}
+              color={PURPLE}
             />
             <StatCard
               title="المستخدمون"
               value={adminStats?.totalUsers ?? 0}
               icon={Users}
-              color={TEAL}
+              color={GREEN}
             />
             <StatCard
-              title="متوسط الدرجة"
-              value={`${adminStats?.avgScore ?? 0}%`}
-              icon={TrendingUp}
-              color={GOLD}
-              sub="متوسط درجة التوافق"
+              title="بحث اليوم"
+              value={(adminStats as any)?.todaySearches ?? 0}
+              icon={Search}
+              color={BLUE}
             />
           </>
         )}

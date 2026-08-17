@@ -137,14 +137,88 @@ export async function getReviewStatistics() {
   };
 }
 
-export async function getReviewQueuePaginated(page: number = 1, pageSize: number = 50, statusFilter?: string) {
+import { foodsTable, dishes } from "@workspace/db";
+
+export async function getReviewQueuePaginated(
+  page: number = 1,
+  pageSize: number = 50,
+  statusFilter?: string,
+  searchQuery?: string
+) {
   const allRecords = await db.select().from(pendingKnowledgeReviewsTable);
+  const allFoods = await db.select().from(foodsTable);
+  const allDishes = await db.select().from(dishes);
 
-  const filtered = statusFilter
-    ? allRecords.filter((i) => i.status === statusFilter)
-    : allRecords;
+  // Map foods and dishes for fast lookup
+  const foodByIdMap = new Map(allFoods.map((f) => [f.id, f]));
+  const foodByNameNormMap = new Map(allFoods.map((f) => [norm(f.nameAr), f]));
+  const dishByNameNormMap = new Map(allDishes.map((d) => [norm(d.nameAr), d]));
 
-  const sorted = filtered.sort((a, b) => b.lastSeenAt.getTime() - a.lastSeenAt.getTime());
+  // Map raw DB records to rich UI objects
+  const mappedRecords = allRecords.map((rec) => {
+    let resolvedFood = rec.canonicalFoodId ? foodByIdMap.get(rec.canonicalFoodId) : undefined;
+    if (!resolvedFood) {
+      resolvedFood = foodByNameNormMap.get(rec.normalizedName);
+    }
+
+    let resolvedDish = rec.sourceDish ? dishByNameNormMap.get(norm(rec.sourceDish)) : undefined;
+
+    const itemType = resolvedFood ? "food" : resolvedDish ? "dish" : "ingredient";
+    const suggestedNameAr = rec.ingredientName || resolvedFood?.nameAr || resolvedDish?.nameAr || "كيان غير مرتبط";
+    const suggestedNameEn = resolvedFood?.nameEn || resolvedDish?.nameEn || null;
+
+    const confidenceVal = rec.aiConfidence ?? 0.85;
+    const confidenceScore = Math.round(confidenceVal > 1 ? confidenceVal : confidenceVal * 100);
+
+    const sourceLabel = rec.sourceDish
+      ? `${rec.sourceType === "camera" ? "كاميرا" : "بحث"} (${rec.sourceDish})`
+      : rec.sourceType === "camera"
+      ? "كاميرا"
+      : rec.sourceType === "ocr"
+      ? "مسح ضوئي"
+      : rec.sourceType === "barcode"
+      ? "باركود"
+      : "محرك الذكاء الاصطناعي (AI)";
+
+    return {
+      id: rec.id,
+      itemType,
+      suggestedNameAr,
+      suggestedNameEn,
+      status: rec.status,
+      source: sourceLabel,
+      confidenceScore,
+      createdAt: rec.firstSeenAt ? rec.firstSeenAt.toISOString() : rec.lastSeenAt.toISOString(),
+      notes: rec.reviewNotes,
+      ingredientName: rec.ingredientName,
+      normalizedName: rec.normalizedName,
+      sourceDish: rec.sourceDish,
+      sourceType: rec.sourceType,
+      seenCount: rec.seenCount,
+      canonicalFoodId: rec.canonicalFoodId || resolvedFood?.id || null,
+      resolvedFoodId: resolvedFood?.id || null,
+      resolvedDishId: resolvedDish?.id || null,
+      exampleQueries: rec.exampleQueries,
+    };
+  });
+
+  // Filter by status
+  let filtered = statusFilter && statusFilter !== "all"
+    ? mappedRecords.filter((i) => i.status === statusFilter)
+    : mappedRecords;
+
+  // Filter by search query
+  if (searchQuery && searchQuery.trim()) {
+    const q = norm(searchQuery.trim());
+    filtered = filtered.filter((i) =>
+      norm(i.suggestedNameAr).includes(q) ||
+      (i.suggestedNameEn && norm(i.suggestedNameEn).includes(q)) ||
+      norm(i.source).includes(q)
+    );
+  }
+
+  // Sort newest first
+  const sorted = filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   const totalItems = sorted.length;
   const totalPages = Math.ceil(totalItems / pageSize) || 1;
@@ -162,12 +236,42 @@ export async function getReviewQueuePaginated(page: number = 1, pageSize: number
 }
 
 export async function getReviewItemById(id: number) {
-  const [item] = await db
+  const [rec] = await db
     .select()
     .from(pendingKnowledgeReviewsTable)
     .where(eq(pendingKnowledgeReviewsTable.id, id))
     .limit(1);
-  return item || null;
+  if (!rec) return null;
+
+  const allFoods = await db.select().from(foodsTable);
+  const foodByIdMap = new Map(allFoods.map((f) => [f.id, f]));
+  const foodByNameNormMap = new Map(allFoods.map((f) => [norm(f.nameAr), f]));
+
+  let resolvedFood = rec.canonicalFoodId ? foodByIdMap.get(rec.canonicalFoodId) : undefined;
+  if (!resolvedFood) {
+    resolvedFood = foodByNameNormMap.get(rec.normalizedName);
+  }
+
+  const confidenceVal = rec.aiConfidence ?? 0.85;
+  const confidenceScore = Math.round(confidenceVal > 1 ? confidenceVal : confidenceVal * 100);
+
+  return {
+    id: rec.id,
+    itemType: resolvedFood ? "food" : rec.sourceDish ? "dish" : "ingredient",
+    suggestedNameAr: rec.ingredientName || resolvedFood?.nameAr || "كيان غير مرتبط",
+    suggestedNameEn: resolvedFood?.nameEn || null,
+    status: rec.status,
+    source: rec.sourceType,
+    confidenceScore,
+    createdAt: rec.firstSeenAt ? rec.firstSeenAt.toISOString() : rec.lastSeenAt.toISOString(),
+    notes: rec.reviewNotes,
+    ingredientName: rec.ingredientName,
+    normalizedName: rec.normalizedName,
+    sourceDish: rec.sourceDish,
+    sourceType: rec.sourceType,
+    seenCount: rec.seenCount,
+    canonicalFoodId: rec.canonicalFoodId || resolvedFood?.id || null,
+  };
 }
 
 export async function approveReviewItem(id: number, notes?: string) {

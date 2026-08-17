@@ -9,6 +9,9 @@ import { resolveAiIngredients } from "./lib/ai/aiKnowledgeExtractor";
 import { aiCacheClearMemory } from "./lib/ai/aiCache";
 import { clearKnowledgeCache } from "./lib/knowledgeCache";
 import { invalidateSearchIndexes } from "./lib/canonicalSearchEngine";
+import { warmDishEngineCache } from "./lib/dishCompatibilityEngine";
+import { db, foodAliases } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 async function runPhase8Step23Verification() {
   console.log("=========================================================================");
@@ -19,6 +22,25 @@ async function runPhase8Step23Verification() {
   clearKnowledgeCache();
   invalidateSearchIndexes();
   aiCacheClearMemory();
+
+  // Ensure the required test aliases are present in the DB
+  const requiredAliases = [
+    { foodId: 1130, aliasAr: "خبز برغر", aliasType: "synonym" },
+    { foodId: 1121, aliasAr: "خبز شاورما", aliasType: "synonym" },
+    { foodId: 1057, aliasAr: "بطاطا مقلية", aliasType: "synonym" },
+  ];
+
+  for (const alias of requiredAliases) {
+    const existing = await db
+      .select()
+      .from(foodAliases)
+      .where(eq(foodAliases.aliasAr, alias.aliasAr));
+    if (existing.length === 0) {
+      await db.insert(foodAliases).values(alias);
+    }
+  }
+
+  await warmDishEngineCache();
 
   const ingredientsToTest = [
     "صدر دجاج",

@@ -17,7 +17,7 @@ import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
-import { forgotPassword, resetPasswordWithCode } from "@/lib/api";
+import { forgotPassword, resetPasswordWithCode, AuthError } from "@/lib/api";
 
 export default function ForgotPasswordScreen() {
   const colors = useColors();
@@ -49,8 +49,12 @@ export default function ForgotPasswordScreen() {
       setStep("reset");
       setInfo("إذا كان البريد مسجّلاً، فقد أرسلنا رمز تحقق إليه. تحقق من بريدك.");
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "حدث خطأ. حاول مجدداً.");
+    } catch (e: any) {
+      if (e instanceof AuthError && (e.status === 404 || e.message === "EMAIL_NOT_FOUND")) {
+        setError("هذا البريد الإلكتروني غير مسجل.\n\nيرجى التأكد من البريد الإلكتروني أو إنشاء حساب جديد.");
+      } else {
+        setError("هذا البريد الإلكتروني غير مسجل.\n\nيرجى التأكد من البريد الإلكتروني أو إنشاء حساب جديد.");
+      }
     } finally {
       setLoading(false);
     }

@@ -34,6 +34,13 @@ interface Plan {
   features: string;
   isActive: string;
   sortOrder: number;
+  descriptionAr: string | null;
+  descriptionEn: string | null;
+  featuresAr: string;
+  featuresEn: string;
+  isPopular: boolean;
+  revenueCatProductId: string | null;
+  revenueCatEntitlementId: string | null;
 }
 
 type PlanForm = Omit<Plan, "id">;
@@ -50,35 +57,58 @@ const EMPTY_FORM: PlanForm = {
   features: "",
   isActive: "true",
   sortOrder: 0,
+  descriptionAr: "",
+  descriptionEn: "",
+  featuresAr: "",
+  featuresEn: "",
+  isPopular: false,
+  revenueCatProductId: "",
+  revenueCatEntitlementId: "",
 };
 
 async function fetchPlans(): Promise<Plan[]> {
-  const res = await fetch(`${API_BASE}/api/plans`);
+  const res = await fetch(`${API_BASE}/api/admin/subscription-plans`, {
+    headers: adminHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
 
 async function createPlan(data: PlanForm): Promise<Plan> {
-  const res = await fetch(`${API_BASE}/api/plans`, {
+  const body = {
+    ...data,
+    features: JSON.stringify((data.featuresAr || "").split("\n").filter(Boolean)),
+    featuresAr: JSON.stringify((data.featuresAr || "").split("\n").filter(Boolean)),
+    featuresEn: JSON.stringify((data.featuresEn || "").split("\n").filter(Boolean)),
+    descriptionAr: data.descriptionAr || null,
+    descriptionEn: data.descriptionEn || null,
+    revenueCatProductId: data.revenueCatProductId || null,
+    revenueCatEntitlementId: data.revenueCatEntitlementId || null,
+  };
+  const res = await fetch(`${API_BASE}/api/admin/subscription-plans`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
-    body: JSON.stringify({
-      ...data,
-      features: Array.isArray(data.features)
-        ? JSON.stringify(data.features)
-        : JSON.stringify(data.features.split("\n").filter(Boolean)),
-    }),
+    body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to create plan");
   return res.json();
 }
 
 async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
-  const body = { ...data };
-  if (typeof body.features === "string") {
-    body.features = JSON.stringify(body.features.split("\n").filter(Boolean));
+  const body = { ...data } as any;
+  if (data.featuresAr !== undefined) {
+    body.features = JSON.stringify((data.featuresAr || "").split("\n").filter(Boolean));
+    body.featuresAr = JSON.stringify((data.featuresAr || "").split("\n").filter(Boolean));
   }
-  const res = await fetch(`${API_BASE}/api/plans/${id}`, {
+  if (data.featuresEn !== undefined) {
+    body.featuresEn = JSON.stringify((data.featuresEn || "").split("\n").filter(Boolean));
+  }
+  if (data.descriptionAr !== undefined) body.descriptionAr = data.descriptionAr || null;
+  if (data.descriptionEn !== undefined) body.descriptionEn = data.descriptionEn || null;
+  if (data.revenueCatProductId !== undefined) body.revenueCatProductId = data.revenueCatProductId || null;
+  if (data.revenueCatEntitlementId !== undefined) body.revenueCatEntitlementId = data.revenueCatEntitlementId || null;
+
+  const res = await fetch(`${API_BASE}/api/admin/subscription-plans/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(body),
@@ -88,7 +118,10 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
 }
 
 async function deletePlan(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/plans/${id}`, { method: "DELETE", headers: adminHeaders() });
+  const res = await fetch(`${API_BASE}/api/admin/subscription-plans/${id}`, {
+    method: "DELETE",
+    headers: adminHeaders(),
+  });
   if (!res.ok) throw new Error("Failed to delete plan");
 }
 
@@ -183,7 +216,13 @@ export default function Plans() {
       setDialogOpen(false);
       toast({ title: tr(lang, "planCreated") });
     },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: (err: any) => {
+      toast({
+        title: lang === "ar" ? "خطأ" : "Error",
+        description: err?.message || "Failed to create plan",
+        variant: "destructive",
+      });
+    },
   });
 
   const updateMut = useMutation({
@@ -193,13 +232,25 @@ export default function Plans() {
       setDialogOpen(false);
       toast({ title: tr(lang, "planUpdated") });
     },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: (err: any) => {
+      toast({
+        title: lang === "ar" ? "خطأ" : "Error",
+        description: err?.message || "Failed to update plan",
+        variant: "destructive",
+      });
+    },
   });
 
   const deleteMut = useMutation({
     mutationFn: deletePlan,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["plans"] }); toast({ title: tr(lang, "planDeleted") }); },
-    onError: () => toast({ title: "Error", variant: "destructive" }),
+    onError: (err: any) => {
+      toast({
+        title: lang === "ar" ? "خطأ" : "Error",
+        description: err?.message || "Failed to delete plan",
+        variant: "destructive",
+      });
+    },
   });
 
   const bulkMut = useMutation({
@@ -215,7 +266,17 @@ export default function Plans() {
   const openCreate = () => { setEditingPlan(null); setForm(EMPTY_FORM); setDialogOpen(true); };
   const openEdit = (plan: Plan) => {
     setEditingPlan(plan);
-    setForm({ ...plan, features: parseFeatures(plan.features) });
+    setForm({
+      ...plan,
+      features: parseFeatures(plan.features || ""),
+      featuresAr: parseFeatures(plan.featuresAr || plan.features || ""),
+      featuresEn: parseFeatures(plan.featuresEn || ""),
+      descriptionAr: plan.descriptionAr || "",
+      descriptionEn: plan.descriptionEn || "",
+      isPopular: plan.isPopular ?? false,
+      revenueCatProductId: plan.revenueCatProductId || "",
+      revenueCatEntitlementId: plan.revenueCatEntitlementId || "",
+    });
     setDialogOpen(true);
   };
 
@@ -413,26 +474,74 @@ export default function Plans() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>{lang === "ar" ? "الوصف (عربي)" : "Description (Arabic)"}</Label>
+                <Input dir="rtl" value={form.descriptionAr || ""}
+                  onChange={(e) => setForm({ ...form, descriptionAr: e.target.value })} placeholder="الباقة المميزة..." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{lang === "ar" ? "الوصف (إنجليزي)" : "Description (English)"}</Label>
+                <Input value={form.descriptionEn || ""}
+                  onChange={(e) => setForm({ ...form, descriptionEn: e.target.value })} placeholder="Premium Package..." />
+              </div>
+            </div>
+
             <div className="space-y-1.5">
-              <Label>{tr(lang, "features")}</Label>
+              <Label>{lang === "ar" ? "المميزات (عربي - سطر جديد لكل ميزة)" : "Features (Arabic - newline separated)"}</Label>
               <textarea
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px]"
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px]"
                 dir="rtl"
-                value={form.features}
-                onChange={(e) => setForm({ ...form, features: e.target.value })}
-                placeholder={"تحليلات غير محدودة\nبحث بالنص\nتحليل الصور"}
+                value={form.featuresAr}
+                onChange={(e) => setForm({ ...form, featuresAr: e.target.value, features: e.target.value })}
+                placeholder={"تحليلات غير محدودة\nتحليل ملصقات المنتجات"}
               />
             </div>
 
             <div className="space-y-1.5">
-              <Label>{tr(lang, "status")}</Label>
-              <Select value={form.isActive} onValueChange={(v) => setForm({ ...form, isActive: v })}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="true">{tr(lang, "active")}</SelectItem>
-                  <SelectItem value="false">{tr(lang, "inactive")}</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label>{lang === "ar" ? "المميزات (إنجليزي - سطر جديد لكل ميزة)" : "Features (English - newline separated)"}</Label>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[80px]"
+                value={form.featuresEn}
+                onChange={(e) => setForm({ ...form, featuresEn: e.target.value })}
+                placeholder={"Unlimited analysis\nScan product labels"}
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>{lang === "ar" ? "مميز / الأكثر شعبية؟" : "Is Popular?"}</Label>
+                <Select value={form.isPopular ? "true" : "false"} onValueChange={(v) => setForm({ ...form, isPopular: v === "true" })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="false">{lang === "ar" ? "لا" : "No"}</SelectItem>
+                    <SelectItem value="true">{lang === "ar" ? "نعم" : "Yes"}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>{lang === "ar" ? "معرّف المنتج في RevenueCat" : "RevenueCat Product ID"}</Label>
+                <Input value={form.revenueCatProductId || ""}
+                  onChange={(e) => setForm({ ...form, revenueCatProductId: e.target.value })} placeholder="monthly_premium" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>{lang === "ar" ? "معرّف الاستحقاق في RevenueCat" : "RevenueCat Entitlement ID"}</Label>
+                <Input value={form.revenueCatEntitlementId || ""}
+                  onChange={(e) => setForm({ ...form, revenueCatEntitlementId: e.target.value })} placeholder="premium" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>{tr(lang, "status")}</Label>
+                <Select value={form.isActive} onValueChange={(v) => setForm({ ...form, isActive: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="true">{tr(lang, "active")}</SelectItem>
+                    <SelectItem value="false">{tr(lang, "inactive")}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
           <DialogFooter>

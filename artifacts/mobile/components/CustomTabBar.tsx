@@ -44,7 +44,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const borderColor = isDark ? "#2A3D35" : "#E5EFE9";
   const activeColor = isDark ? PRIMARY_DARK : PRIMARY;
   const inactiveColor = isDark ? "#5A7870" : "#8A9B95";
-  const bottomPad = Platform.OS === "android" ? 6 : Math.max(insets.bottom, 6);
+  const bottomPad = Math.max(insets.bottom + 8, 14);
 
   return (
     <View
@@ -94,7 +94,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
               >
                 <Icon
                   name={isFocused ? "camera" : "camera-outline"}
-                  size={28}
+                  size={30}
                   color="#ffffff"
                   strokeWidth={2}
                 />
@@ -124,7 +124,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           >
             <Icon
               name={isFocused ? tab.iconFocused : tab.icon}
-              size={22}
+              size={25}
               color={color}
               strokeWidth={isFocused ? 2.2 : 1.5}
             />
@@ -133,7 +133,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                 styles.label,
                 {
                   color,
-                  fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_400Regular",
+                  fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_500Medium",
                 },
               ]}
               numberOfLines={1}
@@ -153,8 +153,8 @@ const styles = StyleSheet.create({
     elevation: 16,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     alignItems: "flex-end",
   },
   tab: {
@@ -162,36 +162,36 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingTop: 8,
-    paddingBottom: 4,
+    paddingBottom: 6,
     gap: 3,
-    minHeight: 56,
+    minHeight: 66,
   },
   tabCamera: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingBottom: 4,
-    minHeight: 56,
+    paddingBottom: 6,
+    minHeight: 66,
   },
   cameraFab: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -24,
-    marginBottom: 2,
-    elevation: 6,
+    marginTop: -26,
+    marginBottom: 3,
+    elevation: 8,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
   },
   cameraLabel: {
-    fontSize: 11,
+    fontSize: 14.5,
     textAlign: "center",
   },
   label: {
-    fontSize: 11,
+    fontSize: 14.5,
     textAlign: "center",
   },
 });

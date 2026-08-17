@@ -65,8 +65,8 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
       }
     >
       {/* Top Header Row: Source Badge & Decision Badge (Only for 100% Pure Meals) */}
-      <View style={styles.topRow}>
-        <View style={[styles.sourceBadge, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.topRow, { flexDirection: "row-reverse" }]}>
+        <View style={[styles.sourceBadge, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row-reverse" }]}>
           <Icon
             name={inputType === "camera" ? "camera-outline" : "search-outline"}
             size={14}
@@ -79,7 +79,7 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
 
         {/* Case A: 100% Allowed */}
         {is100Allowed ? (
-          <View style={[styles.statusBadge, { backgroundColor: colors.allowed }]}>
+          <View style={[styles.statusBadge, { backgroundColor: colors.allowed, flexDirection: "row-reverse" }]}>
             <Icon name="checkmark-circle-outline" size={14} color={colors.card} />
             <Text style={[styles.statusBadgeText, { color: colors.card }]}>
               القرار النهائي: مسموح
@@ -89,7 +89,7 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
 
         {/* Case B: 100% Forbidden */}
         {is100Forbidden ? (
-          <View style={[styles.statusBadge, { backgroundColor: colors.forbidden }]}>
+          <View style={[styles.statusBadge, { backgroundColor: colors.forbidden, flexDirection: "row-reverse" }]}>
             <Icon name="close-circle-outline" size={14} color={colors.card} />
             <Text style={[styles.statusBadgeText, { color: colors.card }]}>
               القرار النهائي: محظور
@@ -102,15 +102,15 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
 
       {/* Main Title & Explanation */}
       <View style={styles.headerBlock}>
-        <Text style={[styles.mealTitle, { color: colors.foreground }]}>{recognizedName}</Text>
-        <Text style={[styles.summaryText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.mealTitle, { color: colors.foreground, textAlign: "right" }]}>{recognizedName}</Text>
+        <Text style={[styles.summaryText, { color: colors.mutedForeground, textAlign: "right" }]}>
           {summaryText || `تم تقييم حالة هذه الوجبة بناءً على المكونات المسجلة وحكم النظام.`}
         </Text>
       </View>
 
       {/* INGREDIENT COMPOSITION BREAKDOWN (Pure Composition Focus) */}
       <View style={[styles.compositionContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.compositionHeaderTitle, { color: colors.foreground }]}>
+        <Text style={[styles.compositionHeaderTitle, { color: colors.foreground, textAlign: "right" }]}>
           نسب مكونات الوجبة
         </Text>
 
@@ -118,9 +118,9 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
           {/* Allowed Ingredients Progress Bar */}
           {allowedCount > 0 ? (
             <View style={styles.barItem}>
-              <View style={styles.barLabelRow}>
-                <Text style={[styles.percentValue, { color: colors.allowed }]}>🟢 {allowedPct}%</Text>
+              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
                 <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات مسموحة</Text>
+                <Text style={[styles.percentValue, { color: colors.allowed }]}>🟢 {allowedPct}%</Text>
               </View>
               <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                 <View
@@ -136,9 +136,9 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
           {/* Forbidden Ingredients Progress Bar */}
           {forbiddenCount > 0 ? (
             <View style={styles.barItem}>
-              <View style={styles.barLabelRow}>
-                <Text style={[styles.percentValue, { color: colors.forbidden }]}>🔴 {forbiddenPct}%</Text>
+              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
                 <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات محظورة</Text>
+                <Text style={[styles.percentValue, { color: colors.forbidden }]}>🔴 {forbiddenPct}%</Text>
               </View>
               <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                 <View
@@ -154,9 +154,9 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
           {/* Conditional Ingredients Progress Bar */}
           {conditionalCount > 0 ? (
             <View style={styles.barItem}>
-              <View style={styles.barLabelRow}>
-                <Text style={[styles.percentValue, { color: colors.conditional }]}>🟡 {conditionalPct}%</Text>
+              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
                 <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات مشروطة</Text>
+                <Text style={[styles.percentValue, { color: colors.conditional }]}>🟡 {conditionalPct}%</Text>
               </View>
               <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                 <View
@@ -172,9 +172,9 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
           {/* Unresolved Ingredients Progress Bar */}
           {unresolvedCount > 0 ? (
             <View style={styles.barItem}>
-              <View style={styles.barLabelRow}>
-                <Text style={[styles.percentValue, { color: colors.unknown }]}>⚪ {unresolvedPct}%</Text>
+              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
                 <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات غير معروفة</Text>
+                <Text style={[styles.percentValue, { color: colors.unknown }]}>⚪ {unresolvedPct}%</Text>
               </View>
               <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
                 <View
@@ -192,7 +192,7 @@ export const ResultStatusCard = React.memo(function ResultStatusCard({
       {/* System Confidence Bar from backend */}
       {displayConfidence !== null ? (
         <View style={styles.confidenceWrap}>
-          <View style={styles.confidenceHeader}>
+          <View style={[styles.confidenceHeader, { flexDirection: "row-reverse" }]}>
             <Icon
               name="shield-checkmark-outline"
               size={14}

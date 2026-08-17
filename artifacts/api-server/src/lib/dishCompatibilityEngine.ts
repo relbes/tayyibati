@@ -29,6 +29,9 @@ export interface IngredientAnalysisItem {
   source: string;
   resolvedBy: "food" | "alias" | "unknown";
   provenance: "exact_food" | "food_alias" | "dish_recipe" | "ocr" | "ai_extracted";
+  proteinCategory?: string;
+  proteinSpecificity?: string;
+  priority?: string;
 }
 
 export interface EnrichedUnknownIngredient {
@@ -60,6 +63,9 @@ export interface DishAnalysisResult {
   forbiddenIngredients: IngredientAnalysisItem[];
   conditionalIngredients: IngredientAnalysisItem[];
   unknownIngredients: EnrichedUnknownIngredient[];
+  proteinCategory?: string;
+  proteinSpecificity?: string;
+  priority?: string;
   recognitionStats: {
     totalDetected: number;
     totalResolved: number;
@@ -76,6 +82,9 @@ export interface DishAnalysisResult {
     detailedReasonAr: string;
     detailedReasonEn: string;
   };
+  _trace_recipeIngredientsBefore?: string[];
+  _trace_recipeIngredientsAfterFiltering?: string[];
+  _trace_recipeIngredientsAfterSpecialization?: string[];
 }
 
 // In-Memory Cache Store for Fast Sub-Millisecond Lookups
@@ -258,7 +267,121 @@ export function getDishEngineCache(): DishEngineCache {
  * - 0  = unresolved (unknown)
  * Original detection source (e.g. AI extraction vs recipe) is preserved in `provenance` and `source`.
  */
-export function resolveSingleIngredient(
+function cleanTokenStem(w: string): string {
+  if (!w) return "";
+  const s = stripAlefLam(norm(w)).replace(/[\s()،,.\-\/]+/g, "");
+  return s.endsWith("ه") && s.length > 3 ? s.slice(0, -1) : s;
+}
+
+function evaluateGenericFoodFamily(
+  rawName: string,
+  cache: DishEngineCache,
+  isAiExtracted: boolean = false
+): IngredientAnalysisItem | null {
+  const n = norm(rawName);
+  const b = stripAlefLam(rawName);
+  const rawWords = b.split(/[\s()،,.\-\/]+/).map((w) => cleanTokenStem(w)).filter((w) => w.length > 0);
+
+  if (rawWords.length === 0 || b.length < 2) return null;
+
+  const baseToken = rawWords[0];
+
+  // Search cache.foodsById for candidate foods belonging to this generic base token family
+  const candidateMap = new Map<number, any>();
+
+  cache.foodsById.forEach((f) => {
+    const fNorm = norm(f.nameAr);
+    const fTokens = fNorm.split(/[\s()،,.\-\/]+/).map((t) => cleanTokenStem(t)).filter((t) => t.length > 0);
+
+    // Check if the food name tokens contain the base token stem
+    if (fTokens.includes(baseToken)) {
+      if (rawWords.length > 1) {
+        const remainingWords = rawWords.slice(1);
+        const matchesRemaining = remainingWords.every((rw) => fTokens.includes(rw));
+        if (matchesRemaining) {
+          candidateMap.set(f.id, f);
+        }
+      } else {
+        candidateMap.set(f.id, f);
+      }
+    }
+  });
+
+  if (candidateMap.size === 0 && rawWords.length > 1) {
+    // If exact multi-word candidate search yielded 0, fall back to baseToken candidates
+    cache.foodsById.forEach((f) => {
+      const fNorm = norm(f.nameAr);
+      const fTokens = fNorm.split(/[\s()،,.\-\/]+/).map((t) => cleanTokenStem(t)).filter((t) => t.length > 0);
+      if (fTokens.includes(baseToken)) {
+        candidateMap.set(f.id, f);
+      }
+    });
+  }
+
+  if (candidateMap.size === 0) {
+    return null; // No family candidates in database
+  }
+
+  const candidates = Array.from(candidateMap.values());
+  const allowedVariants = candidates.filter((f) => f.status === "allowed");
+  const forbiddenVariants = candidates.filter((f) => f.status !== "allowed");
+
+  let status: "allowed" | "forbidden" | "conditional" = "forbidden";
+  let reason = "";
+  let notes: string | null = "";
+  let foodId: number | null = null;
+  let canonicalFoodAr = rawName;
+  let canonicalFoodEn = rawName;
+
+  // CASE 1 — ALL FAMILY CANDIDATES ARE ALLOWED
+  if (allowedVariants.length > 0 && forbiddenVariants.length === 0) {
+    status = "allowed";
+    if (candidates.length === 1) {
+      foodId = candidates[0].id;
+      canonicalFoodAr = candidates[0].nameAr;
+      canonicalFoodEn = candidates[0].nameEn || candidates[0].nameAr;
+      reason = candidates[0].reason || `مكون ${rawName} مسموح وفق نظام الطيبات.`;
+      notes = candidates[0].notes || null;
+    } else {
+      foodId = null;
+      reason = `جميع أنواع ${rawName} المتوفرة في قاعدة البيانات مسموحة.`;
+      notes = "مسموح بجميع أنواعه";
+    }
+  }
+  // CASE 2 — MIXED FAMILY (Some allowed, some forbidden)
+  else if (allowedVariants.length > 0 && forbiddenVariants.length > 0) {
+    status = "forbidden";
+    foodId = null;
+    const allowedNames = Array.from(new Set(allowedVariants.map((f) => f.nameAr))).join("، ");
+    reason = `نوع ${rawName} غير محدد. مسموح فقط إذا كان من الأنواع المسموحة: ${allowedNames}.`;
+    notes = `مسموح فقط إذا كان من الأنواع المسموحة: ${allowedNames}`;
+  }
+  // CASE 3 — ALL FAMILY CANDIDATES FORBIDDEN
+  else if (allowedVariants.length === 0 && forbiddenVariants.length > 0) {
+    status = "forbidden";
+    foodId = candidates.length === 1 ? candidates[0].id : null;
+    reason = candidates.length === 1 && candidates[0].reason ? candidates[0].reason : `جميع أنواع ${rawName} المتوفرة في قاعدة البيانات محظورة.`;
+    notes = candidates.length === 1 && candidates[0].notes ? candidates[0].notes : "محظور نهائياً";
+  }
+
+  return {
+    rawIngredientName: rawName,
+    foodId,
+    canonicalFoodAr,
+    canonicalFoodEn,
+    status,
+    reason,
+    notes,
+    confidence: "MEDIUM",
+    confidenceScore: foodId !== null ? 80 : 50,
+    requirementType: "required",
+    source: isAiExtracted ? "AI Extracted Text (Generic Family Resolver)" : "Generic Family Knowledge Engine",
+    resolvedBy: "food",
+    provenance: isAiExtracted ? "ai_extracted" : "dish_recipe",
+  };
+}
+
+function resolveSingleIngredientInternal(
   rawName: string,
   cache: DishEngineCache,
   isAiExtracted: boolean = false
@@ -337,11 +460,64 @@ export function resolveSingleIngredient(
       };
     }
   }
+  // 3.5. Protein Category & Specificity Custom Resolver
+  const proteinInfo = resolveProteinIngredient(rawName);
+  if (proteinInfo) {
+    return {
+      rawIngredientName: rawName,
+      foodId: null,
+      canonicalFoodAr: proteinInfo.canonicalFoodAr,
+      canonicalFoodEn: proteinInfo.canonicalFoodEn,
+      status: proteinInfo.status,
+      reason: proteinInfo.reason,
+      notes: null,
+      confidence: "HIGH",
+      confidenceScore: 95, // High confidence for known category match
+      requirementType: "required",
+      source: isAiExtracted ? "AI Extracted Text (Protein Resolver)" : "Protein Resolver Engine",
+      resolvedBy: "food",
+      provenance: isAiExtracted ? "ai_extracted" : "exact_food",
+      proteinCategory: proteinInfo.proteinCategory,
+      proteinSpecificity: proteinInfo.proteinSpecificity,
+    };
+  }
+
+  // 3.6. Generic Food Family Evaluator
+  const genericFamilyRes = evaluateGenericFoodFamily(rawName, cache, isAiExtracted);
+  if (genericFamilyRes) {
+    return genericFamilyRes;
+  }
 
   // 4. Substring Partial Match (Final Match Quality Score: 70)
   for (const [foodNorm, fList] of cache.foodsByNormAr.entries()) {
     const f = fList[0];
-    if (f && foodNorm.length >= 3 && (n.includes(foodNorm) || foodNorm.includes(n))) {
+    
+    let isMatch = false;
+    if (f && foodNorm.length >= 3) {
+      if (n.includes(foodNorm)) {
+        isMatch = true;
+      } else if (foodNorm.includes(n)) {
+        // Candidate contains query. Check if candidate introduces additional specificity.
+        // Tokenize query and candidate.
+        const queryWords = n.split(/\s+/).map(w => stripAlefLam(w)).filter(w => w.length > 0);
+        const candidateWords = foodNorm.split(/\s+/).map(w => stripAlefLam(w)).filter(w => w.length > 0);
+        
+        // Find extra words in candidate that are not present in query.
+        const extraWords = candidateWords.filter(cw => !queryWords.includes(cw));
+        
+        // If there are any extra words at index > 0, the candidate introduces specificity.
+        const hasExtraModifiers = extraWords.some(ew => {
+          const index = candidateWords.indexOf(ew);
+          return index > 0;
+        });
+        
+        if (!hasExtraModifiers) {
+          isMatch = true;
+        }
+      }
+    }
+
+    if (f && foodNorm.length >= 3 && isMatch) {
       return {
         rawIngredientName: rawName,
         foodId: f.id,
@@ -425,6 +601,24 @@ export function resolveSingleIngredient(
   };
 }
 
+export function resolveSingleIngredient(
+  rawName: string,
+  cache: DishEngineCache,
+  isAiExtracted: boolean = false
+): IngredientAnalysisItem {
+  const resolved = resolveSingleIngredientInternal(rawName, cache, isAiExtracted);
+  const proteinInfo = getProteinFields(resolved.canonicalFoodAr || resolved.rawIngredientName);
+  resolved.proteinCategory = proteinInfo.proteinCategory;
+  resolved.proteinSpecificity = proteinInfo.proteinSpecificity;
+  if (proteinInfo.proteinCategory !== "NONE") {
+    const pInfo = resolveProteinIngredient(resolved.canonicalFoodAr || resolved.rawIngredientName);
+    if (pInfo) {
+      resolved.priority = pInfo.priority;
+    }
+  }
+  return resolved;
+}
+
 /**
  * Finds closest suggested canonical food for unknown ingredients
  */
@@ -453,9 +647,19 @@ function findSuggestedCanonical(rawName: string, cache: DishEngineCache): string
  */
 export async function analyzeDishCompatibility(
   dishIdentifier: number | string,
-  rawIngredientNamesOverride?: string[]
+  rawIngredientNamesOverride?: string[],
+  originalQuery?: string
 ): Promise<DishAnalysisResult> {
   const cache = await warmDishEngineCache();
+
+  // Determine query protein category context
+  const proteinContextQuery = originalQuery || (typeof dishIdentifier === "string" ? dishIdentifier : "");
+  const queryProtein = getProteinFields(proteinContextQuery);
+  if (queryProtein.proteinCategory === "MEAT" && queryProtein.proteinSpecificity === "UNSPECIFIED") {
+    queryProtein.proteinSpecificity = "BEEF";
+  } else if (queryProtein.proteinCategory === "POULTRY" && queryProtein.proteinSpecificity === "UNSPECIFIED") {
+    queryProtein.proteinSpecificity = "CHICKEN";
+  }
 
   let targetDish: any = null;
   let countryOrigins: string[] = ["الوطن العربي"];
@@ -480,16 +684,95 @@ export async function analyzeDishCompatibility(
     }
   }
 
+  let dishNameAr = targetDish ? targetDish.nameAr : (typeof dishIdentifier === "string" ? dishIdentifier : "");
+  let dishNameEn = targetDish ? targetDish.nameEn : (typeof dishIdentifier === "string" ? dishIdentifier : "");
+
+  if (targetDish && queryProtein.proteinCategory !== "NONE" && queryProtein.proteinSpecificity !== "UNSPECIFIED") {
+    const specialized = specializeDishName(
+      targetDish.nameAr,
+      targetDish.nameEn || targetDish.nameAr,
+      queryProtein.proteinCategory,
+      queryProtein.proteinSpecificity
+    );
+    dishNameAr = specialized.nameAr;
+    dishNameEn = specialized.nameEn;
+  }
+
   const recipeIngredientsToAnalyze: { rawName: string; reqType: "required" | "typical" | "optional" | "variation"; foodId?: number | null; isAi: boolean }[] = [];
+
+  const traceBefore: string[] = [];
+  const traceAfterFiltering: string[] = [];
+  const traceAfterSpecialization: string[] = [];
 
   if (targetDish) {
     countryOrigins = cache.countriesByDishId.get(targetDish.id) || ["الوطن العربي"];
     const recipeIngredients = cache.ingredientsByDishId.get(targetDish.id) || [];
     recipeIngredients.forEach((ri) => {
+      let rawName = ri.rawIngredientName;
+      let foodId = ri.foodId;
+
+      traceBefore.push(rawName);
+
+      // Determine protein characteristics of the recipe ingredient
+      const ingProtein = getProteinFields(rawName);
+
+      // Rule A/B: Exclude ingredients of a different protein category if query explicitly specifies one
+      if (queryProtein.proteinCategory !== "NONE" && ingProtein.proteinCategory !== "NONE") {
+        if (queryProtein.proteinCategory !== ingProtein.proteinCategory) {
+          // Skip alternative protein variation
+          return;
+        }
+      }
+
+      traceAfterFiltering.push(rawName);
+
+      // Rule 4: Generic-to-specific specialization
+      let specialized = false;
+      if (rawIngredientNamesOverride && rawIngredientNamesOverride.length > 0) {
+        if (ingProtein.proteinCategory !== "NONE" && ingProtein.proteinSpecificity === "UNSPECIFIED") {
+          // Find matching specific override of the same category
+          const matchingOverride = rawIngredientNamesOverride.find((overrideName) => {
+            const oProtein = getProteinFields(overrideName);
+            return oProtein.proteinCategory === ingProtein.proteinCategory && oProtein.proteinSpecificity !== "UNSPECIFIED";
+          });
+          if (matchingOverride) {
+            rawName = matchingOverride;
+            foodId = undefined; // Force re-resolution to specific food
+            specialized = true;
+          }
+        }
+      }
+
+      // If we couldn't specialize via overrides, specialize via query context protein
+      if (!specialized && ingProtein.proteinCategory !== "NONE" && ingProtein.proteinSpecificity === "UNSPECIFIED") {
+        if (queryProtein.proteinCategory === ingProtein.proteinCategory && queryProtein.proteinSpecificity !== "UNSPECIFIED") {
+          let specificName = rawName;
+          if (queryProtein.proteinSpecificity === "BEEF") {
+            specificName = "لحم بقر";
+          } else if (queryProtein.proteinSpecificity === "LAMB") {
+            specificName = "لحم غنم";
+          } else if (queryProtein.proteinSpecificity === "CHICKEN") {
+            specificName = "دجاج";
+          } else if (queryProtein.proteinSpecificity === "TURKEY") {
+            specificName = "ديك رومي";
+          } else if (queryProtein.proteinSpecificity === "DUCK") {
+            specificName = "بط";
+          } else if (queryProtein.proteinSpecificity === "CAMEL") {
+            specificName = "لحم جمل";
+          }
+          if (specificName !== rawName) {
+            rawName = specificName;
+            foodId = undefined; // Force re-resolution
+          }
+        }
+      }
+
+      traceAfterSpecialization.push(rawName);
+
       recipeIngredientsToAnalyze.push({
-        rawName: ri.rawIngredientName,
+        rawName,
         reqType: (ri.requirementType as any) || "required",
-        foodId: ri.foodId,
+        foodId,
         isAi: false,
       });
     });
@@ -606,7 +889,7 @@ export async function analyzeDishCompatibility(
   const lowestConfidence = allScores.length > 0 ? Math.min(...allScores) : 0;
 
   // Generate Explanation Summary
-  const dishTitle = targetDish ? targetDish.nameAr : typeof dishIdentifier === "string" ? dishIdentifier : "الطبق المودع";
+  const dishTitle = targetDish ? dishNameAr : typeof dishIdentifier === "string" ? dishIdentifier : "الطبق المودع";
 
   let summaryAr = "";
   let summaryEn = "";
@@ -641,8 +924,8 @@ export async function analyzeDishCompatibility(
     dish: targetDish
       ? {
           id: targetDish.id,
-          nameAr: targetDish.nameAr,
-          nameEn: targetDish.nameEn,
+          nameAr: dishNameAr,
+          nameEn: dishNameEn,
           category: targetDish.category,
           countryOrigins,
         }
@@ -660,6 +943,8 @@ export async function analyzeDishCompatibility(
     forbiddenIngredients,
     conditionalIngredients,
     unknownIngredients,
+    proteinCategory: detectDishProteinInfo(typeof dishIdentifier === "string" ? dishIdentifier : (targetDish ? targetDish.nameAr : ""), ingredientAnalysis).proteinCategory,
+    proteinSpecificity: detectDishProteinInfo(typeof dishIdentifier === "string" ? dishIdentifier : (targetDish ? targetDish.nameAr : ""), ingredientAnalysis).proteinSpecificity,
     recognitionStats: {
       totalDetected,
       totalResolved,
@@ -676,6 +961,9 @@ export async function analyzeDishCompatibility(
       detailedReasonAr,
       detailedReasonEn,
     },
+    _trace_recipeIngredientsBefore: traceBefore,
+    _trace_recipeIngredientsAfterFiltering: traceAfterFiltering,
+    _trace_recipeIngredientsAfterSpecialization: traceAfterSpecialization,
   };
 }
 
@@ -701,7 +989,7 @@ export function detectMainProtein(dishNameAr: string, ingredients: string[] = []
     return "🦐 روبيان";
   }
   if (allText.includes("لحم") || allText.includes("لحوم") || allText.includes("meat")) {
-    return "🐑 لحم ضأن";
+    return "🥩 نوع اللحم غير محدد";
   }
   return "🥗 نباتي";
 }
@@ -756,5 +1044,290 @@ export function getDishLightweightPreview(dishId: number): DishLightweightPrevie
     compatibilityScore,
     compatibilityStatus,
   };
+}
+
+export function specializeDishName(
+  dishNameAr: string,
+  dishNameEn: string,
+  proteinCategory: string,
+  proteinSpecificity: string
+): { nameAr: string; nameEn: string } {
+  if (proteinCategory === "NONE" || proteinSpecificity === "UNSPECIFIED") {
+    return { nameAr: dishNameAr, nameEn: dishNameEn };
+  }
+
+  let suffixAr = "";
+  let suffixEn = "";
+
+  switch (proteinSpecificity) {
+    case "BEEF":
+      suffixAr = "لحم بقر";
+      suffixEn = "Beef";
+      break;
+    case "LAMB":
+      suffixAr = "لحم غنم";
+      suffixEn = "Lamb";
+      break;
+    case "CHICKEN":
+      suffixAr = "دجاج";
+      suffixEn = "Chicken";
+      break;
+    case "TURKEY":
+      suffixAr = "ديك رومي";
+      suffixEn = "Turkey";
+      break;
+    case "DUCK":
+      suffixAr = "بط";
+      suffixEn = "Duck";
+      break;
+    case "CAMEL":
+      suffixAr = "لحم جمل";
+      suffixEn = "Camel";
+      break;
+    case "OSTRICH":
+      suffixAr = "نعام";
+      suffixEn = "Ostrich";
+      break;
+    case "PIGEON":
+      suffixAr = "حمام";
+      suffixEn = "Pigeon";
+      break;
+    case "QUAIL":
+      suffixAr = "سمان";
+      suffixEn = "Quail";
+      break;
+  }
+
+  let specializedAr = dishNameAr;
+  let specializedEn = dishNameEn;
+
+  if (suffixAr && !dishNameAr.includes(suffixAr)) {
+    specializedAr = `${dishNameAr} ${suffixAr}`;
+  }
+
+  if (suffixEn && !dishNameEn.toLowerCase().includes(suffixEn.toLowerCase())) {
+    specializedEn = `${dishNameEn} (${suffixEn})`;
+  }
+
+  return { nameAr: specializedAr, nameEn: specializedEn };
+}
+
+export function getProteinFields(nameAr: string): { proteinCategory: string; proteinSpecificity: string } {
+  const n = norm(nameAr);
+
+  // 1. POULTRY
+  if (n.includes("دجاج") || n.includes("دجاجه") || n.includes("فراخ") || n.includes("جاج") || n.includes("chicken")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "CHICKEN" };
+  }
+  if ((n.includes("بط") || n.includes("duck")) && !n.includes("بطاط")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "DUCK" };
+  }
+  if ((n.includes("رومي") || n.includes("حبش") || n.includes("turkey")) && !n.includes("جبن")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "TURKEY" };
+  }
+  if (n.includes("نعام") || n.includes("ostrich")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "OSTRICH" };
+  }
+  if (n.includes("حمام") || n.includes("pigeon")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "PIGEON" };
+  }
+  if (n.includes("سمان") || n.includes("quail")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "QUAIL" };
+  }
+  if (n.includes("طيور") || n.includes("دواجن") || n.includes("طير") || n.includes("poultry")) {
+    return { proteinCategory: "POULTRY", proteinSpecificity: "UNSPECIFIED" };
+  }
+
+  // 2. MEAT
+  if (n.includes("ضان") || n.includes("ضأن") || n.includes("خروف") || n.includes("غنم") || n.includes("ماعز") || n.includes("lamb") || n.includes("mutton") || n.includes("goat")) {
+    return { proteinCategory: "MEAT", proteinSpecificity: "LAMB" };
+  }
+  if (n.includes("بقر") || n.includes("عجل") || n.includes("beef") || n.includes("veal")) {
+    return { proteinCategory: "MEAT", proteinSpecificity: "BEEF" };
+  }
+  if (n.includes("جاموس") || n.includes("buffalo")) {
+    return { proteinCategory: "MEAT", proteinSpecificity: "BUFFALO" };
+  }
+  if (n.includes("جمل") || n.includes("حاشي") || n.includes("ابل") || n.includes("camel")) {
+    return { proteinCategory: "MEAT", proteinSpecificity: "CAMEL" };
+  }
+  if (n.includes("لحم") || n.includes("لحوم") || n.includes("meat")) {
+    return { proteinCategory: "MEAT", proteinSpecificity: "UNSPECIFIED" };
+  }
+
+  return { proteinCategory: "NONE", proteinSpecificity: "NONE" };
+}
+
+export function resolveProteinIngredient(rawName: string) {
+  const info = getProteinFields(rawName);
+  if (info.proteinCategory === "NONE") {
+    return null;
+  }
+
+  let status: "allowed" | "forbidden" | "conditional" = "conditional";
+  let canonicalFoodAr = rawName;
+  let canonicalFoodEn = rawName;
+  let priority = "none";
+  let reason = "تقييم بروتين حسب قواعد طيباتي";
+
+  if (info.proteinCategory === "POULTRY") {
+    if (info.proteinSpecificity === "CHICKEN") {
+      status = "forbidden";
+      canonicalFoodAr = "دجاج";
+      canonicalFoodEn = "Chicken";
+      reason = "الدجاج التجاري ممنوع في نظام طيباتي.";
+    } else if (info.proteinSpecificity === "DUCK") {
+      status = "forbidden";
+      canonicalFoodAr = "بط";
+      canonicalFoodEn = "Duck";
+      reason = "البط ممنوع في نظام طيباتي.";
+    } else if (info.proteinSpecificity === "TURKEY") {
+      status = "forbidden";
+      canonicalFoodAr = "ديك رومي";
+      canonicalFoodEn = "Turkey";
+      reason = "الديك الرومي ممنوع في نظام طيباتي.";
+    } else if (info.proteinSpecificity === "OSTRICH") {
+      status = "forbidden";
+      canonicalFoodAr = "نعام";
+      canonicalFoodEn = "Ostrich";
+      reason = "النعام ممنوع في نظام طيباتي.";
+    } else if (info.proteinSpecificity === "PIGEON") {
+      status = "allowed";
+      canonicalFoodAr = "حمام";
+      canonicalFoodEn = "Pigeon";
+      reason = "الحمام مسموح في نظام طيباتي.";
+    } else if (info.proteinSpecificity === "QUAIL") {
+      status = "allowed";
+      canonicalFoodAr = "سمان";
+      canonicalFoodEn = "Quail";
+      reason = "السمان مسموح في نظام طيباتي.";
+    } else {
+      status = "forbidden";
+      canonicalFoodAr = rawName;
+      canonicalFoodEn = "Unspecified Poultry";
+      reason = "نوع الطيور غير محدد. مسموح فقط الحمام والسمان، وممنوع الدجاج والبط والديك الرومي والنعام.";
+    }
+  } else if (info.proteinCategory === "MEAT") {
+    if (info.proteinSpecificity === "LAMB") {
+      status = "allowed";
+      canonicalFoodAr = "لحم غنم";
+      canonicalFoodEn = "Lamb";
+      priority = "preferred";
+      reason = "لحم الضأن (الخروف والماعز) هو الخيار الأول والمفضل بمعدل مرتين أسبوعياً.";
+    } else if (info.proteinSpecificity === "BEEF") {
+      status = "allowed";
+      canonicalFoodAr = "لحم بقر";
+      canonicalFoodEn = "Beef";
+      priority = "allowed_with_conditions";
+      reason = "مسموح بشرط أن يكون بلديًا ومغذى تغذية طبيعية (بمعدل مرة أسبوعياً ومطهو جيداً بالغلْي).";
+    } else if (info.proteinSpecificity === "BUFFALO") {
+      status = "allowed";
+      canonicalFoodAr = "لحم جاموس";
+      canonicalFoodEn = "Buffalo";
+      priority = "allowed_with_conditions";
+      reason = "مسموح بشرط أن يكون بلديًا ومغذى تغذية طبيعية (بمعدل مرة أسبوعياً ومطهو جيداً بالغلْي).";
+    } else if (info.proteinSpecificity === "CAMEL") {
+      status = "allowed";
+      canonicalFoodAr = "لحم جمل";
+      canonicalFoodEn = "Camel";
+      priority = "allowed_with_conditions";
+      reason = "مسموح بشرط أن يكون بلديًا ومغذى تغذية طبيعية (بمعدل مرة أسبوعياً ومطهو جيداً بالغلْي).";
+    } else {
+      status = "forbidden";
+      canonicalFoodAr = rawName;
+      canonicalFoodEn = "Unspecified Meat";
+      reason = "نوع اللحم غير محدد. مسموح فقط لحم الضأن، ولحم البقر والجاموس والجمل البلدي المغذى طبيعياً.";
+    }
+  }
+
+  return {
+    status,
+    canonicalFoodAr,
+    canonicalFoodEn,
+    proteinCategory: info.proteinCategory,
+    proteinSpecificity: info.proteinSpecificity,
+    priority,
+    reason,
+  };
+}
+
+export function detectDishProteinInfo(
+  query: string,
+  ingredients: { proteinCategory?: string; proteinSpecificity?: string }[]
+): { proteinCategory: string; proteinSpecificity: string } {
+  const queryProtein = getProteinFields(query);
+  if (queryProtein.proteinCategory !== "NONE") {
+    if (queryProtein.proteinSpecificity === "UNSPECIFIED") {
+      const specificIng = ingredients.find(
+        (ing) =>
+          ing.proteinCategory === queryProtein.proteinCategory &&
+          ing.proteinSpecificity &&
+          ing.proteinSpecificity !== "UNSPECIFIED" &&
+          ing.proteinSpecificity !== "NONE"
+      );
+      if (specificIng) {
+        return {
+          proteinCategory: queryProtein.proteinCategory,
+          proteinSpecificity: specificIng.proteinSpecificity,
+        };
+      }
+    }
+    return queryProtein;
+  }
+
+  let category = "NONE";
+  let specificity = "NONE";
+
+  for (const ing of ingredients) {
+    if (ing.proteinCategory && ing.proteinCategory !== "NONE") {
+      if (category === "NONE" || ing.proteinCategory === "POULTRY") {
+        category = ing.proteinCategory;
+        specificity = ing.proteinSpecificity || "UNSPECIFIED";
+      }
+    }
+  }
+
+  return { proteinCategory: category, proteinSpecificity: specificity };
+}
+
+export function isPureProteinQuery(query: string): boolean {
+  const n = norm(query);
+  const pureProteinKeywords = [
+    "لحم", "لحوم", "طيور", "دواجن", "طير", "حمام", "سمان", "دجاج", "دجاجه",
+    "جاج", "فراخ", "بط", "رومي", "ديك رومي", "حبش", "نعام", "لحم غنم", "لحم ضأن", "لحم بقر",
+    "لحم جاموس", "لحم جمل", "غنم", "بقر", "جاموس", "جمل"
+  ];
+  return pureProteinKeywords.includes(n);
+}
+
+export function getClarificationData(query: string, category: string) {
+  if (category === "MEAT") {
+    return {
+      needsClarification: true,
+      clarificationType: "PROTEIN_SPECIFICATION",
+      questionAr: "ما نوع اللحم الذي تقصده؟",
+      suggestions: [
+        { label: "لحم غنم", proteinCategory: "MEAT", proteinSpecificity: "LAMB" },
+        { label: "لحم بقر", proteinCategory: "MEAT", proteinSpecificity: "BEEF" },
+        { label: "لحم جاموس", proteinCategory: "MEAT", proteinSpecificity: "BUFFALO" },
+        { label: "لحم جمل", proteinCategory: "MEAT", proteinSpecificity: "CAMEL" }
+      ]
+    };
+  } else if (category === "POULTRY") {
+    return {
+      needsClarification: true,
+      clarificationType: "PROTEIN_SPECIFICATION",
+      questionAr: "ما نوع الطيور الذي تقصده؟",
+      suggestions: [
+        { label: "حمام", proteinCategory: "POULTRY", proteinSpecificity: "PIGEON" },
+        { label: "سمان", proteinCategory: "POULTRY", proteinSpecificity: "QUAIL" },
+        { label: "دجاج", proteinCategory: "POULTRY", proteinSpecificity: "CHICKEN" },
+        { label: "بط", proteinCategory: "POULTRY", proteinSpecificity: "DUCK" },
+        { label: "ديك رومي", proteinCategory: "POULTRY", proteinSpecificity: "TURKEY" },
+        { label: "نعام", proteinCategory: "POULTRY", proteinSpecificity: "OSTRICH" }
+      ]
+    };
+  }
+  return null;
 }
 

@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Tayyibati Production Master Logo (Approved Brand Identity - Emblem + Brand Name ONLY, NO slogan) -->
+  <defs>
+    <linearGradient id="bowlGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1B7A5E"/>
+      <stop offset="100%" stop-color="#125642"/>
+    </linearGradient>
+    <linearGradient id="peachGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFA826"/>
+      <stop offset="100%" stop-color="#F15A24"/>
+    </linearGradient>
+    <linearGradient id="arcGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4CB538"/>
+      <stop offset="100%" stop-color="#1B7A5E"/>
+    </linearGradient>
+    <linearGradient id="arcGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB326"/>
+      <stop offset="100%" stop-color="#F7931E"/>
+    </linearGradient>
+  </defs>
+
+  <g transform="translate(0, -20)">
+    <!-- 1. Circular Arc Outer Enclosure -->
+    <!-- Left Green Arc -->
+    <path d="M 280,420 C 260,260 380,140 512,140 C 580,140 640,165 680,210" 
+          fill="none" stroke="url(#arcGreen)" stroke-width="26" stroke-linecap="round"/>
+    
+    <!-- Right Gold Arc Segment -->
+    <path d="M 680,240 C 705,280 715,330 710,380" 
+          fill="none" stroke="url(#arcGold)" stroke-width="22" stroke-linecap="round"/>
+
+    <!-- Decorative Dots -->
+    <circle cx="470" cy="225" r="16" fill="#F7931E"/>
+    <circle cx="430" cy="275" r="18" fill="#4CB538"/>
+
+    <!-- 2. Heart Peach Emblem (Center) -->
+    <!-- Heart shape with peach warm gradient -->
+    <path d="M 600,245 C 640,210 690,260 660,310 L 600,385 L 540,310 C 510,260 560,210 600,245 Z" 
+          fill="url(#peachGrad)"/>
+    <!-- Small Leaf on Peach -->
+    <path d="M 600,245 C 605,215 630,200 640,205 C 635,230 615,245 600,245 Z" 
+          fill="#4CB538"/>
+
+    <!-- 3. Left Green Leaves inside Bowl -->
+    <!-- Large Leaf -->
+    <path d="M 370,360 C 370,290 440,270 475,325 C 475,385 410,420 370,360 Z" 
+          fill="#4CB538"/>
+    <!-- Medium Leaf overlay -->
+    <path d="M 430,370 C 430,315 485,300 510,345 C 510,390 460,415 430,370 Z" 
+          fill="#3E992B"/>
+
+    <!-- 4. Bowl Base -->
+    <path d="M 310,410 C 320,530 450,570 512,570 C 574,570 704,530 714,410 C 660,445 570,465 512,465 C 454,465 364,445 310,410 Z" 
+          fill="url(#bowlGrad)"/>
+    <!-- Bowl Foot Stand -->
+    <path d="M 440,555 C 470,585 554,585 584,555 C 564,595 460,595 440,555 Z" 
+          fill="#125642"/>
+
+    <!-- 5. Arabic Brand Typography: "طيباتي" (No Slogan) -->
+    <g fill="#1B7A5E">
+      <!-- Letter ط (Ta) -->
+      <path d="M 230,685 C 240,640 280,630 320,670 C 340,690 350,710 320,740 C 270,740 230,730 230,685 Z M 275,690 C 285,670 310,670 315,695 C 315,710 290,715 275,690 Z" />
+      <path d="M 305,580 L 305,680 L 285,680 L 285,580 Z" /> <!-- Vertical Stem of Ta -->
+
+      <!-- Connecting stroke to ي (Ya) & ب (Ba) & ا (Alif) -->
+      <!-- letter ي (Ya) & ب (Ba) loop -->
+      <path d="M 320,735 C 360,735 385,660 420,660 C 455,660 470,735 510,735 C 550,735 575,660 610,660 C 645,660 660,735 700,735 C 730,735 745,690 770,690 L 785,710 C 755,710 735,765 690,765 C 645,765 630,690 600,690 C 570,690 555,765 500,765 C 445,765 430,690 400,690 C 370,690 350,765 310,765 Z" />
+
+      <!-- Vertical Alif stroke inside Tayyibati -->
+      <path d="M 525,600 L 525,720 L 500,720 L 500,600 Z" />
+      <!-- Vertical Ta stroke -->
+      <path d="M 645,600 L 645,720 L 620,720 L 620,600 Z" />
+
+      <!-- Final Ya tail (ي) -->
+      <path d="M 770,690 Q 800,690 810,740 Q 800,780 750,770 L 755,745 Q 780,750 785,730 Q 775,715 755,715 Z" />
+    </g>
+
+    <!-- Diacritic Dots (Orange Accent #F7931E and Green #1B7A5E) -->
+    <!-- Dots for Ya 1 -->
+    <circle cx="270" cy="785" r="15" fill="#1B7A5E"/>
+    <circle cx="310" cy="785" r="15" fill="#1B7A5E"/>
+
+    <!-- Dot for Ba -->
+    <circle cx="440" cy="785" r="15" fill="#F7931E"/>
+
+    <!-- Dots for Ya 2 -->
+    <circle cx="585" cy="785" r="15" fill="#F7931E"/>
+    <circle cx="625" cy="785" r="15" fill="#F7931E"/>
+  </g>
+</svg>

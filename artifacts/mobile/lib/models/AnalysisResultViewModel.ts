@@ -3,10 +3,33 @@ import type { MealDecisionVM, MealDecisionItemVM } from "./MealDecisionVM";
 import type { CanonicalResultVM } from "./CanonicalResultVM";
 import type { AnalysisReport } from "@/context/AnalysisContext";
 
+import { extractBaseEntityWithModifiers } from "../../../api-server/src/lib/arabicNormalization";
+
+export type ResultPresentationMode = "GENERIC_FOOD_FAMILY" | "SPECIFIC_FOOD" | "DISH" | "NOT_FOUND";
+
+export interface FoodFamilyMemberVM {
+  nameAr: string;
+  nameEn?: string;
+  status: "allowed" | "forbidden" | "conditional";
+  reason?: string;
+  notes?: string;
+}
+
+export interface FoodFamilyViewModel {
+  familyName: string;
+  familyStatus: "allowed" | "forbidden" | "conditional" | "mixed";
+  summaryText: string;
+  allowedVariants: FoodFamilyMemberVM[];
+  forbiddenVariants: FoodFamilyMemberVM[];
+  conditionalVariants: FoodFamilyMemberVM[];
+}
+
 export interface AnalysisResultViewModel {
   inputType: "text" | "camera";
   originalInput: string;
   recognizedName: string;
+  presentationMode: ResultPresentationMode;
+  familyViewModel?: FoodFamilyViewModel | null;
   analysis?: AnalysisReport | null;
   ingredientDecisions: IngredientDecisionVM[];
   mealDecision: MealDecisionVM | null;
@@ -27,11 +50,12 @@ export function createAnalysisResultViewModel(
   const rawCanonical = report.canonicalResult as any;
 
   const recognizedName =
-    report.aiKnowledge?.canonicalName ||
+    (report as any).displayQuery ||
+    report.query ||
+    report.primaryRuling?.nameAr ||
     rawCanonical?.canonical_name ||
     rawCanonical?.canonicalName ||
-    report.primaryRuling?.nameAr ||
-    report.query ||
+    report.aiKnowledge?.canonicalName ||
     "مأكولات ومشروبات";
 
   const originalInput = report.query || recognizedName;
@@ -154,10 +178,96 @@ export function createAnalysisResultViewModel(
       }
     : null;
 
+  // -------------------------------------------------------------------------
+  // Presentation Mode Classification
+  // -------------------------------------------------------------------------
+  let presentationMode: ResultPresentationMode = "SPECIFIC_FOOD";
+  let familyViewModel: FoodFamilyViewModel | null = null;
+
+  if (report.notFound || report.resultMode === "NOT_FOUND") {
+    presentationMode = "NOT_FOUND";
+  } else if (
+    report.resultMode === "COMPOSITE_FOOD" ||
+    report.resultMode === "MULTIPLE_DISHES" ||
+    report.analysisType === "image" ||
+    report.analysisType === "label" ||
+    (report as any).entityType === "dish" ||
+    ((report as any).dish !== undefined && report.resultMode === "COMPOSITE_FOOD")
+  ) {
+    presentationMode = "DISH";
+  } else if (report.resultMode === "EXACT_FOOD") {
+    const hasFamilyData =
+      Boolean((report as any).familySummary) ||
+      Boolean((report as any).familyStatus) ||
+      Boolean((report as any).allowedExceptions?.length) ||
+      Boolean((report as any).prohibitedExceptions?.length) ||
+      Boolean((report as any).forbiddenExceptions?.length);
+
+    const queryText = (report as any).displayQuery || report.query || "";
+    const baseWithMod = extractBaseEntityWithModifiers(queryText);
+    const hasModifiers = Boolean(baseWithMod && baseWithMod.modifiers && baseWithMod.modifiers.length > 0);
+
+    const isGenericFamily = hasFamilyData && !hasModifiers;
+
+    if (isGenericFamily) {
+      presentationMode = "GENERIC_FOOD_FAMILY";
+
+      const allowedVariants: FoodFamilyMemberVM[] = (report.allowed || []).map((i) => ({
+        nameAr: i.nameAr || i.name || "",
+        nameEn: i.nameEn,
+        status: "allowed" as const,
+        reason: i.dbReason || i.reason,
+        notes: i.notes,
+      }));
+
+      const forbiddenVariants: FoodFamilyMemberVM[] = (report.forbidden || []).map((i) => ({
+        nameAr: i.nameAr || i.name || "",
+        nameEn: i.nameEn,
+        status: "forbidden" as const,
+        reason: i.dbReason || i.reason,
+        notes: i.notes,
+      }));
+
+      const conditionalVariants: FoodFamilyMemberVM[] = (report.conditional || []).map((i) => ({
+        nameAr: i.nameAr || i.name || "",
+        nameEn: i.nameEn,
+        status: "conditional" as const,
+        reason: i.dbReason || i.reason,
+        notes: i.notes,
+      }));
+
+      const rawFamilyStatus = (report as any).familyStatus || report.primaryRuling?.status || "allowed";
+      let familyStatus: "allowed" | "forbidden" | "conditional" | "mixed" = rawFamilyStatus as any;
+
+      if (allowedVariants.length > 0 && (forbiddenVariants.length > 0 || conditionalVariants.length > 0)) {
+        familyStatus = "mixed";
+      }
+
+      const summaryText =
+        (report as any).familySummary ||
+        report.explanation ||
+        report.primaryRuling?.dbReason ||
+        "حالة هذه الفئة من الأطعمة وفق نظام الطيباتي.";
+
+      familyViewModel = {
+        familyName: recognizedName,
+        familyStatus,
+        summaryText,
+        allowedVariants,
+        forbiddenVariants,
+        conditionalVariants,
+      };
+    } else {
+      presentationMode = "SPECIFIC_FOOD";
+    }
+  }
+
   return {
     inputType,
     originalInput,
     recognizedName,
+    presentationMode,
+    familyViewModel,
     analysis: report,
     ingredientDecisions: finalDecisions,
     mealDecision,

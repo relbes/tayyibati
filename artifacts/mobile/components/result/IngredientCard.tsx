@@ -67,7 +67,7 @@ export const IngredientCard = React.memo(function IngredientCard({ ingredient }:
       accessibilityLabel={`${ingredient.input}: ${cfg.label}. ${ingredient.reason || ""}`}
     >
       <TouchableOpacity
-        style={styles.mainRow}
+        style={[styles.mainRow, { flexDirection: "row-reverse" }]}
         onPress={toggleReason}
         activeOpacity={ingredient.reason ? 0.7 : 1}
         disabled={!ingredient.reason}
@@ -78,9 +78,9 @@ export const IngredientCard = React.memo(function IngredientCard({ ingredient }:
 
         <View style={styles.infoWrap}>
           {/* User Input Name ONLY - Canonical names are hidden unless Dev Mode */}
-          <Text style={[styles.inputName, { color: colors.foreground }]}>{ingredient.input}</Text>
+          <Text style={[styles.inputName, { color: colors.foreground, textAlign: "right" }]}>{ingredient.input}</Text>
           {ingredient.reason && !showReason ? (
-            <Text style={[styles.reasonPreview, { color: colors.mutedForeground }]} numberOfLines={1}>
+            <Text style={[styles.reasonPreview, { color: colors.mutedForeground, textAlign: "right" }]} numberOfLines={1}>
               {ingredient.reason}
             </Text>
           ) : null}
@@ -101,9 +101,9 @@ export const IngredientCard = React.memo(function IngredientCard({ ingredient }:
 
       {/* Expanded Reason Text */}
       {showReason && ingredient.reason ? (
-        <View style={[styles.expandedReasonBox, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={[styles.expandedReasonBox, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row-reverse" }]}>
           <Icon name="information-circle-outline" size={16} color={cfg.color} />
-          <Text style={[styles.reasonText, { color: colors.foreground }]}>{ingredient.reason}</Text>
+          <Text style={[styles.reasonText, { color: colors.foreground, textAlign: "right" }]}>{ingredient.reason}</Text>
         </View>
       ) : null}
 

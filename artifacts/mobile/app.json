@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F4EDCC"
+      "backgroundColor": "#F7F9F6"
     },
     "ios": {
       "supportsTablet": false,
@@ -29,10 +29,11 @@
     },
     "android": {
       "package": "com.tayyibati.app",
+      "usesCleartextTraffic": true,
       "versionCode": 7,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
-        "backgroundColor": "#1B7A5E"
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#F7F9F6"
       },
       "permissions": [
         "android.permission.CAMERA",

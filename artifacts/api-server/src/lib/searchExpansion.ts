@@ -115,15 +115,19 @@ export function expandSearchQuery(query: string): string[] {
     variants.add(`ال${strippedQ}`);
   }
 
-  // Check synonym dictionary
-  const directSynonyms = SYNONYM_DICTIONARY.get(normQ) || SYNONYM_DICTIONARY.get(strippedQ) || [];
-  for (const syn of directSynonyms) {
-    variants.add(syn);
-    const strippedSyn = stripArticle(syn);
-    if (strippedSyn) {
-      variants.add(strippedSyn);
-      variants.add(`ال${strippedSyn}`);
+  // Initial Alef variation expansion (e.g. "رز" <-> "ارز" <-> "أرز" <-> "الأرز")
+  if (normQ.startsWith("ا") || normQ.startsWith("أ") || normQ.startsWith("إ") || normQ.startsWith("آ")) {
+    const withoutAlef = normQ.replace(/^[اأإآ]/, "");
+    if (withoutAlef.length >= 2) {
+      variants.add(withoutAlef);
+      variants.add(`ال${withoutAlef}`);
+      variants.add(`الأ${withoutAlef}`);
     }
+  } else if (!normQ.startsWith("ال") && normQ.length >= 2) {
+    variants.add(`ا${normQ}`);
+    variants.add(`أ${normQ}`);
+    variants.add(`ال${normQ}`);
+    variants.add(`الأ${normQ}`);
   }
 
   const result = Array.from(variants);

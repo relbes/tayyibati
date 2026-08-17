@@ -1,4 +1,5 @@
 import { Router, Request, Response } from "express";
+import crypto from "crypto";
 import { db } from "@workspace/db";
 import { foodsTable, usersTable } from "@workspace/db";
 import { eq, ilike, and, or, sql, inArray } from "drizzle-orm";
@@ -120,6 +121,69 @@ function getBrowseCatalogPayloads(allFoods: any[]) {
   return { freePayload: cachedFreeBrowsePayload, premiumPayload: cachedPremiumBrowsePayload };
 }
 
+router.get("/foods/catalog", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return void res.status(401).json({ error: "Authentication required" });
+    }
+
+    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
+    const isPremium = String(user?.isPremium) === "true" || (user as any)?.isPremium === true;
+
+    const cache = await getKnowledgeCache();
+    const allFoods = cache.foods || [];
+
+    const FREE_APPROVED_CATEGORIES = new Set(["خضروات", "فواكه", "حبوب"]);
+
+    let rawCatalog: any[] = [];
+    if (isPremium) {
+      rawCatalog = allFoods;
+    } else {
+      const freeGrouped: Record<string, any[]> = {};
+      for (const catName of Array.from(FREE_APPROVED_CATEGORIES)) {
+        freeGrouped[catName] = allFoods
+          .filter((f) => f.category === catName)
+          .sort((a, b) => a.id - b.id)
+          .slice(0, 10);
+      }
+      rawCatalog = Object.values(freeGrouped).flat();
+    }
+
+    const compactFoods = rawCatalog.map((f) => ({
+      id: f.id,
+      nameAr: f.nameAr,
+      category: f.category?.trim() || "أخرى",
+      status: f.status || "conditional",
+    }));
+
+    compactFoods.sort((a, b) => a.id - b.id);
+
+    const versionString = crypto
+      .createHash("md5")
+      .update(JSON.stringify(compactFoods))
+      .digest("hex");
+
+    const etagHeader = `W/"${versionString}"`;
+    res.setHeader("ETag", etagHeader);
+
+    const clientEtag = req.headers["if-none-match"];
+    if (clientEtag && (clientEtag === etagHeader || clientEtag === versionString || clientEtag === `"${versionString}"`)) {
+      return void res.status(304).end();
+    }
+
+    res.json({
+      version: versionString,
+      isPremium,
+      totalDatabase: allFoods.length,
+      foods: compactFoods,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to fetch food catalog");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/foods/browse", requireAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.userId;
@@ -145,11 +209,11 @@ router.get("/foods/browse", requireAuth, async (req: Request, res: Response) => 
 router.get("/foods/autocomplete", async (req, res) => {
   try {
     const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
-    if (q.length < 2) {
-      return void res.json({ suggestions: [], searchOutcome: "NOT_FOUND" });
+    if (!q || q.length < 1) {
+      return void res.json({ suggestions: [], searchOutcome: "NOT_FOUND", queryIntent: "UNKNOWN", foods: [], dishes: [] });
     }
 
-    const searchRes = await CanonicalSearchEngine.search(q, { mode: SearchMode.AUTOCOMPLETE });
+    const structuredRes = await CanonicalSearchEngine.searchEntities(q, { mode: SearchMode.AUTOCOMPLETE });
 
     const suggestions: Array<{
       labelAr: string;
@@ -157,26 +221,33 @@ router.get("/foods/autocomplete", async (req, res) => {
       query: string;
       entityType: string;
       canonicalId: number | string;
+      sectionHeader?: string;
     }> = [];
 
-    if (searchRes.searchOutcome === "FOUND") {
-      suggestions.push({
-        labelAr: searchRes.canonicalName,
-        labelEn: searchRes.canonicalName,
-        query: searchRes.canonicalName,
-        entityType: searchRes.canonicalEntityType,
-        canonicalId: searchRes.canonicalId,
-      });
-    } else if (searchRes.searchOutcome === "AMBIGUOUS" && searchRes.candidateDishes) {
-      for (const cand of searchRes.candidateDishes) {
+    if (structuredRes.displayFoods && structuredRes.displayFoods.length > 0) {
+      structuredRes.displayFoods.forEach((f, idx) => {
         suggestions.push({
-          labelAr: cand.canonicalName,
-          labelEn: cand.canonicalName,
-          query: cand.canonicalName,
-          entityType: cand.canonicalEntityType,
-          canonicalId: cand.canonicalId,
+          labelAr: f.canonicalName,
+          labelEn: f.canonicalName,
+          query: f.canonicalName,
+          entityType: "food",
+          canonicalId: f.canonicalId,
+          sectionHeader: idx === 0 ? "الأطعمة" : undefined,
         });
-      }
+      });
+    }
+
+    if (structuredRes.displayDishes && structuredRes.displayDishes.length > 0) {
+      structuredRes.displayDishes.forEach((d, idx) => {
+        suggestions.push({
+          labelAr: d.canonicalName,
+          labelEn: d.canonicalName,
+          query: d.canonicalName,
+          entityType: "dish",
+          canonicalId: d.canonicalId,
+          sectionHeader: idx === 0 ? "الأطباق" : undefined,
+        });
+      });
     }
 
     // Deduplicate suggestions by labelAr & entityType
@@ -188,9 +259,16 @@ router.get("/foods/autocomplete", async (req, res) => {
       return true;
     });
 
+    const searchOutcome = structuredRes.primaryResult ? structuredRes.primaryResult.searchOutcome : "NOT_FOUND";
+
     return void res.json({
-      searchOutcome: searchRes.searchOutcome,
+      searchOutcome,
+      queryIntent: structuredRes.queryIntent,
       suggestions: uniqueSuggestions,
+      foods: structuredRes.foods,
+      dishes: structuredRes.dishes,
+      displayFoods: structuredRes.displayFoods,
+      displayDishes: structuredRes.displayDishes,
     });
   } catch (err) {
     console.error("[AUTOCOMPLETE API ERROR]", err);

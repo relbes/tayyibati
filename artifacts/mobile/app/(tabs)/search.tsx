@@ -171,7 +171,23 @@ export default function SearchScreen() {
                         </TouchableOpacity>
                       </View>
                     )}
-                    <AnalysisResultCard report={result} onRetry={clearSearch} />
+                    <AnalysisResultCard
+                      report={result}
+                      onRetry={clearSearch}
+                      onGoHome={() => {
+                        clearSearch();
+                        try {
+                          router.dismissTo("/(tabs)");
+                        } catch {
+                          router.navigate("/(tabs)");
+                        }
+                      }}
+                      onSelectSuggestion={(text) => {
+                        setQuery(text);
+                        handleAnalyze(text);
+                      }}
+                      isAnalyzing={isAnalyzing}
+                    />
                   </>
                 )}
 
@@ -200,22 +216,22 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 6,
   },
-  title: { fontSize: 22, fontFamily: "Tajawal_700Bold", width: "100%" },
-  subtitle: { fontSize: 14, fontFamily: "Tajawal_400Regular", marginBottom: 8, width: "100%" },
+  title: { fontSize: 24, fontFamily: "Tajawal_700Bold", width: "100%" },
+  subtitle: { fontSize: 15, fontFamily: "Tajawal_400Regular", marginBottom: 8, width: "100%" },
   content: { padding: 16, gap: 12 },
-  sectionLabel: { fontSize: 13, fontFamily: "Tajawal_500Medium" },
+  sectionLabel: { fontSize: 14, fontFamily: "Tajawal_500Medium" },
   suggestionsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
-  chipText: { fontSize: 14, fontFamily: "Tajawal_500Medium" },
+  chipText: { fontSize: 15, fontFamily: "Tajawal_500Medium" },
   tipCard: { borderWidth: 1, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 16, gap: 8 },
-  tipEmoji: { fontSize: 18 },
-  tipText: { lineHeight: 24, fontFamily: "Tajawal_500Medium", fontSize: 13 },
+  tipEmoji: { fontSize: 19 },
+  tipText: { lineHeight: 24, fontFamily: "Tajawal_500Medium", fontSize: 14 },
   limitBanner: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 6 },
-  limitBannerTitle: { fontSize: 15, fontFamily: "Tajawal_700Bold", width: "100%" },
-  limitBannerSub: { fontSize: 13, fontFamily: "Tajawal_400Regular", lineHeight: 20, width: "100%" },
+  limitBannerTitle: { fontSize: 16, fontFamily: "Tajawal_700Bold", width: "100%" },
+  limitBannerSub: { fontSize: 14, fontFamily: "Tajawal_400Regular", lineHeight: 21, width: "100%" },
   limitBannerBtn: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10, marginTop: 4 },
-  limitBannerBtnText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 14 },
+  limitBannerBtnText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 15 },
   resultContainer: { gap: 10 },
   resultHeader: { justifyContent: "space-between", alignItems: "center" },
-  resultLabel: { fontSize: 16, fontFamily: "Tajawal_700Bold" },
+  resultLabel: { fontSize: 17, fontFamily: "Tajawal_700Bold" },
 });

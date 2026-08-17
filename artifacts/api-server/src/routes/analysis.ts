@@ -46,16 +46,16 @@ export async function getUserPlanLimits(userId: string): Promise<{ textLimit: nu
   try {
     const [account] = await db.select().from(usersTable).where(eq(usersTable.id, userId));
 
-    if (account?.isPremium === "true") {
-      return { textLimit: -1, imageLimit: -1 };
-    }
-
     if (account?.planId != null) {
       const [plan] = await db
         .select()
         .from(subscriptionPlansTable)
         .where(eq(subscriptionPlansTable.id, account.planId));
       if (plan) return { textLimit: plan.dailyTextLimit, imageLimit: plan.dailyImageLimit };
+    }
+
+    if (account?.isPremium === "true") {
+      return { textLimit: -1, imageLimit: -1 };
     }
 
     // Primary source: free plan from subscription_plans table in DB
@@ -158,15 +158,28 @@ export type IngredientFrequency = "basic" | "daily" | "weekly" | "occasional" | 
 export interface IngredientResult {
   name: string;
   nameAr: string;
+  nameEn?: string;
   status: IngredientStatus;
   frequency?: IngredientFrequency;
   reason: string | null;
   notes?: string | null;
+  proteinCategory?: string;
+  proteinSpecificity?: string;
+  priority?: string;
 }
 
 export interface AnalysisReport {
   query: string;
-  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD";
+  dish?: string;
+  proteinCategory?: string;
+  proteinSpecificity?: string;
+  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND";
+  needsClarification?: boolean;
+  clarificationType?: string;
+  questionAr?: string;
+  suggestions?: any[];
+  resolutionState?: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN";
+  aiConfidence?: number;
 
   primaryRuling?: {
     status: "allowed" | "forbidden" | "conditional" | "unknown";
@@ -870,8 +883,14 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
   const tStart = performance.now();
   let queryText = "";
   try {
-    const { query } = req.body as { query: string };
+    const { query, displayQuery, entityType, canonicalId } = req.body as {
+      query: string;
+      displayQuery?: string;
+      entityType?: string;
+      canonicalId?: number | string;
+    };
     queryText = typeof query === "string" ? query.trim() : "";
+    const displayQueryText = typeof displayQuery === "string" ? displayQuery.trim() : queryText;
 
     if (!queryText) return void res.status(400).json({ error: "query is required" });
 
@@ -889,8 +908,11 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
     // Execute Universal Pipeline via UnifiedAnalysisEngine
     const unifiedResult = await UnifiedAnalysisEngine.analyze({
       query: queryText,
+      displayQuery: displayQueryText,
       inputType: "text",
       userId,
+      entityType: entityType as any,
+      canonicalId,
     });
 
     const report = unifiedResult.report;

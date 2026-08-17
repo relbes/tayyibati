@@ -169,11 +169,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: "Tajawal_700Bold",
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Tajawal_400Regular",
   },
   item: {
@@ -192,7 +192,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   scoreText: {
-    fontSize: 16,
+    fontSize: 17,
     fontFamily: "Tajawal_700Bold",
   },
   scoreSection: {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   itemQuery: {
-    fontSize: 15,
+    fontSize: 16.5,
     fontFamily: "Tajawal_700Bold",
   },
   itemMeta: {
@@ -218,7 +218,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   itemDate: {
-    fontSize: 12,
+    fontSize: 13,
     fontFamily: "Tajawal_400Regular",
   },
   deleteBtn: {
@@ -232,15 +232,15 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptyTitle: {
-    fontSize: 18,
+    fontSize: 19.5,
     fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   emptyDesc: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Tajawal_400Regular",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 23,
   },
   loginBtn: {
     paddingHorizontal: 28,
@@ -251,6 +251,6 @@ const styles = StyleSheet.create({
   loginBtnText: {
     color: "#fff",
     fontFamily: "Tajawal_700Bold",
-    fontSize: 15,
+    fontSize: 16,
   },
 });

@@ -30,6 +30,7 @@ function HighlightText({ text, query, colors }: { text: string; query: string; c
 
 export function RefinementSuggestions({ result, onSelect, colors }: RefinementSuggestionsProps) {
   if (!result) return null;
+  if (result.needsClarification) return null;
 
   const isMultipleDishes =
     result.resultMode === "MULTIPLE_DISHES" || result.requiresSelection || result.isAmbiguous;

@@ -6,6 +6,9 @@ import { useEffect, useState, useCallback } from "react";
 import NotFound from "@/pages/not-found";
 import Overview from "@/pages/overview";
 import Foods from "@/pages/foods";
+import Dishes from "@/pages/dishes";
+import KnowledgeReview from "@/pages/knowledge-review";
+import AiReview from "@/pages/ai-review";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
@@ -17,6 +20,9 @@ import { getApiBaseUrl } from "@/lib/api";
 import {
   LayoutDashboard,
   UtensilsCrossed,
+  Utensils,
+  CheckSquare,
+  Bot,
   History as HistoryIcon,
   Settings as SettingsIcon,
   Star,
@@ -37,11 +43,13 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
   const { lang, toggle } = useLang();
 
   const NAV_ITEMS = [
-    { path: "/", label: tr(lang, "overview"), icon: LayoutDashboard },
+    { path: "/", label: lang === "ar" ? "لوحة التحكم" : "Dashboard", icon: LayoutDashboard },
     { path: "/foods", label: tr(lang, "foodDb"), icon: UtensilsCrossed },
-    { path: "/history", label: tr(lang, "analysisHistory"), icon: HistoryIcon },
+    { path: "/dishes", label: lang === "ar" ? "الأطباق" : "Dishes", icon: Utensils },
+    { path: "/knowledge-review", label: lang === "ar" ? "مراجعة المعرفة" : "Knowledge Review", icon: CheckSquare },
+    { path: "/ai-review", label: lang === "ar" ? "مراجعة الذكاء الاصطناعي" : "AI Review", icon: Bot },
     { path: "/users", label: tr(lang, "users"), icon: UsersIcon },
-    { path: "/plans", label: tr(lang, "plans"), icon: Star },
+    { path: "/subscription-plans", label: lang === "ar" ? "باقات الاشتراك" : "Subscription Plans", icon: Star },
     { path: "/settings", label: tr(lang, "settings"), icon: SettingsIcon },
   ];
 
@@ -125,7 +133,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden flex-row-reverse">
+    <div className="flex h-screen overflow-hidden flex-row">
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onLogout={onLogout} />
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-16 items-center gap-4 border-b bg-card px-6 lg:hidden">
@@ -143,9 +151,12 @@ function Layout({ onLogout }: { onLogout: () => void }) {
           <Switch>
             <Route path="/" component={Overview} />
             <Route path="/foods" component={Foods} />
+            <Route path="/dishes" component={Dishes} />
+            <Route path="/knowledge-review" component={KnowledgeReview} />
+            <Route path="/ai-review" component={AiReview} />
             <Route path="/history" component={History} />
             <Route path="/users" component={Users} />
-            <Route path="/plans" component={Plans} />
+            <Route path="/subscription-plans" component={Plans} />
             <Route path="/settings" component={Settings} />
             <Route component={NotFound} />
           </Switch>

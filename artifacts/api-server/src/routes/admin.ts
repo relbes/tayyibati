@@ -1,7 +1,7 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { db } from "@workspace/db";
-import { analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable } from "@workspace/db";
+import { analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable, dishes, pendingKnowledgeReviewsTable, aiFoodKnowledgeCacheTable } from "@workspace/db";
 import { desc, sql, count, avg, eq, and } from "drizzle-orm";
 import { getUserPlanLimits } from "./analysis";
 
@@ -109,8 +109,23 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
       .from(analysisHistoryTable);
 
     const [userCount] = await db
-      .select({ totalUsers: sql<number>`cast(count(distinct ${userUsageTable.userId}) as int)` })
-      .from(userUsageTable);
+      .select({ totalUsers: sql<number>`cast(count(distinct ${usersTable.id}) as int)` })
+      .from(usersTable);
+
+    const [foodCount] = await db.select({ c: count() }).from(foodsTable);
+    const [dishCount] = await db.select({ c: count() }).from(dishes);
+    const [pendingKnowledgeCount] = await db
+      .select({ c: count() })
+      .from(pendingKnowledgeReviewsTable)
+      .where(eq(pendingKnowledgeReviewsTable.status, "pending"));
+    const [pendingAiCount] = await db
+      .select({ c: count() })
+      .from(aiFoodKnowledgeCacheTable)
+      .where(eq(aiFoodKnowledgeCacheTable.isDeleted, false));
+    const [todayCount] = await db
+      .select({ c: count() })
+      .from(analysisHistoryTable)
+      .where(sql`date_trunc('day', ${analysisHistoryTable.createdAt}) = date_trunc('day', now())`);
 
     const dailyRows = await db
       .select({
@@ -145,6 +160,11 @@ router.get("/admin/stats", requireAdmin, async (req, res) => {
     res.json({
       totalAnalyses: totals?.totalAnalyses ?? 0,
       totalUsers: userCount?.totalUsers ?? 0,
+      totalFoods: foodCount?.c ?? 0,
+      totalDishes: dishCount?.c ?? 0,
+      pendingKnowledge: pendingKnowledgeCount?.c ?? 0,
+      pendingAiReviews: pendingAiCount?.c ?? 0,
+      todaySearches: todayCount?.c ?? 0,
       avgScore: Math.round(Number(totals?.avgScore ?? 0)),
       textAnalyses: totals?.textAnalyses ?? 0,
       imageAnalyses: totals?.imageAnalyses ?? 0,

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Splash Screen Logo Asset - Transparent Background -->
+  <g transform="translate(0, 0)">
+    <defs>
+      <linearGradient id="shieldGradSplash" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#1B7A5E"/>
+        <stop offset="100%" stop-color="#145C47"/>
+      </linearGradient>
+      <linearGradient id="goldGradSplash" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#E2B75F"/>
+        <stop offset="100%" stop-color="#CA973C"/>
+      </linearGradient>
+    </defs>
+
+    <!-- Shield Emblem -->
+    <path d="M 256,64 
+             C 325,64 390,90 408,120 
+             C 412,240 385,360 256,448 
+             C 127,360 100,240 104,120 
+             C 122,90 187,64 256,64 Z" 
+          fill="url(#shieldGradSplash)"/>
+
+    <!-- Golden Wheat Stalk -->
+    <path d="M 230,360 Q 225,260 240,180 Q 243,164 246,150" 
+          fill="none" stroke="url(#goldGradSplash)" stroke-width="10" stroke-linecap="round"/>
+
+    <path d="M 245,150 Q 260,135 256,120 Q 240,135 245,150 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 244,170 Q 262,162 267,144 Q 247,149 244,170 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 240,172 Q 220,162 215,145 Q 235,150 240,172 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 241,205 Q 262,192 270,172 Q 247,180 241,205 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 237,207 Q 215,195 207,175 Q 230,182 237,207 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 237,240 Q 261,227 271,205 Q 246,215 237,240 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 234,242 Q 210,230 201,207 Q 225,217 234,242 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 234,275 Q 259,262 270,237 Q 244,250 234,275 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 230,277 Q 205,265 195,240 Q 220,252 230,277 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 230,310 Q 256,297 268,272 Q 242,285 230,310 Z" fill="url(#goldGradSplash)"/>
+    <path d="M 226,312 Q 201,300 190,275 Q 215,287 226,312 Z" fill="url(#goldGradSplash)"/>
+
+    <!-- White Checkmark -->
+    <path d="M 260,270 L 297,310 L 362,220" 
+          fill="none" stroke="#FFFFFF" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+</svg>

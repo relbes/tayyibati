@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 
@@ -15,6 +15,13 @@ export const subscriptionPlansTable = pgTable("subscription_plans", {
   features: text("features").notNull().default("[]"),
   isActive: text("is_active").notNull().default("true"),
   sortOrder: integer("sort_order").notNull().default(0),
+  descriptionAr: text("description_ar"),
+  descriptionEn: text("description_en"),
+  featuresAr: text("features_ar").notNull().default("[]"),
+  featuresEn: text("features_en").notNull().default("[]"),
+  isPopular: boolean("is_popular").notNull().default(false),
+  revenueCatProductId: text("revenuecat_product_id"),
+  revenueCatEntitlementId: text("revenuecat_entitlement_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

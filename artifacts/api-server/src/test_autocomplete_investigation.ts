@@ -13,6 +13,14 @@ async function testAutocompleteInvestigation() {
   const appleAutocompleteRes = await CanonicalSearchEngine.search("تفاح", { mode: SearchMode.AUTOCOMPLETE });
   console.log("CanonicalSearchEngine Output:", JSON.stringify(appleAutocompleteRes, null, 2));
 
+  console.log("\nTesting CanonicalSearchEngine with SearchMode.AUTOCOMPLETE for 'من':");
+  const minAutocompleteRes = await CanonicalSearchEngine.search("من", { mode: SearchMode.AUTOCOMPLETE });
+  console.log("CanonicalSearchEngine Output:", JSON.stringify(minAutocompleteRes, null, 2));
+
+  console.log("\nTesting CanonicalSearchEngine with SearchMode.AUTOCOMPLETE for 'شاورما':");
+  const shawarmaAutocompleteRes = await CanonicalSearchEngine.search("شاورما", { mode: SearchMode.AUTOCOMPLETE });
+  console.log("CanonicalSearchEngine Output:", JSON.stringify(shawarmaAutocompleteRes, null, 2));
+
   console.log("\n=========================================================================");
 }
 

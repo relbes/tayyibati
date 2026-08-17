@@ -1,20 +1,29 @@
-import { warmDishEngineCache } from "./lib/dishCompatibilityEngine";
-import { normalize, stripArticle } from "./lib/arabicNormalization";
+import { db, dishIngredients } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
-async function checkDishes() {
-  const cache = await warmDishEngineCache();
-  console.log("Total dishes in dishCache:", cache.dishes.length);
-  const shawarmaDishes = cache.dishes.filter(d => normalize(d.nameAr).includes("شاورما") || normalize(d.nameAr).includes("شاورمه"));
-  console.log("Dishes containing shawarma:");
-  shawarmaDishes.forEach(d => {
-    console.log(`ID: ${d.id} | nameAr: "${d.nameAr}" | norm: "${normalize(d.nameAr)}"`);
-  });
+async function main() {
+  console.log("=== RUNNING SHAWARMA INGREDIENTS DATABASE UPDATE ===");
+  
+  // Print current ingredients
+  const currentBefore = await db.select().from(dishIngredients).where(eq(dishIngredients.dishId, 1111));
+  console.log("Current ingredients before update for dish 1111:", currentBefore.map(c => c.rawIngredientName));
 
-  const shawarmaAliases = Array.from(cache.dishAliasesByNormAr.entries()).filter(([norm, list]) => norm.includes("شاورما") || norm.includes("شاورمه"));
-  console.log("Dish Aliases containing shawarma:");
-  shawarmaAliases.forEach(([norm, list]) => {
-    console.log(`Alias norm: "${norm}" | Targets:`, list.map(a => a.canonicalDish?.nameAr || a.dishId));
-  });
+  console.log("Deleting old ingredients for dish 1111 (شاورما)...");
+  await db.delete(dishIngredients).where(eq(dishIngredients.dishId, 1111));
+
+  console.log("Inserting new ingredients for dish 1111 (شاورما)...");
+  await db.insert(dishIngredients).values([
+    { dishId: 1111, rawIngredientName: "دجاج", requirementType: "required", foodId: null },
+    { dishId: 1111, rawIngredientName: "لحم", requirementType: "required", foodId: null },
+    { dishId: 1111, rawIngredientName: "ثوم", requirementType: "typical", foodId: null },
+    { dishId: 1111, rawIngredientName: "طحينة", requirementType: "typical", foodId: null },
+    { dishId: 1111, rawIngredientName: "مخلل", requirementType: "typical", foodId: null },
+    { dishId: 1111, rawIngredientName: "خبز", requirementType: "required", foodId: null },
+  ]);
+  
+  const currentAfter = await db.select().from(dishIngredients).where(eq(dishIngredients.dishId, 1111));
+  console.log("Current ingredients after update for dish 1111:", currentAfter.map(c => c.rawIngredientName));
+  console.log("Database update completed successfully!");
 }
 
-checkDishes();
+main().catch(console.error);

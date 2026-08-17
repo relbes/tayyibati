@@ -115,13 +115,19 @@ function authHeader(): Record<string, string> {
 // Analysis
 // ---------------------------------------------------------------------------
 
-export async function analyzeText(query: string) {
+export async function analyzeText(
+  input: string | { query: string; displayQuery?: string; entityType?: string; canonicalId?: number | string }
+) {
   const base = BASE_URL;
+  const payload = typeof input === "string" ? { query: input, displayQuery: input } : { displayQuery: input.query, ...input };
   const res = await fetchWithRetry(`${base}/api/analysis/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify(payload),
   });
+  if (!res.ok) {
+    throw await readAnalysisError(res, "حدث خطأ أثناء تحليل النص، يرجى المحاولة مرة أخرى.");
+  }
   const data = await res.json();
 
   return data.report || data;
@@ -227,6 +233,53 @@ export async function browseFoods(): Promise<BrowseFoodsResponse> {
   return res.json();
 }
 
+export interface CatalogApiResponse {
+  status: 200 | 304;
+  version?: string;
+  isPremium?: boolean;
+  totalDatabase?: number;
+  foods?: Array<{
+    id: number;
+    nameAr: string;
+    category: string;
+    status: "allowed" | "forbidden" | "conditional";
+  }>;
+}
+
+export async function fetchCatalog(versionEtag?: string): Promise<CatalogApiResponse> {
+  const base = BASE_URL;
+  const headers: Record<string, string> = {
+    ...authHeader(),
+  };
+  if (versionEtag) {
+    headers["If-None-Match"] = versionEtag.startsWith("W/") ? versionEtag : `W/"${versionEtag}"`;
+  }
+
+  const res = await fetchWithRetry(`${base}/api/foods/catalog`, {
+    headers,
+  });
+
+  if (res.status === 304) {
+    return { status: 304 };
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      throw new Error("UNAUTHENTICATED");
+    }
+    throw new Error("فشل في تحميل قائمة الأغذية.");
+  }
+
+  const data = await res.json();
+  return {
+    status: 200,
+    version: data.version,
+    isPremium: data.isPremium,
+    totalDatabase: data.totalDatabase,
+    foods: data.foods,
+  };
+}
+
 export async function getFoodStats() {
   const base = BASE_URL;
   const res = await fetchWithRetry(`${base}/api/foods/stats`);
@@ -302,7 +355,7 @@ export async function deleteFood(id: number) {
 
 export async function getPlans() {
   const base = BASE_URL;
-  const res = await fetchWithRetry(`${base}/api/plans`);
+  const res = await fetchWithRetry(`${base}/api/subscription-plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
@@ -382,7 +435,18 @@ export async function loginUser(payload: { email: string; password?: string }) {
 
 export async function getUser(id: string) {
   const base = BASE_URL;
-  const res = await fetchWithRetry(`${base}/api/users/${id}`);
+  const res = await fetchWithRetry(`${base}/api/users/${id}`, {
+    headers: authHeader(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch user");
+  return res.json();
+}
+
+export async function getCurrentUser() {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/users/me`, {
+    headers: authHeader(),
+  });
   if (!res.ok) throw new Error("Failed to fetch user");
   return res.json();
 }

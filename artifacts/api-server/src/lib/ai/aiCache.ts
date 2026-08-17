@@ -89,6 +89,7 @@ export async function aiCacheGet(query: string, inputType: SearchModality = "tex
       )
       .limit(1);
 
+
     if (records && records.length > 0) {
       const rec = records[0];
       const parsedResponse = rec.responseJson as FoodKnowledgeResponse;

@@ -41,8 +41,9 @@ adminKnowledgeReviewRouter.get("/", async (req, res) => {
     const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
     const pageSize = Math.max(1, Math.min(200, parseInt(String(req.query.pageSize || "50"), 10) || 50));
     const statusFilter = typeof req.query.status === "string" ? req.query.status : undefined;
+    const searchFilter = typeof req.query.search === "string" ? req.query.search : undefined;
 
-    const data = await getReviewQueuePaginated(page, pageSize, statusFilter);
+    const data = await getReviewQueuePaginated(page, pageSize, statusFilter, searchFilter);
     res.json({
       success: true,
       ...data,

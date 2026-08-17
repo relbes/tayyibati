@@ -1,9 +1,10 @@
 import { Router } from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db } from "@workspace/db";
 import { userUsageTable, usersTable, subscriptionPlansTable, passwordResetsTable } from "@workspace/db";
-import { eq, and, ilike, or, desc, isNull } from "drizzle-orm";
+import { eq, and, ilike, or, desc, isNull, ne } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../lib/email";
 import { issueToken } from "../lib/session";
 import { requireAuth } from "../middleware/requireAuth";
@@ -48,10 +49,8 @@ function checkEmailRegisterLimit(email: string): { allowed: boolean; retryAfterS
 const router = Router();
 
 function stableIdFromEmail(email: string): string {
-  return (
-    "user_" +
-    Buffer.from(email.toLowerCase()).toString("base64").replace(/[^a-z0-9]/gi, "").slice(0, 16)
-  );
+  const hash = crypto.createHash("sha256").update(email.toLowerCase()).digest("hex").slice(0, 16);
+  return "user_" + hash;
 }
 
 type PublicUser = Omit<typeof usersTable.$inferSelect, "passwordHash" | "failedLoginAttempts" | "lockedUntil"> & { hasPassword: boolean };
@@ -110,34 +109,152 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
       return void res.status(503).json({ error: "Payment service not configured" });
     }
 
-    const connectors = new ReplitConnectors();
-    const rcRes = await connectors.proxy(
-      "revenuecat",
-      `/v2/projects/${REVENUECAT_PROJECT_ID}/customers/${userId}/active-entitlements`,
-      { method: "GET" }
-    );
+    // 1. Load user and current plan from DB
+    const [currentUser] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
 
-    let isPremium = false;
-    if (rcRes.ok) {
-      const data = await rcRes.json() as { items?: Array<{ lookup_key?: string; identifier?: string }> };
-      isPremium = data.items?.some(
-        (e) => e.lookup_key === REVENUECAT_ENTITLEMENT || e.identifier === REVENUECAT_ENTITLEMENT
-      ) ?? false;
-    } else {
-      req.log.warn({ status: rcRes.status, userId }, "RevenueCat returned non-ok for entitlement check");
+    if (!currentUser) return void res.status(404).json({ error: "User not found" });
+
+    let currentPlan = null;
+    if (currentUser.planId != null) {
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.id, currentUser.planId));
+      currentPlan = plan || null;
     }
 
+    // 2. Call RevenueCat proxy
+    const connectors = new ReplitConnectors();
+    let rcPremium = false;
+    let rcProductId: string | null = null;
+    let rcSuccess = false;
+
+    try {
+      const rcRes = await connectors.proxy(
+        "revenuecat",
+        `/v2/projects/${REVENUECAT_PROJECT_ID}/customers/${userId}/active-entitlements`,
+        { method: "GET" }
+      );
+      if (rcRes.ok) {
+        const data = await rcRes.json() as {
+          items?: Array<{
+            lookup_key?: string;
+            identifier?: string;
+            product_identifier?: string;
+          }>;
+        };
+        const activeEnt = data.items?.find(
+          (e) => e.lookup_key === REVENUECAT_ENTITLEMENT || e.identifier === REVENUECAT_ENTITLEMENT
+        );
+        if (activeEnt) {
+          rcPremium = true;
+          rcProductId = activeEnt.product_identifier || null;
+        }
+        rcSuccess = true;
+      } else {
+        req.log.warn({ status: rcRes.status, userId }, "RevenueCat returned non-ok for entitlement check");
+      }
+    } catch (err) {
+      req.log.error({ err }, "RevenueCat API request failed");
+    }
+
+    // 3. Keep current database state if the RevenueCat API request failed
+    if (!rcSuccess) {
+      req.log.info({ userId }, "Preserving database plan state due to RevenueCat API failure");
+      return void res.json({
+        isPremium: currentUser.isPremium === "true",
+        planId: currentUser.planId
+      });
+    }
+
+    const isRcManaged = currentPlan && currentPlan.revenueCatProductId != null && currentPlan.revenueCatProductId !== "";
+    const isCurrentPlanAdminAssigned = currentPlan && currentPlan.billingCycle !== "free" && !isRcManaged;
+
+    let finalPremium = currentUser.isPremium === "true";
+    let finalPlanId = currentUser.planId;
+
+    if (isCurrentPlanAdminAssigned) {
+      // Admin-assigned, so preserve it
+      finalPlanId = currentPlan.id;
+      finalPremium = true;
+      req.log.info({ userId }, "Preserving Admin-assigned plan in sync-premium");
+    } else if (rcPremium) {
+      // Entitlement is active in RevenueCat
+      finalPremium = true;
+      if (rcProductId) {
+        const [matchingPlan] = await db
+          .select()
+          .from(subscriptionPlansTable)
+          .where(and(
+            eq(subscriptionPlansTable.revenueCatProductId, rcProductId),
+            eq(subscriptionPlansTable.isActive, "true")
+          ));
+        if (matchingPlan) {
+          finalPlanId = matchingPlan.id;
+        }
+      }
+      // If user has no plan assigned or is currently Free, fallback to the first active Premium plan
+      if (finalPlanId == null) {
+        const [fallbackPlan] = await db
+          .select()
+          .from(subscriptionPlansTable)
+          .where(and(
+            ne(subscriptionPlansTable.billingCycle, "free"),
+            eq(subscriptionPlansTable.isActive, "true")
+          ))
+          .orderBy(subscriptionPlansTable.sortOrder)
+          .limit(1);
+        if (fallbackPlan) {
+          finalPlanId = fallbackPlan.id;
+        }
+      }
+    } else {
+      // RevenueCat reports no active entitlement
+      if (currentPlan) {
+        if (currentPlan.billingCycle !== "free") {
+          // Since it's not Admin assigned, it must be RC managed. Downgrade to Free.
+          const [freePlan] = await db
+            .select()
+            .from(subscriptionPlansTable)
+            .where(eq(subscriptionPlansTable.billingCycle, "free"))
+            .limit(1);
+          finalPlanId = freePlan ? freePlan.id : null;
+          finalPremium = false;
+        } else {
+          // Already Free
+          finalPlanId = currentPlan.id;
+          finalPremium = false;
+        }
+      } else {
+        // Fallback to Free if planId is null/invalid
+        const [freePlan] = await db
+          .select()
+          .from(subscriptionPlansTable)
+          .where(eq(subscriptionPlansTable.billingCycle, "free"))
+          .limit(1);
+        finalPlanId = freePlan ? freePlan.id : null;
+        finalPremium = false;
+      }
+    }
+
+    // 4. Save updates to DB
     const [user] = await db
       .update(usersTable)
-      .set({ isPremium: isPremium ? "true" : "false" })
+      .set({
+        isPremium: finalPremium ? "true" : "false",
+        planId: finalPlanId
+      })
       .where(eq(usersTable.id, userId))
       .returning();
 
     if (!user) return void res.status(404).json({ error: "User not found" });
-    await syncTodayUsagePremium(userId, isPremium);
+    await syncTodayUsagePremium(userId, finalPremium);
 
-    req.log.info({ userId, isPremium }, "Premium synced from RevenueCat");
-    res.json({ isPremium });
+    req.log.info({ userId, finalPremium, finalPlanId }, "Premium sync execution completed");
+    res.json({ isPremium: finalPremium, planId: finalPlanId });
   } catch (err) {
     req.log.error({ err }, "Failed to sync premium from RevenueCat");
     res.status(500).json({ error: "Internal server error" });
@@ -355,9 +472,8 @@ router.post("/users/forgot-password", async (req, res) => {
     }
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Always respond 200 to avoid leaking which emails are registered.
     const [user] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
-    if (!user) return void res.json({ ok: true });
+    if (!user) return void res.status(404).json({ error: "EMAIL_NOT_FOUND", exists: false });
 
     const code = generateResetCode();
     const codeHash = await bcrypt.hash(code, 10);
@@ -466,13 +582,99 @@ router.get("/users", requireAdmin, async (req, res) => {
   }
 });
 
-router.get("/users/:id", requireAdmin, async (req, res) => {
+router.get("/users/me", requireAuth, async (req, res) => {
   try {
-    const [user] = await db.select().from(usersTable).where(eq(usersTable.id, req.params.id as string));
-    if (!user) return void res.status(404).json({ error: "Not found" });
-    res.json(toAdminUser(user));
+    const userId = req.userId!;
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    if (!user) {
+      return void res.status(404).json({ error: "Not found" });
+    }
+
+    let planInfo = null;
+    if (user.planId != null) {
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.id, user.planId));
+      if (plan) {
+        planInfo = {
+          id: plan.id,
+          nameAr: plan.name,
+          nameEn: plan.nameEn,
+          price: plan.price,
+          currency: plan.currency,
+          billingCycle: plan.billingCycle,
+        };
+      }
+    }
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      isPremium: user.isPremium,
+      planId: user.planId,
+      provider: user.provider,
+      avatar: user.avatar,
+      plan: planInfo,
+    });
   } catch (err) {
-    req.log.error({ err }, "Failed to get user");
+    req.log.error({ err }, "Failed to get current user");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/users/:id", requireAuth, async (req, res) => {
+  try {
+    const targetId = req.params.id as string;
+    if (req.userId !== targetId) {
+      return void res.status(403).json({ error: "Access denied" });
+    }
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, targetId));
+
+    if (!user) {
+      return void res.status(404).json({ error: "Not found" });
+    }
+
+    let planInfo = null;
+    if (user.planId != null) {
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.id, user.planId));
+      if (plan) {
+        planInfo = {
+          id: plan.id,
+          nameAr: plan.name,
+          nameEn: plan.nameEn,
+          price: plan.price,
+          currency: plan.currency,
+          billingCycle: plan.billingCycle,
+        };
+      }
+    }
+
+    res.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      isPremium: user.isPremium,
+      planId: user.planId,
+      provider: user.provider,
+      avatar: user.avatar,
+      plan: planInfo,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to get user by id");
     res.status(500).json({ error: "Internal server error" });
   }
 });

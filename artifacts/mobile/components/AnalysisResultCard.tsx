@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager, ActivityIndicator } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import type { AnalysisReport } from "@/context/AnalysisContext";
@@ -11,6 +11,9 @@ import { IngredientSection } from "./result/IngredientSection";
 import { UnresolvedSection } from "./result/UnresolvedSection";
 import { ResultActionButtons } from "./result/ResultActionButtons";
 import { EmptyAnalysisState } from "./result/EmptyAnalysisState";
+import { FoodFamilyResultCard } from "./result/FoodFamilyResultCard";
+
+import { useRouter } from "expo-router";
 
 if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -22,6 +25,8 @@ interface AnalysisResultCardProps {
   onRetry?: () => void;
   onGoHome?: () => void;
   onShare?: () => void;
+  onSelectSuggestion?: (queryText: string) => void;
+  isAnalyzing?: boolean;
 }
 
 export function AnalysisResultCard({
@@ -30,10 +35,139 @@ export function AnalysisResultCard({
   onRetry,
   onGoHome,
   onShare,
+  onSelectSuggestion,
+  isAnalyzing = false,
 }: AnalysisResultCardProps) {
   const colors = useColors();
+  const router = useRouter();
   const { isDevMode } = useDeveloperMode();
   const [showDevDetails, setShowDevDetails] = useState<boolean>(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState<string | null>(null);
+
+  const handleGoHome = React.useCallback(() => {
+    if (onGoHome) {
+      onGoHome();
+      return;
+    }
+    try {
+      router.dismissTo("/(tabs)");
+    } catch {
+      try {
+        router.replace("/(tabs)");
+      } catch {
+        router.navigate("/(tabs)");
+      }
+    }
+  }, [onGoHome, router]);
+
+  // Emojis mapping for specificities
+  const SPECIFICITY_EMOJIS: Record<string, string> = {
+    LAMB: "🐑",
+    BEEF: "🐄",
+    BUFFALO: "🐃",
+    CAMEL: "🐪",
+    PIGEON: "🕊️",
+    QUAIL: "🐦",
+    CHICKEN: "🐔",
+    DUCK: "🦆",
+    TURKEY: "🦃",
+    OSTRICH: "🦩",
+  };
+
+  // Subtitles mapping for specificities conforming to Tayyibati guidelines
+  const SPECIFICITY_SUBTITLES: Record<string, string> = {
+    LAMB: "الخيار الأول والمفضل بمعدل مرتين أسبوعياً",
+    BEEF: "مسموح بشرط أن يكون بلديًا ومغذى طبيعيًا (بمعدل مرة أسبوعياً)",
+    BUFFALO: "مسموح بشرط أن يكون بلديًا ومغذى طبيعيًا (بمعدل مرة أسبوعياً)",
+    CAMEL: "مسموح بشرط أن يكون بلديًا ومغذى طبيعيًا (بمعدل مرة أسبوعياً)",
+    PIGEON: "مسموح (الطيور البرية وغير التجارية مسموحة)",
+    QUAIL: "مسموح (الطيور البرية وغير التجارية مسموحة)",
+    CHICKEN: "ممنوع (الدجاج التجاري ممنوع في نظام طيباتي)",
+    DUCK: "ممنوع (البط التجاري ممنوع في نظام طيباتي)",
+    TURKEY: "ممنوع (الديك الرومي التجاري ممنوع في نظام طيباتي)",
+    OSTRICH: "ممنوع (النعام التجاري ممنوع في نظام طيباتي)",
+  };
+
+  // Handle Clarification Requests
+  if (report?.needsClarification) {
+    const question = report.questionAr || "أحتاج تحديد النوع حتى أعطيك نتيجة دقيقة";
+    const suggestions = report.suggestions || [];
+
+    const handleSelect = (label: string) => {
+      if (isAnalyzing) return;
+      setSelectedSuggestion(label);
+      if (onSelectSuggestion) {
+        onSelectSuggestion(label);
+      }
+    };
+
+    return (
+      <View style={[styles.clarificationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.clarificationHeader}>
+          <View style={[styles.clarificationIconContainer, { backgroundColor: colors.primary + "15" }]}>
+            <Icon name="help-circle-outline" size={28} color={colors.primary} />
+          </View>
+          <Text style={[styles.clarificationQuestion, { color: colors.foreground }]}>
+            {question}
+          </Text>
+          <Text style={[styles.clarificationSubtitle, { color: colors.mutedForeground }]}>
+            اختر النوع للحصول على تحليل أدق
+          </Text>
+        </View>
+
+        <View style={styles.suggestionsList}>
+          {suggestions.map((sug, idx) => {
+            const isObj = typeof sug === "object" && sug !== null && "label" in sug;
+            const label = isObj ? (sug as any).label : String(sug);
+            const spec = isObj ? (sug as any).proteinSpecificity || "" : "";
+            const emoji = SPECIFICITY_EMOJIS[spec] || "🥩";
+            const subtitle = SPECIFICITY_SUBTITLES[spec] || "";
+            const isThisLoading = isAnalyzing && selectedSuggestion === label;
+
+            return (
+              <TouchableOpacity
+                key={`${label}_${idx}`}
+                style={[
+                  styles.suggestionButton,
+                  {
+                    backgroundColor: colors.secondary,
+                    borderColor: colors.border,
+                    opacity: isAnalyzing && selectedSuggestion !== label ? 0.6 : 1,
+                  },
+                ]}
+                onPress={() => handleSelect(label)}
+                disabled={isAnalyzing}
+                activeOpacity={0.7}
+              >
+                <View style={styles.suggestionRightPart}>
+                  <Text style={styles.suggestionEmoji}>{emoji}</Text>
+                  <View style={styles.suggestionTextContainer}>
+                    <Text style={[styles.suggestionLabel, { color: colors.foreground }]}>
+                      {label}
+                    </Text>
+                    {subtitle ? (
+                      <Text style={[styles.suggestionSub, { color: colors.mutedForeground }]}>
+                        {subtitle}
+                      </Text>
+                    ) : null}
+                  </View>
+                </View>
+                {isThisLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Icon
+                    name="chevron-back"
+                    size={18}
+                    color={colors.mutedForeground}
+                  />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
 
   // Construct or use unified ViewModel
   const viewModel: AnalysisResultViewModel | null = inputViewModel
@@ -43,6 +177,25 @@ export function AnalysisResultCard({
     : null;
 
   if (!viewModel) return null;
+
+  // Handle GENERIC_FOOD_FAMILY Presentation Mode (Category Searches e.g. "تمر", "خبز", "أرز")
+  if (viewModel.presentationMode === "GENERIC_FOOD_FAMILY" && viewModel.familyViewModel) {
+    return (
+      <View style={styles.container}>
+        <FoodFamilyResultCard
+          viewModel={viewModel.familyViewModel}
+          onRetry={onRetry}
+          onGoHome={handleGoHome}
+        />
+        <ResultActionButtons
+          onRetry={onRetry}
+          onGoHome={handleGoHome}
+          onShare={onShare}
+          isPremium={true}
+        />
+      </View>
+    );
+  }
 
   const { inputType, recognizedName, ingredientDecisions, mealDecision, canonicalResult, analysis } = viewModel;
 
@@ -178,7 +331,7 @@ export function AnalysisResultCard({
       {/* SECTION 8: Action Buttons */}
       <ResultActionButtons
         onAnalyzeAnother={onRetry || (() => {})}
-        onGoHome={onGoHome || (() => {})}
+        onGoHome={handleGoHome}
         onShare={onShare}
       />
     </View>
@@ -189,6 +342,72 @@ const styles = StyleSheet.create({
   container: {
     gap: 16,
     padding: 16,
+  },
+  clarificationCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+    gap: 20,
+    width: "100%",
+  },
+  clarificationHeader: {
+    alignItems: "center",
+    gap: 8,
+  },
+  clarificationIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  clarificationQuestion: {
+    fontSize: 16,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "center",
+    lineHeight: 24,
+  },
+  clarificationSubtitle: {
+    fontSize: 13,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "center",
+  },
+  suggestionsList: {
+    gap: 10,
+  },
+  suggestionButton: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  suggestionRightPart: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 12,
+    flex: 1,
+  },
+  suggestionEmoji: {
+    fontSize: 22,
+  },
+  suggestionTextContainer: {
+    flex: 1,
+    alignItems: "flex-end",
+    gap: 2,
+  },
+  suggestionLabel: {
+    fontSize: 14,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "right",
+  },
+  suggestionSub: {
+    fontSize: 11,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
   },
   devAccordion: {
     borderRadius: 16,

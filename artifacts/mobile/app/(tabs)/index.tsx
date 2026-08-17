@@ -66,6 +66,14 @@ export default function HomeScreen() {
     setShowSuggestions(false);
   }, [setQuery, setResult, setShowSuggestions]);
 
+  const handleSelectClarificationSuggestion = useCallback(
+    (label: string) => {
+      setQuery(label);
+      handleAnalyze(label);
+    },
+    [setQuery, handleAnalyze]
+  );
+
   useEffect(() => {
     if (result) {
 
@@ -125,17 +133,9 @@ export default function HomeScreen() {
       {/* Scrollable content */}
       <Animated.ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingBottom: 120, paddingTop: 8 }}
         showsVerticalScrollIndicator={false}
       >
-        <LocalizedText
-          style={[
-            styles.greeting,
-            { color: colors.foreground, width: "100%", textAlign: isRTL() ? "right" : "left" },
-          ]}
-        >
-          {t("home.greeting")}
-        </LocalizedText>
 
         {/* Search bar */}
         <View style={{ zIndex: 999, width: "100%", paddingHorizontal: 16 }}>
@@ -154,11 +154,11 @@ export default function HomeScreen() {
 
         {/* Results area */}
         {result ? (
-          <View style={{ padding: 16 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16 }}>
             {/* Clear button */}
             <View
               style={[
-                { flexDirection: isRTL() ? "row-reverse" : "row" },
+                { flexDirection: isRTL() ? "row-reverse" : "row", marginBottom: 4 },
                 styles.resultHeader,
               ]}
             >
@@ -173,7 +173,13 @@ export default function HomeScreen() {
             {/* Single-entity analysis result */}
             {showResultCard && (
               <>
-                <AnalysisResultCard report={result} onRetry={clearSearch} />
+                <AnalysisResultCard
+                  report={result}
+                  onRetry={clearSearch}
+                  onGoHome={clearSearch}
+                  onSelectSuggestion={handleSelectClarificationSuggestion}
+                  isAnalyzing={isAnalyzing}
+                />
               </>
             )}
 
@@ -213,7 +219,7 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   content: { flex: 1 },
   greeting: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: "Tajawal_700Bold",
     marginHorizontal: 16,
     marginVertical: 12,
@@ -228,13 +234,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   appName: {
-    fontSize: 30,
+    fontSize: 32,
     fontFamily: "Tajawal_700Bold",
     color: "#fff",
     textAlign: "center",
   },
   appSub: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
     textAlign: "center",

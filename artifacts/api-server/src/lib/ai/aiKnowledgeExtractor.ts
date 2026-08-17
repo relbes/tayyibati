@@ -11,6 +11,7 @@
 
 import { getAIProvider, SearchModality } from "./aiProvider";
 import { CanonicalSearchEngine, SearchMode } from "../canonicalSearchEngine";
+import { resolveProteinIngredient, getProteinFields, warmDishEngineCache, resolveSingleIngredient } from "../dishCompatibilityEngine";
 
 export interface AiKnowledgeResponse {
   entityType: "dish" | "food" | "product";
@@ -28,10 +29,13 @@ export interface ResolvedIngredientItem {
   confidence: number;
   matchedAlias: string | null;
   searchMethod: string;
+  proteinCategory?: string;
+  proteinSpecificity?: string;
 }
 
 export async function resolveAiIngredients(ingredients: string[]): Promise<ResolvedIngredientItem[]> {
   const resolvedList: ResolvedIngredientItem[] = [];
+  const cache = await warmDishEngineCache();
 
   for (const ing of ingredients) {
     const query = ing.trim();
@@ -43,6 +47,7 @@ export async function resolveAiIngredients(ingredients: string[]): Promise<Resol
     });
 
     if (res && res.searchOutcome === "FOUND") {
+      const pInfo = getProteinFields(res.canonical_name || res.canonicalName || query);
       resolvedList.push({
         input: query,
         searchOutcome: "FOUND",
@@ -52,18 +57,55 @@ export async function resolveAiIngredients(ingredients: string[]): Promise<Resol
         confidence: res.confidence || res.searchConfidence || 100,
         matchedAlias: res.matched_alias || res.matchedAlias || null,
         searchMethod: res.search_method || "exact_alias",
+        proteinCategory: pInfo.proteinCategory,
+        proteinSpecificity: pInfo.proteinSpecificity,
       });
     } else {
-      resolvedList.push({
-        input: query,
-        searchOutcome: "NOT_FOUND",
-        canonicalId: 0,
-        canonicalEntityType: "food",
-        canonicalName: query,
-        confidence: 0,
-        matchedAlias: null,
-        searchMethod: "not_found",
-      });
+      const proteinInfo = resolveProteinIngredient(query);
+      if (proteinInfo) {
+        resolvedList.push({
+          input: query,
+          searchOutcome: "FOUND",
+          canonicalId: 0,
+          canonicalEntityType: "food",
+          canonicalName: proteinInfo.canonicalFoodAr,
+          confidence: 95,
+          matchedAlias: null,
+          searchMethod: "protein_resolver",
+          proteinCategory: proteinInfo.proteinCategory,
+          proteinSpecificity: proteinInfo.proteinSpecificity,
+        });
+      } else {
+        // Fallback: try resolving via resolveSingleIngredient to see if it matches a DB food/alias (e.g. compound bread "خبز برغر" -> "الخبز")
+        const resolvedItem = resolveSingleIngredient(query, cache, true);
+        if (resolvedItem && resolvedItem.foodId !== null && resolvedItem.resolvedBy !== "unknown") {
+          resolvedList.push({
+            input: query,
+            searchOutcome: "FOUND",
+            canonicalId: resolvedItem.foodId,
+            canonicalEntityType: "food",
+            canonicalName: resolvedItem.canonicalFoodAr,
+            confidence: resolvedItem.confidenceScore,
+            matchedAlias: resolvedItem.rawIngredientName !== resolvedItem.canonicalFoodAr ? resolvedItem.rawIngredientName : null,
+            searchMethod: resolvedItem.resolvedBy === "alias" ? "exact_alias" : "exact_canonical",
+            proteinCategory: resolvedItem.proteinCategory,
+            proteinSpecificity: resolvedItem.proteinSpecificity,
+          });
+        } else {
+          resolvedList.push({
+            input: query,
+            searchOutcome: "NOT_FOUND",
+            canonicalId: 0,
+            canonicalEntityType: "food",
+            canonicalName: query,
+            confidence: 0,
+            matchedAlias: null,
+            searchMethod: "not_found",
+            proteinCategory: "NONE",
+            proteinSpecificity: "NONE",
+          });
+        }
+      }
     }
   }
 
@@ -93,9 +135,10 @@ export class AiKnowledgeExtractor {
       }
 
       const canonicalName = rawRes.canonicalNameAr || rawRes.canonicalNameEn || query;
-      const ingredients: string[] = (rawRes.ingredients || [])
+      let ingredients: string[] = (rawRes.ingredients || [])
         .map((ing) => (ing.name ? ing.name.trim() : ""))
         .filter((n) => n.length > 0);
+
 
       return {
         entityType: rawRes.entityType || "dish",

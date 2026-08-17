@@ -88,7 +88,11 @@ export interface AnalysisReport {
   conditional: IngredientResult[];
   unknown: IngredientResult[];
   explanation: string;
-  suggestions: string[];
+  suggestions?: string[] | Array<{
+    label: string;
+    proteinCategory?: string;
+    proteinSpecificity?: string;
+  }>;
   analysisType: "text" | "image" | "label";
   notFound?: boolean;
   overallConfidence?: "HIGH" | "MEDIUM" | "LOW";
@@ -159,6 +163,11 @@ export interface AnalysisReport {
     confidence: number;
     searchMethod: string;
   } | null;
+
+  // Generic Clarification fields
+  needsClarification?: boolean;
+  clarificationType?: string;
+  questionAr?: string;
 }
 
 interface AnalysisContextType {

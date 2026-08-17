@@ -30,6 +30,7 @@
 import { computeCompatibilityScore } from "./compatibilityScore.js";
 import { getKnowledgeCache } from "./knowledgeCache.js";
 import { ResolvedIngredientItem as AiResolvedIngredientItem } from "./ai/aiKnowledgeExtractor.js";
+import { resolveProteinIngredient } from "./dishCompatibilityEngine";
 
 export interface IngredientDecisionItem {
   input: string;
@@ -38,6 +39,9 @@ export interface IngredientDecisionItem {
   status: "allowed" | "forbidden" | "conditional" | "unknown";
   reason: string;
   source: string;
+  proteinCategory?: string;
+  proteinSpecificity?: string;
+  priority?: string;
 }
 
 export interface DecisionWeightsConfig {
@@ -364,63 +368,95 @@ export class DecisionEngine {
    * Private internal helper to evaluate a single resolved ingredient
    */
   private static async evaluateSingleIngredientInternal(item: AiResolvedIngredientItem): Promise<IngredientDecisionItem> {
-    if (!item || item.searchOutcome === "NOT_FOUND" || !item.canonicalId || item.canonicalId === 0) {
+    if (!item) {
       return {
-        input: item?.input || "",
+        input: "",
         canonicalId: 0,
-        canonicalName: item?.canonicalName || item?.input || "",
+        canonicalName: "",
         status: "unknown",
-        reason: "لم يتم العثور على المكون في قاعدة البيانات",
+        reason: "لم يتم تقديم أي مكون",
         source: "unknown",
       };
     }
 
-    if (item.canonicalEntityType === "food") {
-      const cache = await getKnowledgeCache();
-      const foodId = typeof item.canonicalId === "string" ? parseInt(item.canonicalId, 10) : item.canonicalId;
-      const food = cache.foodById.get(foodId);
+    // 1. Prioritize Canonical DB Resolution (if canonicalId is valid and not 0)
+    if (item.canonicalId && item.canonicalId !== 0 && item.searchOutcome !== "NOT_FOUND") {
+      if (item.canonicalEntityType === "food") {
+        const cache = await getKnowledgeCache();
+        const foodId = typeof item.canonicalId === "string" ? parseInt(item.canonicalId, 10) : item.canonicalId;
+        const food = cache.foodById.get(foodId);
 
-      if (food) {
+        if (food) {
+          const pInfo = resolveProteinIngredient(food.nameAr);
+          return {
+            input: item.input,
+            canonicalId: food.id,
+            canonicalName: food.nameAr,
+            status: food.status as any,
+            reason: food.reason || food.notes || "مقيّم حسَب قواعد طيباتي للمكونات",
+            source: "foods",
+            proteinCategory: item.proteinCategory,
+            proteinSpecificity: item.proteinSpecificity,
+            priority: pInfo?.priority,
+          };
+        }
+      }
+ 
+      if (item.canonicalEntityType === "product") {
         return {
           input: item.input,
-          canonicalId: food.id,
-          canonicalName: food.nameAr,
-          status: food.status as any,
-          reason: food.reason || food.notes || "مقيّم حسَب قواعد طيباتي للمكونات",
+          canonicalId: item.canonicalId,
+          canonicalName: item.canonicalName,
+          status: "allowed",
+          reason: "منتج تجاري مسجل",
+          source: "products",
+          proteinCategory: item.proteinCategory,
+          proteinSpecificity: item.proteinSpecificity,
+        };
+      }
+ 
+      if (item.canonicalEntityType === "dish") {
+        return {
+          input: item.input,
+          canonicalId: item.canonicalId,
+          canonicalName: item.canonicalName,
+          status: "conditional",
+          reason: "طبق مركب يتطلب تحليل مكونات",
+          source: "dishes",
+          proteinCategory: item.proteinCategory,
+          proteinSpecificity: item.proteinSpecificity,
+        };
+      }
+    }
+ 
+    // 2. Try Custom Protein Specificity Resolution Fallback (known generic categories / specific proteins not in DB)
+    if (item.proteinCategory && item.proteinCategory !== "NONE") {
+      const pInfo = resolveProteinIngredient(item.input);
+      if (pInfo) {
+        return {
+          input: item.input,
+          canonicalId: 0,
+          canonicalName: pInfo.canonicalFoodAr,
+          status: pInfo.status,
+          reason: pInfo.reason,
           source: "foods",
+          proteinCategory: pInfo.proteinCategory,
+          proteinSpecificity: pInfo.proteinSpecificity,
+          priority: pInfo.priority,
         };
       }
     }
 
-    if (item.canonicalEntityType === "product") {
-      return {
-        input: item.input,
-        canonicalId: item.canonicalId,
-        canonicalName: item.canonicalName,
-        status: "allowed",
-        reason: "منتج تجاري مسجل",
-        source: "products",
-      };
-    }
-
-    if (item.canonicalEntityType === "dish") {
-      return {
-        input: item.input,
-        canonicalId: item.canonicalId,
-        canonicalName: item.canonicalName,
-        status: "conditional",
-        reason: "طبق مركب يتطلب تحليل مكونات",
-        source: "dishes",
-      };
-    }
-
+    // 3. Unresolved fallback -> Unknown
     return {
-      input: item.input,
-      canonicalId: item.canonicalId,
-      canonicalName: item.canonicalName,
+      input: item.input || "",
+      canonicalId: 0,
+      canonicalName: item.canonicalName || item.input || "",
       status: "unknown",
-      reason: "غير محدد",
+      reason: "لم يتم العثور على المكون في قاعدة البيانات",
       source: "unknown",
+      proteinCategory: "NONE",
+      proteinSpecificity: "NONE",
     };
   }
 

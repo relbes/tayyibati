@@ -14,6 +14,9 @@ import { AiKnowledgeExtractor, AiKnowledgeResponse, resolveAiIngredients, Resolv
 import { DecisionEngine, IngredientDecisionItem } from "./decisionEngine";
 import { MealDecisionEngine, MealDecision } from "./mealDecisionEngine";
 import { ExplanationFramework, ExplanationModel } from "./explanationFramework";
+import { detectDishProteinInfo, isPureProteinQuery, resolveProteinIngredient, getClarificationData } from "./dishCompatibilityEngine";
+import { extractBaseEntity } from "./arabicNormalization";
+import { FoodResolutionEngine } from "./foodResolutionEngine";
 
 export interface SearchSession {
   id: string;
@@ -48,6 +51,15 @@ export interface OrchestrationResult {
   explanationModel?: ExplanationModel;
   candidates?: CanonicalSearchResult[];
   didYouMean?: string[];
+  dish?: string;
+  proteinCategory?: string;
+  proteinSpecificity?: string;
+  needsClarification?: boolean;
+  clarificationType?: string;
+  questionAr?: string;
+  suggestions?: any[];
+  resolutionState?: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN";
+  aiConfidence?: number;
 }
 
 export class SearchOrchestrator {
@@ -132,16 +144,128 @@ export class SearchOrchestrator {
       };
     }
 
+    if (isPureProteinQuery(context.query)) {
+      const resolution = await FoodResolutionEngine.resolve(
+        context.query,
+        mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
+        1.0
+      );
+
+      if (resolution.needsClarification) {
+        return {
+          triggerAction: "NOT_FOUND",
+          canonicalResult: null,
+          resolvedObject: null,
+          needsClarification: true,
+          clarificationType: resolution.clarificationType,
+          questionAr: resolution.questionAr,
+          suggestions: resolution.suggestions,
+        };
+      }
+
+      const proteinInfo = resolveProteinIngredient(context.query);
+      if (proteinInfo) {
+
+        const resolvedIngredient: ResolvedIngredientItem = {
+          input: context.query,
+          searchOutcome: "FOUND",
+          canonicalId: 0,
+          canonicalEntityType: "food",
+          canonicalName: proteinInfo.canonicalFoodAr,
+          confidence: 95,
+          matchedAlias: null,
+          searchMethod: "protein_resolver",
+          proteinCategory: proteinInfo.proteinCategory,
+          proteinSpecificity: proteinInfo.proteinSpecificity,
+        };
+
+        const decision: IngredientDecisionItem = {
+          input: context.query,
+          canonicalId: 0,
+          canonicalName: proteinInfo.canonicalFoodAr,
+          status: proteinInfo.status,
+          reason: proteinInfo.reason,
+          source: "foods",
+          proteinCategory: proteinInfo.proteinCategory,
+          proteinSpecificity: proteinInfo.proteinSpecificity,
+          priority: proteinInfo.priority !== "none" ? proteinInfo.priority : undefined,
+        };
+
+        const mealDecision: MealDecision = {
+          status: proteinInfo.status,
+          allowedCount: proteinInfo.status === "allowed" ? 1 : 0,
+          forbiddenCount: proteinInfo.status === "forbidden" ? 1 : 0,
+          conditionalCount: proteinInfo.status === "conditional" ? 1 : 0,
+          unknownCount: 0,
+          compatibilityScore: proteinInfo.status === "allowed" ? 100 : (proteinInfo.status === "forbidden" ? 0 : 50),
+        };
+
+        const explanationModel: ExplanationModel = {
+          summaryAr: proteinInfo.reason,
+          summaryEn: proteinInfo.reason,
+          detailedReasonAr: proteinInfo.reason,
+          detailedReasonEn: proteinInfo.reason,
+        };
+
+        const mockCanonicalResult: CanonicalSearchResult = {
+          canonicalId: 0,
+          canonicalEntityType: "food",
+          canonicalName: proteinInfo.canonicalFoodAr,
+          searchOutcome: "NOT_FOUND",
+          confidence: 95,
+          searchMethod: "protein_resolver",
+          matchType: "NOT_FOUND",
+        };
+
+        return {
+          triggerAction: "NOT_FOUND",
+          canonicalResult: mockCanonicalResult,
+          resolvedObject: null,
+          resolvedIngredients: [resolvedIngredient],
+          ingredientDecisions: [decision],
+          mealDecision,
+          explanationModel,
+          dish: extractBaseEntity(context.query) || undefined,
+          proteinCategory: proteinInfo.proteinCategory,
+          proteinSpecificity: proteinInfo.proteinSpecificity,
+        };
+      }
+    }
+
     // 3. TEXT / CAMERA / OCR MODE POLICY
     const result = await CanonicalSearchEngine.search(context);
 
-    // FOUND -> Return existing canonical result immediately (NEVER invoke AI)
+    // FOUND -> Check if it has protein variant ambiguity first (e.g. 'شاورما' alone)
     if (result.searchOutcome === "FOUND") {
+      const resolution = await FoodResolutionEngine.resolve(
+        context.query,
+        mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
+        1.0
+      );
+
+      if (resolution.needsClarification) {
+        return {
+          triggerAction: "NOT_FOUND",
+          canonicalResult: result,
+          resolvedObject: null,
+          needsClarification: true,
+          clarificationType: resolution.clarificationType,
+          questionAr: resolution.questionAr,
+          suggestions: resolution.suggestions,
+          proteinCategory: resolution.proteinCategory,
+          proteinSpecificity: resolution.proteinSpecificity,
+          resolutionState: resolution.state,
+          aiConfidence: 1.0,
+        };
+      }
+
       const resolved = await KnowledgeResolver.resolveCanonicalObject(result.canonical_id, result.entity_type);
       return {
         triggerAction: "ANALYZE_IMMEDIATE",
         canonicalResult: result,
         resolvedObject: resolved,
+        resolutionState: "CONFIDENT",
+        aiConfidence: 1.0,
       };
     }
 
@@ -154,16 +278,44 @@ export class SearchOrchestrator {
         canonicalResult: result,
         resolvedObject: null,
         candidates: result.candidateDishes,
+        resolutionState: "AMBIGUOUS",
+        aiConfidence: 1.0,
       };
     }
 
-    // NOT_FOUND -> Invoke AiKnowledgeExtractor, resolve ingredients, evaluate Decisions, aggregate Meal Decision & generate Explanation
+    // NOT_FOUND -> Invoke AiKnowledgeExtractor, resolve ingredients, evaluate Decisions
     const aiKnowledge = await AiKnowledgeExtractor.extract(context.query, mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any));
     const resolvedIngredients = await resolveAiIngredients(aiKnowledge.ingredients || []);
+
+    const resolution = await FoodResolutionEngine.resolve(
+      context.query,
+      mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
+      aiKnowledge.confidence,
+      aiKnowledge.ingredients,
+      aiKnowledge.canonicalName
+    );
+
+    if (resolution.needsClarification) {
+      return {
+        triggerAction: "NOT_FOUND",
+        canonicalResult: result,
+        resolvedObject: null,
+        needsClarification: true,
+        clarificationType: resolution.clarificationType,
+        questionAr: resolution.questionAr,
+        suggestions: resolution.suggestions,
+        proteinCategory: resolution.proteinCategory,
+        proteinSpecificity: resolution.proteinSpecificity,
+        resolutionState: resolution.state,
+        aiConfidence: aiKnowledge.confidence,
+      };
+    }
+
     const ingredientDecisions = await DecisionEngine.evaluateIngredients(resolvedIngredients);
     const mealDecision = MealDecisionEngine.evaluateMeal(ingredientDecisions);
     const explanationModel = ExplanationFramework.generateExplanation(mealDecision, ingredientDecisions, result);
 
+    const pInfo = detectDishProteinInfo(context.query, ingredientDecisions);
     return {
       triggerAction: "NOT_FOUND",
       canonicalResult: result,
@@ -174,6 +326,13 @@ export class SearchOrchestrator {
       mealDecision,
       explanationModel,
       didYouMean: result?.didYouMean,
+      dish: extractBaseEntity(aiKnowledge.canonicalName || context.query) || undefined,
+      proteinCategory: pInfo.proteinCategory,
+      proteinSpecificity: pInfo.proteinSpecificity,
+      resolutionState: "CONFIDENT",
+      aiConfidence: aiKnowledge.confidence,
     };
   }
 }
+
+

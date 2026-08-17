@@ -32,7 +32,7 @@ export default function CameraScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshUsage } = useAuth();
   const { isAnalyzing, setIsAnalyzing } = useAnalysis();
   const [pickedImage, setPickedImage] = useState<string | null>(null);
   const [pickedImageData, setPickedImageData] = useState<{ base64: string; mimeType: string } | null>(null);
@@ -112,6 +112,7 @@ export default function CameraScreen() {
     try {
       const report = await analyzeImage(base64, mimeType, "food");
       setResult(report);
+      if (refreshUsage) refreshUsage();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -391,7 +392,18 @@ export default function CameraScreen() {
                 />
               )}
 
-              <AnalysisResultCard report={result} />
+              <AnalysisResultCard
+                report={result}
+                onGoHome={() => {
+                  try {
+                    router.dismissTo("/(tabs)");
+                  } catch {
+                    router.navigate("/(tabs)");
+                  }
+                }}
+                onSelectSuggestion={handleManualEntry}
+                isAnalyzing={isAnalyzing}
+              />
 
               {result.relevantVariants && result.relevantVariants.length > 0 && (
                 <View style={{ marginTop: 16, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1, borderRadius: 14, padding: 16 }}>

@@ -6,13 +6,16 @@ import { analyzeText, analyzeDish, fetchAutocomplete, AnalysisError } from "@/li
 
 export interface AutocompleteSuggestion {
   labelAr: string;
-  labelEn: string;
+  labelEn?: string;
   query: string;
-  source: "DB_ENTITY" | "DB_ALIAS" | "DB_VARIANT";
+  entityType?: "food" | "dish" | "product" | string;
+  canonicalId?: number | string;
+  sectionHeader?: string;
+  source?: string;
 }
 
 export function useFoodSearch() {
-  const { user } = useAuth();
+  const { user, refreshUsage } = useAuth();
   const { setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
 
   // The raw text the user typed — never overwritten by selection
@@ -60,8 +63,51 @@ export function useFoodSearch() {
       try {
         const response = await fetchAutocomplete(trimmed, controller.signal);
         if (latestQueryRef.current === trimmed) {
-          setSuggestions(response.suggestions ?? []);
-          setShowSuggestions((response.suggestions?.length ?? 0) > 0);
+          if (typeof __DEV__ !== "undefined" && __DEV__) {
+            console.log("[SEARCH UI]", {
+              query: trimmed,
+              queryIntent: response.queryIntent,
+              foods: response.displayFoods?.map((x: any) => ({
+                id: x.canonicalId,
+                nameAr: x.canonicalName,
+                entityType: x.canonicalEntityType || "food",
+              })),
+              dishes: response.displayDishes?.map((x: any) => ({
+                id: x.canonicalId,
+                nameAr: x.canonicalName,
+                entityType: x.canonicalEntityType || "dish",
+              })),
+            });
+          }
+
+          let finalSuggestions: AutocompleteSuggestion[] = [];
+
+          // STRICT QUERY INTENT DISPLAY POLICY
+          if (response.queryIntent === "FOOD" || (response.displayFoods && response.displayFoods.length > 0)) {
+            // FOOD intent: render ONLY food entities! Completely ignore dishes to prevent dish flooding.
+            finalSuggestions = (response.displayFoods || []).map((f: any, idx: number) => ({
+              labelAr: f.canonicalName,
+              labelEn: f.canonicalName,
+              query: f.canonicalName,
+              entityType: "food",
+              canonicalId: f.canonicalId,
+              sectionHeader: idx === 0 ? "الأطعمة" : undefined,
+            }));
+          } else if (response.queryIntent === "DISH") {
+            finalSuggestions = (response.displayDishes || []).map((d: any, idx: number) => ({
+              labelAr: d.canonicalName,
+              labelEn: d.canonicalName,
+              query: d.canonicalName,
+              entityType: "dish",
+              canonicalId: d.canonicalId,
+              sectionHeader: idx === 0 ? "الأطباق" : undefined,
+            }));
+          } else {
+            finalSuggestions = response.suggestions ?? [];
+          }
+
+          setSuggestions(finalSuggestions);
+          setShowSuggestions(finalSuggestions.length > 0);
         }
       } catch (err: any) {
         if (err.name !== "AbortError" && latestQueryRef.current === trimmed) {
@@ -104,9 +150,7 @@ export function useFoodSearch() {
       setLimitReached(false);
 
       try {
-
         const report = await run();
-
         setResult(report);
         setCurrentReport(report);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -138,18 +182,12 @@ export function useFoodSearch() {
   );
 
   // ─── RULE 2 & 4: Direct dish selection → analyze by canonical ID ──────────
-  // The query textbox is NEVER modified. No text search is performed.
   const handleSelectDish = useCallback(
     async (dish: any) => {
-
-
       const dishId: number | undefined =
         typeof dish === "number" ? dish : typeof dish === "object" && dish?.id ? Number(dish.id) : undefined;
 
-
-
       if (!dishId || isNaN(dishId)) {
-        // Fallback: dish was a plain string — should not happen with the new architecture
         const nameAr = typeof dish === "string" ? dish : dish?.nameAr ?? "";
         console.warn("[TRACE FALLBACK] No dishId — falling back to analyzeText:", nameAr);
         if (!nameAr) return;
@@ -157,22 +195,32 @@ export function useFoodSearch() {
         return;
       }
 
-      // Direct canonical dish analysis — no text search, no query overwrite
       await _runAnalysis(() => analyzeDish(dishId), `analyzeDish(${dishId})`);
     },
     [_runAnalysis]
   );
 
-  // ─── Autocomplete suggestion tap: fill textbox + immediately analyze ───────
-  // The suggestion provides the exact canonical query text, so we set the
-  // textbox to that canonical form and analyze it once.
+  // ─── Autocomplete suggestion tap: fill textbox + analyze canonical entity ──
   const handleSelectSuggestion = useCallback(
     (sug: AutocompleteSuggestion) => {
       const canonicalText = sug.query || sug.labelAr;
-      setQuery(canonicalText);          // update textbox to show canonical name
+      const displayTitle = sug.labelAr || canonicalText;
+      setQuery(displayTitle);
       setShowSuggestions(false);
-      // Analyze the canonical text (one text search, no second search needed)
-      _runAnalysis(() => analyzeText(canonicalText));
+      if (sug.entityType === "dish" && sug.canonicalId) {
+        _runAnalysis(() => analyzeDish(Number(sug.canonicalId)), `analyzeDish(${sug.canonicalId})`);
+      } else {
+        _runAnalysis(
+          () =>
+            analyzeText({
+              query: canonicalText,
+              displayQuery: displayTitle,
+              entityType: sug.entityType || "food",
+              canonicalId: sug.canonicalId,
+            }),
+          `analyzeText("${canonicalText}", entity=${sug.entityType})`
+        );
+      }
     },
     [_runAnalysis]
   );

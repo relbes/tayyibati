@@ -1,7 +1,7 @@
 export const ar = {
   home: {
     appName: "طيباتي",
-    appSub: "تحقق من توافق أي طعام",
+    appSub: "ابحث عن أي طعام وتحقق من توافقه مع نظام الطيبات",
     greeting: "ماذا تريد أن تتحقق منه؟",
     searchPlaceholder: "ابحث أو أدخل اسم طعام أو مكوّن...",
     quickActions: "طرق سريعة للتحقق",

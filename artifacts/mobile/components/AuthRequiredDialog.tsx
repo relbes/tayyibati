@@ -15,12 +15,12 @@ export function AuthRequiredDialog({ visible, onClose }: AuthRequiredDialogProps
 
   const handleRegister = () => {
     onClose();
-    router.push({ pathname: "/auth", params: { tab: "register" } });
+    router.push("/auth?tab=register");
   };
 
   const handleLogin = () => {
     onClose();
-    router.push({ pathname: "/auth", params: { tab: "login" } });
+    router.push("/auth?tab=login");
   };
 
   return (

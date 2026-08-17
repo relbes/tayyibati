@@ -7,6 +7,7 @@ import usersRouter from "./users";
 import adminRouter from "./admin";
 import plansRouter from "./plans";
 import configRouter from "./config";
+import dishesRouter from "./dishes";
 import { adminKnowledgeReviewRouter } from "./adminKnowledgeReview";
 import { adminAiCacheRouter } from "./adminAiCache";
 
@@ -16,6 +17,7 @@ router.use(healthRouter);
 router.use(configRouter);
 router.use(plansRouter);
 router.use(foodsRouter);
+router.use(dishesRouter);
 router.use(analysisRouter);
 router.use(historyRouter);
 router.use(usersRouter);

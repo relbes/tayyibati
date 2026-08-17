@@ -22,28 +22,28 @@ export const UnresolvedSection = React.memo(function UnresolvedSection({
       accessibilityRole="text"
       accessibilityLabel={`المكونات غير المحددة: ${unresolvedInputs.length} مكونات`}
     >
-      <View style={styles.headerRow}>
+      <View style={[styles.headerRow, { flexDirection: "row-reverse" }]}>
         <Text style={styles.iconText}>❓</Text>
-        <Text style={[styles.sectionTitle, { color: colors.foreground }]}>مكونات غير محددة</Text>
+        <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: "right" }]}>مكونات غير محددة</Text>
         <View style={[styles.countBadge, { backgroundColor: colors.muted }]}>
           <Text style={[styles.countText, { color: colors.mutedForeground }]}>{unresolvedInputs.length}</Text>
         </View>
       </View>
 
       {/* Informative Banner */}
-      <View style={[styles.infoNotice, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.infoNotice, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row-reverse" }]}>
         <Icon name="information-circle-outline" size={20} color={colors.mutedForeground} />
-        <Text style={[styles.noticeText, { color: colors.mutedForeground }]}>
+        <Text style={[styles.noticeText, { color: colors.mutedForeground, textAlign: "right" }]}>
           لم يتم العثور على هذه المكونات في قاعدة بيانات الطيبات، ولذلك تعامل النظام معها على أنها غير محددة.
         </Text>
       </View>
 
       {/* Chip Grid */}
-      <View style={styles.chipGrid}>
+      <View style={[styles.chipGrid, { flexDirection: "row-reverse" }]}>
         {unresolvedInputs.map((input, idx) => (
-          <View key={`${input}_${idx}`} style={[styles.chip, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View key={`${input}_${idx}`} style={[styles.chip, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row-reverse" }]}>
             <Text style={styles.chipSymbol}>❓</Text>
-            <Text style={[styles.chipText, { color: colors.foreground }]}>{input}</Text>
+            <Text style={[styles.chipText, { color: colors.foreground, textAlign: "right" }]}>{input}</Text>
           </View>
         ))}
       </View>

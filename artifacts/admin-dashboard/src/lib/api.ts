@@ -7,12 +7,16 @@ export const getApiBaseUrl = (): string => {
 
 export const API_BASE = getApiBaseUrl();
 
-export function adminHeaders(): HeadersInit {
+export function adminHeaders(): Record<string, string> {
   const token = localStorage.getItem("tayyibati_admin_token");
 
-  return token
-    ? {
-        Authorization: `Bearer ${token}`,
-      }
-    : {};
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  return headers;
 }

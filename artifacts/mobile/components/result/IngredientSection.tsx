@@ -46,15 +46,15 @@ export const IngredientSection = React.memo(function IngredientSection({
   return (
     <View style={styles.sectionContainer}>
       <TouchableOpacity
-        style={[styles.headerRow, { backgroundColor: colors.card, borderColor: colors.border }]}
+        style={[styles.headerRow, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row-reverse" }]}
         onPress={toggleExpand}
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={`${title}، عدد المكونات ${ingredients.length}، ${isExpanded ? "مطوي" : "موسع"}`}
       >
-        <View style={styles.headerRight}>
+        <View style={[styles.headerRight, { flexDirection: "row-reverse" }]}>
           <Text style={styles.iconText}>{icon}</Text>
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>{title}</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: "right" }]}>{title}</Text>
           <View style={[styles.countBadge, { backgroundColor: headerColor + "20" }]}>
             <Text style={[styles.countText, { color: headerColor }]}>{ingredients.length}</Text>
           </View>

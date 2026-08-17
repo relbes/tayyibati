@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { Icon } from "@/components/Icon";
 
@@ -15,9 +16,11 @@ export const ResultActionButtons = React.memo(function ResultActionButtons({
   onShare,
 }: ResultActionButtonsProps) {
   const colors = useColors();
+  const insets = useSafeAreaInsets();
+  const bottomMargin = Math.max(insets.bottom + 12, 24);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { marginBottom: bottomMargin }]}>
       {/* Primary Action Button */}
       <TouchableOpacity
         style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
@@ -26,7 +29,7 @@ export const ResultActionButtons = React.memo(function ResultActionButtons({
         accessibilityRole="button"
         accessibilityLabel="تحليل وجبة أخرى"
       >
-        <Icon name="refresh-outline" size={20} color={colors.primaryForeground} />
+        <Icon name="refresh-outline" size={22} color={colors.primaryForeground} />
         <Text style={[styles.primaryBtnText, { color: colors.primaryForeground }]}>تحليل وجبة أخرى</Text>
       </TouchableOpacity>
 
@@ -38,7 +41,7 @@ export const ResultActionButtons = React.memo(function ResultActionButtons({
         accessibilityRole="button"
         accessibilityLabel="العودة للرئيسية"
       >
-        <Icon name="home-outline" size={20} color={colors.foreground} />
+        <Icon name="home-outline" size={22} color={colors.foreground} />
         <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>العودة للرئيسية</Text>
       </TouchableOpacity>
 
@@ -51,7 +54,7 @@ export const ResultActionButtons = React.memo(function ResultActionButtons({
           accessibilityRole="button"
           accessibilityLabel="مشاركة النتيجة"
         >
-          <Icon name="share-social-outline" size={20} color={colors.foreground} />
+          <Icon name="share-social-outline" size={22} color={colors.foreground} />
           <Text style={[styles.secondaryBtnText, { color: colors.foreground }]}>مشاركة النتيجة</Text>
         </TouchableOpacity>
       ) : null}
@@ -61,17 +64,17 @@ export const ResultActionButtons = React.memo(function ResultActionButtons({
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
-    marginTop: 8,
-    marginBottom: 24,
+    gap: 14,
+    marginTop: 12,
   },
   primaryBtn: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    height: 52,
+    gap: 10,
+    height: 56,
     borderRadius: 16,
+    paddingHorizontal: 16,
   },
   primaryBtnText: {
     fontSize: 16,
@@ -81,10 +84,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    height: 52,
+    gap: 10,
+    height: 56,
     borderRadius: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
+    paddingHorizontal: 16,
   },
   secondaryBtnText: {
     fontSize: 16,

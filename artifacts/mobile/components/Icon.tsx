@@ -52,10 +52,29 @@ import {
   Edit,
   Filter,
   LayoutGrid,
+  Leaf,
+  Apple,
+  Wheat,
+  Utensils,
+  Package,
+  Soup,
+  CookingPot,
+  ChefHat,
   type LucideIcon,
 } from "lucide-react-native";
 
 const ICON_MAP: Record<string, LucideIcon> = {
+  // Food & Dish entity icons
+  "leaf": Leaf,
+  "food": Leaf,
+  "apple": Apple,
+  "wheat": Wheat,
+  "utensils": Utensils,
+  "dish": Utensils,
+  "package": Package,
+  "soup": Soup,
+  "cooking-pot": CookingPot,
+  "chef-hat": ChefHat,
   // Navigation & UI
   "close": X,
   "x": X,

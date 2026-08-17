@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- Shield of Purity - Tayyibati Master Logo -->
+  <defs>
+    <!-- Subtle smooth gradient for depth while maintaining flat design aesthetic -->
+    <linearGradient id="shieldGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#1F8B6C"/>
+      <stop offset="100%" stop-color="#176A51"/>
+    </linearGradient>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E2B75F"/>
+      <stop offset="100%" stop-color="#CA973C"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Central Shield Emblem -->
+  <path d="M 512,128 
+           C 650,128 780,180 816,240 
+           C 824,480 770,720 512,896 
+           C 254,720 200,480 208,240 
+           C 244,180 374,128 512,128 Z" 
+        fill="url(#shieldGrad)"/>
+
+  <!-- Golden Wheat Stalk (Left / Center) -->
+  <!-- Main Stem -->
+  <path d="M 460,720 Q 450,520 480,360 Q 486,328 492,300" 
+        fill="none" stroke="url(#goldGrad)" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- Wheat Grains (Grains along the stem) -->
+  <path d="M 490,300 Q 520,270 512,240 Q 480,270 490,300 Z" fill="url(#goldGrad)"/>
+
+  <path d="M 488,340 Q 525,320 535,285 Q 495,295 488,340 Z" fill="url(#goldGrad)"/>
+  <path d="M 480,345 Q 440,325 430,290 Q 470,300 480,345 Z" fill="url(#goldGrad)"/>
+
+  <path d="M 482,410 Q 525,385 540,345 Q 495,360 482,410 Z" fill="url(#goldGrad)"/>
+  <path d="M 475,415 Q 430,390 415,350 Q 460,365 475,415 Z" fill="url(#goldGrad)"/>
+
+  <path d="M 475,480 Q 522,455 542,410 Q 492,430 475,480 Z" fill="url(#goldGrad)"/>
+  <path d="M 468,485 Q 420,460 402,415 Q 450,435 468,485 Z" fill="url(#goldGrad)"/>
+
+  <path d="M 468,550 Q 518,525 540,475 Q 488,500 468,550 Z" fill="url(#goldGrad)"/>
+  <path d="M 460,555 Q 410,530 390,480 Q 440,505 460,555 Z" fill="url(#goldGrad)"/>
+
+  <path d="M 460,620 Q 512,595 536,545 Q 484,570 460,620 Z" fill="url(#goldGrad)"/>
+  <path d="M 452,625 Q 402,600 380,550 Q 430,575 452,625 Z" fill="url(#goldGrad)"/>
+
+  <!-- Crisp White Checkmark (Right / Overlay) -->
+  <path d="M 520,540 L 595,620 L 725,440" 
+        fill="none" stroke="#FFFFFF" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

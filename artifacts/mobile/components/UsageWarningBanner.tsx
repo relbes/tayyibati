@@ -23,17 +23,8 @@ const WARN_THRESHOLD = 0.8;
 export function UsageWarningBanner({ type }: Props) {
   const colors = useColors();
   const router = useRouter();
-  const { user } = useAuth();
-  const [usage, setUsage] = useState<UsageInfo | null>(null);
+  const { user, usage } = useAuth();
   const [dismissed, setDismissed] = useState(false);
-
-  useEffect(() => {
-    if (!user) return;
-    setDismissed(false);
-    getUserUsage()
-      .then((u) => setUsage(u))
-      .catch(() => {});
-  }, [user]);
 
   if (!user || dismissed || !usage) return null;
   if (usage.isPremium) return null;

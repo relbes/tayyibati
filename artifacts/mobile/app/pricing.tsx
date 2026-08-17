@@ -21,15 +21,25 @@ import { useSubscription } from "@/lib/revenuecat";
 import { syncPremium, getPlans } from "@/lib/api";
 import { isRTL } from "@/lib/i18n";
 
+
 interface Plan {
   id: number;
-  name: string;
+  nameAr: string;
   nameEn: string;
-  dailyTextLimit: number;
-  dailyImageLimit: number;
   price: string;
   currency: string;
   billingCycle: string;
+  descriptionAr: string | null;
+  descriptionEn: string | null;
+  featuresAr: string[];
+  featuresEn: string[];
+  dailyLimit: number;
+  dailyTextLimit: number;
+  dailyImageLimit: number;
+  isPopular: boolean;
+  sortOrder: number;
+  revenueCatProductId: string | null;
+  revenueCatEntitlementId: string | null;
 }
 
 export default function PricingScreen() {
@@ -41,11 +51,12 @@ export default function PricingScreen() {
     useSubscription();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const rtl = isRTL();
+  const hasPremium = user?.isPremium === true;
 
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [selectedPkg, setSelectedPkg] = useState<any>(null);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [premiumPlan, setPremiumPlan] = useState<Plan | null>(null);
+  const [plans, setPlans] = useState<Plan[]>([]);
 
   const currentOffering = offerings?.current;
   const packages = currentOffering?.availablePackages ?? [];
@@ -53,15 +64,19 @@ export default function PricingScreen() {
   useEffect(() => {
     getPlans()
       .then((plans: Plan[]) => {
-        const p = plans.find((pl) => pl.billingCycle !== "free");
-        if (p) setPremiumPlan(p);
+        setPlans(plans);
       })
       .catch(() => {});
   }, []);
 
-  const displayPrice = premiumPlan
-    ? `$${premiumPlan.price}`
-    : "$0.99";
+  useEffect(() => {
+    refreshUser().catch(() => {});
+  }, [refreshUser]);
+
+  const defaultPremiumPlan = plans.find((pl) => pl.billingCycle !== "free");
+  const displayPrice = defaultPremiumPlan
+    ? `${defaultPremiumPlan.price} ${defaultPremiumPlan.currency}`
+    : "$1.99";
 
   const handleUpgrade = (pkg: any) => {
     if (!user) {
@@ -117,81 +132,108 @@ export default function PricingScreen() {
     "دعم متميز",
   ];
 
-  const freeFeatures = [
-    "15 بحث نصي / شهر",
-    "3 تحليل صور / شهر",
-    "سجل التحليلات",
-  ];
+  const freePlan = plans.find((p) => p.billingCycle === "free");
+  const premiumPlans = plans.filter((p) => p.billingCycle !== "free");
 
-  const PremiumCard = ({ pkg }: { pkg?: any }) => (
-    <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent, alignItems: rtl ? "flex-end" : "flex-start" }]}>
-      <LinearGradient
-        colors={[colors.accent + "22", colors.primary + "11"]}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      <View
-        style={[
-          styles.popularBadge,
-          {
-            backgroundColor: colors.accent,
-            right: rtl ? undefined : 14,
-            left: rtl ? 14 : undefined,
-          },
-        ]}
-      >
-        <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
-      </View>
-      <Icon name="star" size={32} color={colors.accent} />
-      <Text style={[styles.planName, { color: colors.foreground, marginTop: 8, textAlign: rtl ? "right" : "left", width: "100%" }]}>بريميوم</Text>
-      <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-        <Text style={[styles.planAmount, { color: colors.accent }]}>{displayPrice}</Text>
-        <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> / شهر</Text>
-      </View>
-      <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
-      <Text
-        style={[
-          styles.limitBadge,
-          {
-            color: colors.accent,
-            backgroundColor: colors.accent + "15",
-            alignSelf: rtl ? "flex-end" : "flex-start",
-            textAlign: rtl ? "right" : "left",
-          },
-        ]}
-      >
-        ∞ تحليلات غير محدودة
-      </Text>
-      {premiumFeatures.map((f) => (
-        <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-          <Icon name="checkmark-circle" size={18} color={colors.accent} />
-          <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
-            <Text style={[styles.featureTextText, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
+  const freePlanName = freePlan ? (rtl ? freePlan.nameAr : freePlan.nameEn) : "مجاني";
+  const freePlanFeaturesList = freePlan
+    ? (rtl ? freePlan.featuresAr : freePlan.featuresEn)
+    : [
+        "15 بحث نصي / شهر",
+        "3 تحليل صور / شهر",
+        "سجل التحليلات",
+      ];
+  const freeLimitText = freePlan
+    ? (rtl
+        ? `${freePlan.dailyTextLimit} نصي + ${freePlan.dailyImageLimit} صور / يوم`
+        : `${freePlan.dailyTextLimit} text + ${freePlan.dailyImageLimit} image / day`)
+    : "15 نصي + 3 صور / شهر";
+
+  const isFreeCurrent = freePlan ? (user?.planId === freePlan.id || (!user?.planId && !hasPremium)) : !hasPremium;
+
+  const PremiumCard = ({ plan, pkg }: { plan: Plan | null; pkg?: any }) => {
+    const planName = plan ? (rtl ? plan.nameAr : plan.nameEn) : (rtl ? "بريميوم" : "Premium");
+    const planPrice = plan ? `${plan.price} ${plan.currency}` : "$1.99";
+    const planFeatures = plan
+      ? (rtl ? plan.featuresAr : plan.featuresEn)
+      : premiumFeatures;
+    const isPopular = plan ? plan.isPopular : true;
+    const isCurrentPlan = plan
+      ? (user?.planId === plan.id || (!user?.planId && hasPremium && plan.billingCycle !== "free"))
+      : hasPremium;
+
+    return (
+      <View style={[styles.planCard, styles.premiumCard, { borderColor: colors.accent, alignItems: rtl ? "flex-end" : "flex-start" }]}>
+        <LinearGradient
+          colors={[colors.accent + "22", colors.primary + "11"]}
+          style={StyleSheet.absoluteFill}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        />
+        {isPopular && (
+          <View
+            style={[
+              styles.popularBadge,
+              {
+                backgroundColor: colors.accent,
+                right: rtl ? undefined : 14,
+                left: rtl ? 14 : undefined,
+              },
+            ]}
+          >
+            <Text style={styles.popularText}>الأكثر شيوعاً ⭐</Text>
           </View>
+        )}
+        <Icon name="star" size={32} color={colors.accent} />
+        <Text style={[styles.planName, { color: colors.foreground, marginTop: 8, textAlign: rtl ? "right" : "left", width: "100%" }]}>{planName}</Text>
+        <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Text style={[styles.planAmount, { color: colors.accent }]}>{plan ? plan.price : "$1.99"}</Text>
+          <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> {plan ? plan.currency : "SAR"} / شهر</Text>
         </View>
-      ))}
-      {isSubscribed ? (
-        <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
-          <Text style={[styles.currentText, { color: colors.accent, textAlign: "center" }]}>✓ خطتك الحالية</Text>
-        </View>
-      ) : pkg ? (
-        <TouchableOpacity
-          style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
-          onPress={() => handleUpgrade(pkg)}
+        <View style={[styles.divider, { backgroundColor: colors.accent + "40" }]} />
+        <Text
+          style={[
+            styles.limitBadge,
+            {
+              color: colors.accent,
+              backgroundColor: colors.accent + "15",
+              alignSelf: rtl ? "flex-end" : "flex-start",
+              textAlign: rtl ? "right" : "left",
+            },
+          ]}
         >
-          <Text style={styles.upgradeBtnText}>اشترك الآن — {displayPrice} / شهر</Text>
-        </TouchableOpacity>
-      ) : (
-        <TouchableOpacity
-          style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
-          onPress={handleUpgradeFallback}
-        >
-          <Text style={styles.upgradeBtnText}>اشترك الآن — {displayPrice} / شهر</Text>
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+          {plan ? (rtl ? `∞ تحليلات غير محدودة` : `∞ Unlimited Analysis`) : `∞ تحليلات غير محدودة`}
+        </Text>
+        {planFeatures.map((f) => (
+          <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+            <Icon name="checkmark-circle" size={18} color={colors.accent} />
+            <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
+              <Text style={[styles.featureTextText, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
+            </View>
+          </View>
+        ))}
+        {isCurrentPlan ? (
+          <View style={[styles.currentBadge, { backgroundColor: colors.accent + "30" }]}>
+            <Text style={[styles.currentText, { color: colors.accent, textAlign: "center" }]}>✓ خطتك الحالية</Text>
+          </View>
+        ) : pkg ? (
+          <TouchableOpacity
+            style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
+            onPress={() => handleUpgrade(pkg)}
+          >
+            <Text style={styles.upgradeBtnText}>اشترك الآن — {planPrice} / شهر</Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.upgradeBtn, { backgroundColor: colors.accent }]}
+            onPress={handleUpgradeFallback}
+          >
+            <Text style={styles.upgradeBtnText}>اشترك الآن — {planPrice} / شهر</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -254,10 +296,10 @@ export default function PricingScreen() {
 
           {/* Free plan */}
           <View style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: rtl ? "flex-end" : "flex-start" }]}>
-            <Text style={[styles.planName, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>مجاني</Text>
+            <Text style={[styles.planName, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{freePlanName}</Text>
             <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-              <Text style={[styles.planAmount, { color: colors.foreground }]}>0</Text>
-              <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> ريال / شهر</Text>
+              <Text style={[styles.planAmount, { color: colors.foreground }]}>{freePlan ? freePlan.price : "0"}</Text>
+              <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> {freePlan ? freePlan.currency : "ريال"} / شهر</Text>
             </View>
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
             <Text
@@ -271,9 +313,9 @@ export default function PricingScreen() {
                 },
               ]}
             >
-              15 نصي + 3 صور / شهر
+              {freeLimitText}
             </Text>
-            {freeFeatures.map((f) => (
+            {freePlanFeaturesList.map((f) => (
               <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
                 <Icon name="checkmark-circle" size={18} color={colors.allowed} />
                 <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
@@ -281,17 +323,30 @@ export default function PricingScreen() {
                 </View>
               </View>
             ))}
-            {!isSubscribed && (
+            {isFreeCurrent && (
               <View style={[styles.currentBadge, { backgroundColor: colors.muted }]}>
                 <Text style={[styles.currentText, { color: colors.mutedForeground, textAlign: "center" }]}>✓ خطتك الحالية</Text>
               </View>
             )}
           </View>
 
-          {/* Premium plan */}
-          {packages.length > 0
-            ? packages.map((pkg) => <PremiumCard key={pkg.identifier} pkg={pkg} />)
-            : <PremiumCard />
+          {/* Premium plans */}
+          {premiumPlans.length > 0
+            ? premiumPlans.map((plan) => {
+                const pkg = packages.find(
+                  (p) =>
+                    (plan.revenueCatProductId &&
+                      p.product.identifier === plan.revenueCatProductId) ||
+                    p.product.identifier === "tayyibati_premium_monthly"
+                );
+                return <PremiumCard key={plan.id} plan={plan} pkg={pkg} />;
+              })
+            : (() => {
+                const pkg = packages.find(
+                  (p) => p.product.identifier === "tayyibati_premium_monthly"
+                );
+                return <PremiumCard plan={null} pkg={pkg} />;
+              })()
           }
 
           {/* Restore purchases */}
@@ -367,14 +422,14 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  popularText: { color: "#fff", fontSize: 11, fontFamily: "Tajawal_700Bold" },
-  planName: { fontSize: 22, fontFamily: "Tajawal_700Bold" },
+  popularText: { color: "#fff", fontSize: 12, fontFamily: "Tajawal_700Bold" },
+  planName: { fontSize: 24, fontFamily: "Tajawal_700Bold" },
   priceRow: { alignItems: "flex-end", justifyContent: "flex-start" },
-  planAmount: { fontSize: 36, fontFamily: "Tajawal_700Bold" },
-  planCurrency: { fontSize: 14, fontFamily: "Tajawal_400Regular", paddingBottom: 6 },
+  planAmount: { fontSize: 38, fontFamily: "Tajawal_700Bold" },
+  planCurrency: { fontSize: 15, fontFamily: "Tajawal_400Regular", paddingBottom: 6 },
   divider: { height: 1, marginVertical: 4, alignSelf: "stretch" },
   limitBadge: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Tajawal_700Bold",
     paddingVertical: 6,
     paddingHorizontal: 12,
@@ -391,20 +446,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTextText: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Tajawal_400Regular",
   },
   currentBadge: { padding: 10, borderRadius: 10, alignItems: "center", marginTop: 4, alignSelf: "stretch" },
-  currentText: { fontSize: 13, fontFamily: "Tajawal_700Bold" },
+  currentText: { fontSize: 14, fontFamily: "Tajawal_700Bold" },
   upgradeBtn: { padding: 14, borderRadius: 14, alignItems: "center", marginTop: 4, alignSelf: "stretch" },
-  upgradeBtnText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 16 },
+  upgradeBtnText: { color: "#fff", fontFamily: "Tajawal_700Bold", fontSize: 17 },
   restoreBtn: { alignItems: "center", paddingVertical: 8 },
-  restoreText: { fontSize: 13, fontFamily: "Tajawal_400Regular", textDecorationLine: "underline" },
+  restoreText: { fontSize: 14, fontFamily: "Tajawal_400Regular", textDecorationLine: "underline" },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center", padding: 24 },
   modalBox: { borderRadius: 20, padding: 24, gap: 16, width: "100%" },
-  modalTitle: { fontSize: 18, fontFamily: "Tajawal_700Bold", textAlign: "center" },
-  modalBody: { fontSize: 14, fontFamily: "Tajawal_400Regular", textAlign: "center", lineHeight: 22 },
+  modalTitle: { fontSize: 19.5, fontFamily: "Tajawal_700Bold", textAlign: "center" },
+  modalBody: { fontSize: 15, fontFamily: "Tajawal_400Regular", textAlign: "center", lineHeight: 23 },
   modalButtons: { gap: 12 },
   modalBtn: { flex: 1, padding: 14, borderRadius: 12, alignItems: "center" },
-  modalBtnText: { fontFamily: "Tajawal_700Bold", fontSize: 15 },
+  modalBtnText: { fontFamily: "Tajawal_700Bold", fontSize: 16 },
 });

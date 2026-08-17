@@ -8,7 +8,7 @@
  * - See docs/ENGINEERING_PRINCIPLES.md (Knowledge Before AI, Cache First)
  */
 import { db, foodsTable, foodAliases } from "@workspace/db";
-import { normalizeName, normalize, stripArticle, norm, stripAlefLam } from "./arabicNormalization";
+import { normalizeName, normalize, stripArticle, norm, stripAlefLam, extractBaseEntity } from "./arabicNormalization";
 
 export { normalizeName, normalize, stripArticle, norm, stripAlefLam };
 
@@ -729,6 +729,38 @@ export function resolveFoodIdentity(
     }
   }
 
+  // Stage 2b: Base Entity match (e.g. "لحم" -> matches "لحم بقري", "خبز" -> matches bread family, "رز" / "ارز" / "أرز" / "أَرُز" -> matches rice family)
+  const noAlefQ = strippedQ.replace(/^[اأإآ]/, "");
+  const baseMatches: any[] = [];
+  for (const f of foods) {
+    const baseAr = extractBaseEntity(f.nameAr);
+    if (baseAr) {
+      const normBase = stripArticle(normalizeName(baseAr));
+      const noAlefBase = normBase.replace(/^[اأإآ]/, "");
+      if (
+        normBase === strippedQ ||
+        normBase === normQ ||
+        noAlefBase === strippedQ ||
+        (noAlefQ.length >= 2 && noAlefBase === noAlefQ)
+      ) {
+        baseMatches.push(f);
+      }
+    }
+  }
+
+  if (baseMatches.length > 0) {
+    // Sort baseMatches: prefer Root Family Food (general_category || parentFoodId === null) over specific variants
+    baseMatches.sort((a, b) => {
+      const aIsRoot = a.foodType === "general_category" || a.parentFoodId === null ? 1 : 0;
+      const bIsRoot = b.foodType === "general_category" || b.parentFoodId === null ? 1 : 0;
+      if (bIsRoot !== aIsRoot) return bIsRoot - aIsRoot;
+      return a.id - b.id;
+    });
+
+    const chosenFood = baseMatches[0];
+    return { food: chosenFood, matchType: "BASE_ENTITY", confidence: "HIGH", originalInput: rawInput, matchedTerm: chosenFood.nameAr };
+  }
+
   // Stage 3: Article-stripped exact match on food name
   for (const f of foods) {
     const { sAr } = foodNormMap.get(f.id)!;
@@ -932,4 +964,119 @@ export function resolveWithInheritance(
   }
 
   return null;
+}
+
+export function aggregateFoodFamilySafety(
+  food: any,
+  knowledgeCache: CacheStore,
+  candidates?: any[]
+) {
+  const { foods } = knowledgeCache;
+
+  const childExceptions = foods.filter(
+    (item) => item.parentFoodId === food.id || (item.foodType === "specific_food" && item.parentFoodId === food.id)
+  );
+
+  const allMembers: any[] = [food];
+  const memberIds = new Set<number>([food.id]);
+
+  for (const child of childExceptions) {
+    if (!memberIds.has(child.id)) {
+      memberIds.add(child.id);
+      allMembers.push(child);
+    }
+  }
+
+  const familyBaseName = extractBaseEntity(food.nameAr) || food.nameAr;
+  const familyNormBase = stripArticle(normalizeName(familyBaseName));
+
+  if (candidates && candidates.length > 0) {
+    for (const cand of candidates) {
+      if (!memberIds.has(cand.id)) {
+        const candBaseName = extractBaseEntity(cand.nameAr) || cand.nameAr;
+        const candNormBase = stripArticle(normalizeName(candBaseName));
+        const isSameFamily =
+          cand.parentFoodId === food.id ||
+          candNormBase === familyNormBase ||
+          (candNormBase.length >= 2 && familyNormBase.length >= 2 && (candNormBase.includes(familyNormBase) || familyNormBase.includes(candNormBase)));
+
+        if (isSameFamily) {
+          memberIds.add(cand.id);
+          allMembers.push(cand);
+        }
+      }
+    }
+  }
+
+  if (process.env.DEBUG || process.env.NODE_ENV !== "production") {
+    console.log(`[FOOD_FAMILY_AGGREGATION] Family ID: ${food.id} | Name: "${food.nameAr}" | Members Count: ${allMembers.length}`);
+    for (const m of allMembers) {
+      const src = m.id === food.id ? "canonical_root" : (m.parentFoodId === food.id ? "parent_child_db" : "base_entity_alignment");
+      console.log(`  - Member ID: ${m.id} | Name: "${m.nameAr}" | Status: ${m.status} | Source: ${src}`);
+    }
+  }
+
+  let familyStatus: "allowed" | "forbidden" | "conditional" | "mixed" = food.status as any;
+  let familySummaryAr = "";
+
+  const baseName = extractBaseEntity(food.nameAr) || food.nameAr;
+
+  if (allMembers.length === 1) {
+    if (food.status === "allowed") {
+      familyStatus = "allowed";
+      familySummaryAr = `جميع أنواع ${baseName} مسموحة`;
+    } else if (food.status === "forbidden") {
+      familyStatus = "forbidden";
+      familySummaryAr = `${baseName}: ممنوع`;
+    } else if (food.status === "conditional") {
+      familyStatus = "conditional";
+      familySummaryAr = `${baseName}: مشروط`;
+    } else {
+      familyStatus = "mixed";
+      familySummaryAr = `${baseName}: يتطلب مراجعة`;
+    }
+  } else {
+    const otherMembers = allMembers.filter((m) => m.id !== food.id);
+    const hasAllowedOther = otherMembers.some((m) => m.status === "allowed");
+    const hasForbiddenOther = otherMembers.some((m) => m.status === "forbidden");
+
+    if (food.status === "forbidden" && hasAllowedOther) {
+      familyStatus = "mixed";
+      familySummaryAr = `${baseName}: ممنوع (يحتوي استثناءات مسموحة)`;
+    } else if (food.status === "allowed" && hasForbiddenOther) {
+      familyStatus = "mixed";
+      familySummaryAr = `${baseName}: مسموح (يحتوي استثناءات ممنوعة)`;
+    } else if (allMembers.every((m) => m.status === "allowed")) {
+      familyStatus = "allowed";
+      familySummaryAr = `جميع أنواع ${baseName} مسموحة`;
+    } else if (allMembers.every((m) => m.status === "forbidden")) {
+      familyStatus = "forbidden";
+      familySummaryAr = `${baseName}: ممنوع`;
+    } else {
+      familyStatus = "mixed";
+      familySummaryAr = `${baseName}: محدد بحسب النوع`;
+    }
+  }
+
+  const allowedExceptions = allMembers
+    .filter((m) => m.id !== food.id && m.status === "allowed")
+    .map((m) => ({ id: m.id, nameAr: m.nameAr, nameEn: m.nameEn, status: "allowed", reason: m.reason }));
+
+  const forbiddenExceptions = allMembers
+    .filter((m) => m.id !== food.id && m.status === "forbidden")
+    .map((m) => ({ id: m.id, nameAr: m.nameAr, nameEn: m.nameEn, status: "forbidden", reason: m.reason }));
+
+  const conditionalExceptions = allMembers
+    .filter((m) => m.id !== food.id && m.status === "conditional")
+    .map((m) => ({ id: m.id, nameAr: m.nameAr, nameEn: m.nameEn, status: "conditional", reason: m.reason }));
+
+  return {
+    food,
+    familyStatus,
+    familySummaryAr,
+    allowedExceptions,
+    forbiddenExceptions,
+    conditionalExceptions,
+    allMembers,
+  };
 }

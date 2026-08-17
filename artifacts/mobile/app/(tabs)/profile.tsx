@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: "Tajawal_700Bold",
   },
   profileHeader: {
@@ -246,18 +246,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   avatarInitial: {
-    fontSize: 32,
+    fontSize: 34,
     fontFamily: "Tajawal_700Bold",
     color: "#fff",
   },
   userName: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: "Tajawal_700Bold",
     color: "#fff",
     textAlign: "center",
   },
   userEmail: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Tajawal_400Regular",
     color: "rgba(255,255,255,0.75)",
     textAlign: "center",
@@ -273,7 +273,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   premiumText: {
-    fontSize: 13,
+    fontSize: 14,
     fontFamily: "Tajawal_700Bold",
   },
   guestCenter: {
@@ -284,15 +284,15 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   guestTitle: {
-    fontSize: 22,
+    fontSize: 24,
     fontFamily: "Tajawal_700Bold",
     textAlign: "center",
   },
   guestDesc: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Tajawal_400Regular",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 23,
   },
   primaryBtn: {
     paddingHorizontal: 28,
@@ -303,7 +303,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: "#fff",
     fontFamily: "Tajawal_700Bold",
-    fontSize: 15,
+    fontSize: 16,
   },
   content: {
     padding: 16,
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   cardTitle: {
-    fontSize: 15,
+    fontSize: 16.5,
     fontFamily: "Tajawal_700Bold",
   },
   usageRow: {

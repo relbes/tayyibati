@@ -178,10 +178,12 @@ export default function AuthScreen() {
       router.back();
     } catch (e) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      if (e instanceof AuthError) {
-          if (e.status === 423) {
-              setError("تم تعطيل تسجيل الدخول مؤقتاً، حاول مرة أخرى لاحقاً.");
-          }else {
+      if (tab === "register") {
+        setError("هذا البريد الإلكتروني مسجل مسبقاً.\n\nيمكنك تسجيل الدخول أو استخدام \"نسيت كلمة المرور\".");
+      } else if (e instanceof AuthError) {
+        if (e.status === 423) {
+          setError("تم تعطيل تسجيل الدخول مؤقتاً، حاول مرة أخرى لاحقاً.");
+        } else {
           if (typeof e.remainingAttempts === "number") {
             setRemainingAttempts(e.remainingAttempts);
           }
@@ -257,9 +259,9 @@ export default function AuthScreen() {
            ]}
          >
             {tab === "login"
-              ? "سجّل دخولك للوصول لتحليلاتك المحفوظة"
-              : "أنشئ حساباً لحفظ تحليلاتك"}
-          </Text>
+  ? "سجّل دخولك لبدء البحث"
+  : "أنشئ حساباً لبدء البحث وحفظ تحليلاتك"}
+</Text>
 
           {showGoogleBtn && (
             <>
@@ -385,6 +387,19 @@ export default function AuthScreen() {
           >
             <Text style={styles.submitText}>
               {loading ? "جاري..." : tab === "login" ? "دخول" : "إنشاء الحساب"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.switchTabBtn}
+            onPress={() => {
+              setTab(tab === "login" ? "register" : "login");
+              setError("");
+            }}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.switchTabText, { color: colors.primary }]}>
+              {tab === "login" ? "ليس لديك حساب؟ إنشاء حساب" : "لديك حساب بالفعل؟ تسجيل الدخول"}
             </Text>
           </TouchableOpacity>
 
@@ -538,5 +553,15 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_400Regular",
     textAlign: "center",
     lineHeight: 20,
+  },
+  switchTabBtn: {
+    paddingVertical: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  switchTabText: {
+    fontSize: 14,
+    fontFamily: "Tajawal_500Medium",
+    textAlign: "center",
   },
 });
