@@ -13,7 +13,6 @@ import { getFreeMonthlyLimit } from "../lib/config";
 import { getUserPlanLimits } from "./analysis";
 
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
-const REVENUECAT_ENTITLEMENT = "premium";
 
 const MAX_FAILED_LOGIN_ATTEMPTS = 10;
 const LOCKOUT_DURATION_MS = 15 * 60 * 1000;
@@ -109,7 +108,7 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
       return void res.status(503).json({ error: "Payment service not configured" });
     }
 
-    // 1. Load user and current plan from DB
+    // 1. Load user, current plan, and active database plans
     const [currentUser] = await db
       .select()
       .from(usersTable)
@@ -117,19 +116,28 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
 
     if (!currentUser) return void res.status(404).json({ error: "User not found" });
 
+    const activePlans = await db
+      .select()
+      .from(subscriptionPlansTable)
+      .where(eq(subscriptionPlansTable.isActive, "true"))
+      .orderBy(subscriptionPlansTable.sortOrder);
+
     let currentPlan = null;
     if (currentUser.planId != null) {
-      const [plan] = await db
-        .select()
-        .from(subscriptionPlansTable)
-        .where(eq(subscriptionPlansTable.id, currentUser.planId));
-      currentPlan = plan || null;
+      currentPlan = activePlans.find((p) => p.id === currentUser.planId) || null;
+      if (!currentPlan) {
+        const [plan] = await db
+          .select()
+          .from(subscriptionPlansTable)
+          .where(eq(subscriptionPlansTable.id, currentUser.planId));
+        currentPlan = plan || null;
+      }
     }
 
-    // 2. Call RevenueCat proxy
+    // 2. Call RevenueCat proxy and match entitlements dynamically
     const connectors = new ReplitConnectors();
     let rcPremium = false;
-    let rcProductId: string | null = null;
+    let matchedPlanFromRc: typeof activePlans[0] | null = null;
     let rcSuccess = false;
 
     try {
@@ -146,12 +154,36 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
             product_identifier?: string;
           }>;
         };
-        const activeEnt = data.items?.find(
-          (e) => e.lookup_key === REVENUECAT_ENTITLEMENT || e.identifier === REVENUECAT_ENTITLEMENT
-        );
-        if (activeEnt) {
-          rcPremium = true;
-          rcProductId = activeEnt.product_identifier || null;
+        const activeItems = data.items || [];
+
+        for (const item of activeItems) {
+          const entKey = item.lookup_key || item.identifier;
+          const prodId = item.product_identifier;
+
+          // Match by RevenueCat Product ID
+          if (prodId) {
+            const planByProd = activePlans.find((p) => p.revenueCatProductId === prodId);
+            if (planByProd) {
+              rcPremium = true;
+              matchedPlanFromRc = planByProd;
+              break;
+            }
+          }
+
+          // Match by RevenueCat Entitlement ID
+          if (entKey) {
+            const planByEnt = activePlans.find((p) => p.revenueCatEntitlementId === entKey);
+            if (planByEnt) {
+              rcPremium = true;
+              matchedPlanFromRc = planByEnt;
+              break;
+            }
+          }
+
+          // Fallback match for "premium" entitlement identifier
+          if (entKey === "premium") {
+            rcPremium = true;
+          }
         }
         rcSuccess = true;
       } else {
@@ -184,60 +216,19 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
     } else if (rcPremium) {
       // Entitlement is active in RevenueCat
       finalPremium = true;
-      if (rcProductId) {
-        const [matchingPlan] = await db
-          .select()
-          .from(subscriptionPlansTable)
-          .where(and(
-            eq(subscriptionPlansTable.revenueCatProductId, rcProductId),
-            eq(subscriptionPlansTable.isActive, "true")
-          ));
-        if (matchingPlan) {
-          finalPlanId = matchingPlan.id;
-        }
-      }
-      // If user has no plan assigned or is currently Free, fallback to the first active Premium plan
-      if (finalPlanId == null) {
-        const [fallbackPlan] = await db
-          .select()
-          .from(subscriptionPlansTable)
-          .where(and(
-            ne(subscriptionPlansTable.billingCycle, "free"),
-            eq(subscriptionPlansTable.isActive, "true")
-          ))
-          .orderBy(subscriptionPlansTable.sortOrder)
-          .limit(1);
+      if (matchedPlanFromRc) {
+        finalPlanId = matchedPlanFromRc.id;
+      } else if (finalPlanId == null || (currentPlan && currentPlan.billingCycle === "free")) {
+        const fallbackPlan = activePlans.find((p) => p.billingCycle !== "free");
         if (fallbackPlan) {
           finalPlanId = fallbackPlan.id;
         }
       }
     } else {
-      // RevenueCat reports no active entitlement
-      if (currentPlan) {
-        if (currentPlan.billingCycle !== "free") {
-          // Since it's not Admin assigned, it must be RC managed. Downgrade to Free.
-          const [freePlan] = await db
-            .select()
-            .from(subscriptionPlansTable)
-            .where(eq(subscriptionPlansTable.billingCycle, "free"))
-            .limit(1);
-          finalPlanId = freePlan ? freePlan.id : null;
-          finalPremium = false;
-        } else {
-          // Already Free
-          finalPlanId = currentPlan.id;
-          finalPremium = false;
-        }
-      } else {
-        // Fallback to Free if planId is null/invalid
-        const [freePlan] = await db
-          .select()
-          .from(subscriptionPlansTable)
-          .where(eq(subscriptionPlansTable.billingCycle, "free"))
-          .limit(1);
-        finalPlanId = freePlan ? freePlan.id : null;
-        finalPremium = false;
-      }
+      // RevenueCat reports no active entitlement -> Downgrade to Free
+      const freePlan = activePlans.find((p) => p.billingCycle === "free") || (await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.billingCycle, "free")).limit(1))[0];
+      finalPlanId = freePlan ? freePlan.id : null;
+      finalPremium = false;
     }
 
     // 4. Save updates to DB

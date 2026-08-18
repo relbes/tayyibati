@@ -125,26 +125,18 @@ export default function PricingScreen() {
     }
   };
 
-  const premiumFeatures = [
-    "بحث نصي غير محدود شهرياً",
-    "تحليل صور غير محدود شهرياً",
-    "تحليل ملصقات المنتجات",
-    "سجل كامل للتحليلات",
-    "أولوية في المعالجة",
-    "دعم متميز",
-  ];
-
   const freePlan = plans.find((p) => p.billingCycle === "free");
   const premiumPlans = plans.filter((p) => p.billingCycle !== "free");
 
   const freePlanName = freePlan ? (rtl ? freePlan.nameAr : freePlan.nameEn) : "مجاني";
+  const freePlanDescription = freePlan
+    ? (rtl ? (freePlan.descriptionAr || freePlan.descriptionEn) : (freePlan.descriptionEn || freePlan.descriptionAr))
+    : null;
   const freePlanFeaturesList = freePlan
-    ? (rtl ? freePlan.featuresAr : freePlan.featuresEn)
-    : [
-        "15 بحث نصي / شهر",
-        "3 تحليل صور / شهر",
-        "سجل التحليلات",
-      ];
+    ? (rtl
+        ? (freePlan.featuresAr && freePlan.featuresAr.length > 0 ? freePlan.featuresAr : freePlan.featuresEn)
+        : (freePlan.featuresEn && freePlan.featuresEn.length > 0 ? freePlan.featuresEn : freePlan.featuresAr)) || []
+    : [];
   const freeLimitText = freePlan
     ? (rtl
         ? `${freePlan.dailyTextLimit} نصي + ${freePlan.dailyImageLimit} صور / يوم`
@@ -155,10 +147,15 @@ export default function PricingScreen() {
 
   const PremiumCard = ({ plan, pkg }: { plan: Plan | null; pkg?: any }) => {
     const planName = plan ? (rtl ? plan.nameAr : plan.nameEn) : (rtl ? "بريميوم" : "Premium");
+    const planDescription = plan
+      ? (rtl ? (plan.descriptionAr || plan.descriptionEn) : (plan.descriptionEn || plan.descriptionAr))
+      : null;
     const planPrice = plan ? `${plan.price} ${plan.currency}` : "$1.99";
     const planFeatures = plan
-      ? (rtl ? plan.featuresAr : plan.featuresEn)
-      : premiumFeatures;
+      ? (rtl
+          ? (plan.featuresAr && plan.featuresAr.length > 0 ? plan.featuresAr : plan.featuresEn)
+          : (plan.featuresEn && plan.featuresEn.length > 0 ? plan.featuresEn : plan.featuresAr)) || []
+      : [];
     const isPopular = plan ? plan.isPopular : true;
     const isCurrentPlan = plan
       ? (user?.planId === plan.id || (!user?.planId && hasPremium && plan.billingCycle !== "free"))
@@ -188,6 +185,11 @@ export default function PricingScreen() {
         )}
         <Icon name="star" size={32} color={colors.accent} />
         <Text style={[styles.planName, { color: colors.foreground, marginTop: 8, textAlign: rtl ? "right" : "left", width: "100%" }]}>{planName}</Text>
+        {!!planDescription?.trim() && (
+          <Text style={[styles.planDescription, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
+            {planDescription.trim()}
+          </Text>
+        )}
         <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
           <Text style={[styles.planAmount, { color: colors.accent }]}>{plan ? plan.price : "$1.99"}</Text>
           <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> {plan ? plan.currency : "SAR"} / شهر</Text>
@@ -297,6 +299,11 @@ export default function PricingScreen() {
           {/* Free plan */}
           <View style={[styles.planCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: rtl ? "flex-end" : "flex-start" }]}>
             <Text style={[styles.planName, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{freePlanName}</Text>
+            {!!freePlanDescription?.trim() && (
+              <Text style={[styles.planDescription, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
+                {freePlanDescription.trim()}
+              </Text>
+            )}
             <View style={[styles.priceRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
               <Text style={[styles.planAmount, { color: colors.foreground }]}>{freePlan ? freePlan.price : "0"}</Text>
               <Text style={[styles.planCurrency, { color: colors.mutedForeground }]}> {freePlan ? freePlan.currency : "ريال"} / شهر</Text>
@@ -424,6 +431,13 @@ const styles = StyleSheet.create({
   },
   popularText: { color: "#fff", fontSize: 13.5, fontFamily: "Tajawal_700Bold" },
   planName: { fontSize: 27, fontFamily: "Tajawal_700Bold" },
+  planDescription: {
+    fontSize: 13.5,
+    fontFamily: "Tajawal_400Regular",
+    lineHeight: 19,
+    marginTop: 2,
+    marginBottom: 4,
+  },
   priceRow: { alignItems: "flex-end", justifyContent: "flex-start" },
   planAmount: { fontSize: 38, fontFamily: "Tajawal_700Bold" },
   planCurrency: { fontSize: 16.5, fontFamily: "Tajawal_500Medium", paddingBottom: 6 },
