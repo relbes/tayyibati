@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { useColors } from "@/hooks/useColors";
 import { fetchCatalog, NetworkError } from "@/lib/api";
 import { getCachedCatalog, setCachedCatalog, CatalogFoodItem } from "@/lib/catalogCache";
@@ -273,14 +274,7 @@ export default function BrowseScreen() {
     return (
       <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
         <View style={[styles.titleRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]}
-          >
-            <View>
-              <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
-            </View>
-          </TouchableOpacity>
+          <BackButton />
           <View style={{ flex: 1, alignItems: rtl ? "flex-end" : "flex-start" }}>
             <Text style={[styles.pageTitle, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
               {rtl ? "قائمة المسموح والممنوع" : "Allowed & Forbidden List"}

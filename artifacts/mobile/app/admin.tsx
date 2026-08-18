@@ -16,6 +16,7 @@ import { useRouter } from "expo-router";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { useColors } from "@/hooks/useColors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listFoods, createFood, deleteFood } from "@/lib/api";
@@ -75,9 +76,7 @@ export default function AdminScreen() {
           <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color="#064E24" />
         </TouchableOpacity>
         <Text style={[styles.title, { color: "#064E24" }]}>لوحة الإدارة</Text>
-        <TouchableOpacity style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1, alignItems: "center", justifyContent: "center" }} onPress={() => router.back()}>
-          <Icon name="arrow-back" size={20} color="#064E24" />
-        </TouchableOpacity>
+        <BackButton />
       </View>
 
       {/* Add Form */}

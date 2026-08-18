@@ -494,15 +494,17 @@ function resolveSingleIngredientInternal(
     
     let isMatch = false;
     if (f && foodNorm.length >= 3) {
-      if (n.includes(foodNorm)) {
+      const queryWords = n.split(/\s+/).map(w => stripAlefLam(w)).filter(w => w.length > 0);
+      const candidateWords = foodNorm.split(/\s+/).map(w => stripAlefLam(w)).filter(w => w.length > 0);
+
+      // Whole-word token check: foodNorm is matched only if every candidate word token matches a complete word token in the query
+      // (e.g. food "رز" in query "رز بني" or "أرز مصري", NOT sub-letters inside unrelated words like "ابل" inside "توابل")
+      const isWholeWordTokenMatch = candidateWords.length > 0 && candidateWords.every(cw => queryWords.includes(cw));
+
+      if (isWholeWordTokenMatch) {
         isMatch = true;
       } else if (foodNorm.includes(n)) {
         // Candidate contains query. Check if candidate introduces additional specificity.
-        // Tokenize query and candidate.
-        const queryWords = n.split(/\s+/).map(w => stripAlefLam(w)).filter(w => w.length > 0);
-        const candidateWords = foodNorm.split(/\s+/).map(w => stripAlefLam(w)).filter(w => w.length > 0);
-        
-        // Find extra words in candidate that are not present in query.
         const extraWords = candidateWords.filter(cw => !queryWords.includes(cw));
         
         // If there are any extra words at index > 0, the candidate introduces specificity.
@@ -1112,46 +1114,62 @@ export function specializeDishName(
   return { nameAr: specializedAr, nameEn: specializedEn };
 }
 
+function hasProteinKeyword(text: string, keywords: string[]): boolean {
+  if (!text) return false;
+  const nText = norm(text);
+  const rawTokens = nText.split(/\s+/).filter(Boolean);
+  const strippedTokens = rawTokens.map(t => stripAlefLam(t)).filter(Boolean);
+
+  return keywords.some(kw => {
+    const nKw = norm(kw);
+    const sKw = stripAlefLam(nKw);
+    return (
+      rawTokens.some(t => t === nKw || t === sKw) ||
+      strippedTokens.some(st => st === nKw || st === sKw)
+    );
+  });
+}
+
 export function getProteinFields(nameAr: string): { proteinCategory: string; proteinSpecificity: string } {
   const n = norm(nameAr);
 
   // 1. POULTRY
-  if (n.includes("دجاج") || n.includes("دجاجه") || n.includes("فراخ") || n.includes("جاج") || n.includes("chicken")) {
+  if (hasProteinKeyword(n, ["دجاج", "دجاجه", "فراخ", "جاج", "chicken"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "CHICKEN" };
   }
-  if ((n.includes("بط") || n.includes("duck")) && !n.includes("بطاط")) {
+  if (hasProteinKeyword(n, ["بط", "duck"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "DUCK" };
   }
-  if ((n.includes("رومي") || n.includes("حبش") || n.includes("turkey")) && !n.includes("جبن")) {
+  if (hasProteinKeyword(n, ["رومي", "حبش", "turkey"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "TURKEY" };
   }
-  if (n.includes("نعام") || n.includes("ostrich")) {
+  if (hasProteinKeyword(n, ["نعام", "ostrich"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "OSTRICH" };
   }
-  if (n.includes("حمام") || n.includes("pigeon")) {
+  if (hasProteinKeyword(n, ["حمام", "pigeon"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "PIGEON" };
   }
-  if (n.includes("سمان") || n.includes("quail")) {
+  if (hasProteinKeyword(n, ["سمان", "quail"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "QUAIL" };
   }
-  if (n.includes("طيور") || n.includes("دواجن") || n.includes("طير") || n.includes("poultry")) {
+  if (hasProteinKeyword(n, ["طيور", "دواجن", "طير", "poultry"])) {
     return { proteinCategory: "POULTRY", proteinSpecificity: "UNSPECIFIED" };
   }
 
   // 2. MEAT
-  if (n.includes("ضان") || n.includes("ضأن") || n.includes("خروف") || n.includes("غنم") || n.includes("ماعز") || n.includes("lamb") || n.includes("mutton") || n.includes("goat")) {
+  if (hasProteinKeyword(n, ["ضان", "ضأن", "خروف", "غنم", "ماعز", "lamb", "mutton", "goat"])) {
     return { proteinCategory: "MEAT", proteinSpecificity: "LAMB" };
   }
-  if (n.includes("بقر") || n.includes("عجل") || n.includes("beef") || n.includes("veal")) {
+  if (hasProteinKeyword(n, ["بقر", "عجل", "beef", "veal"])) {
     return { proteinCategory: "MEAT", proteinSpecificity: "BEEF" };
   }
-  if (n.includes("جاموس") || n.includes("buffalo")) {
+  if (hasProteinKeyword(n, ["جاموس", "buffalo"])) {
     return { proteinCategory: "MEAT", proteinSpecificity: "BUFFALO" };
   }
-  if (n.includes("جمل") || n.includes("حاشي") || n.includes("ابل") || n.includes("camel")) {
+  if (hasProteinKeyword(n, ["جمل", "حاشي", "ابل", "camel"])) {
     return { proteinCategory: "MEAT", proteinSpecificity: "CAMEL" };
   }
-  if (n.includes("لحم") || n.includes("لحوم") || n.includes("meat")) {
+  if (hasProteinKeyword(n, ["لحم", "لحوم", "meat"])) {
     return { proteinCategory: "MEAT", proteinSpecificity: "UNSPECIFIED" };
   }
 

@@ -705,29 +705,24 @@ export class CanonicalSearchEngine {
     }
 
     // C. Base Entity Resolution for Foods (e.g. "أرز مصري" -> base "أرز")
-    const baseKey = normalize(extractBaseEntity(rawQuery) || qStripped.split(" ")[0] || "");
-    if (baseKey) {
-      const baseFoodHits = [
-        indexes.exactFoodIndex.get(baseKey),
-        indexes.foodAliasIndex.get(baseKey),
-        ...(indexes.foodPrefixIndex.get(baseKey.slice(0, 2)) || []),
-        ...(indexes.foodPrefixIndex.get(baseKey.slice(0, 3)) || []),
-      ].filter(Boolean);
-
-      for (const bf of baseFoodHits) {
-        if (bf && !seenFoodIds.has(bf.id)) {
-          seenFoodIds.add(bf.id);
+    const extractedBase = extractBaseEntity(rawQuery);
+    if (extractedBase) {
+      const baseKey = normalize(extractedBase);
+      if (baseKey) {
+        const baseFoodHit = indexes.exactFoodIndex.get(baseKey) || indexes.foodAliasIndex.get(baseKey);
+        if (baseFoodHit && !seenFoodIds.has(baseFoodHit.id)) {
+          seenFoodIds.add(baseFoodHit.id);
           foods.push({
-            canonicalId: bf.id,
+            canonicalId: baseFoodHit.id,
             canonicalEntityType: "food",
-            canonicalName: bf.nameAr,
+            canonicalName: baseFoodHit.nameAr,
             searchConfidence: 90,
             matchType: "BASE_ENTITY",
             matchedAlias: baseKey,
             matchedReason: `Matched via Base Food Entity '${baseKey}'`,
             entity_type: "food",
-            canonical_id: bf.id,
-            canonical_name: bf.nameAr,
+            canonical_id: baseFoodHit.id,
+            canonical_name: baseFoodHit.nameAr,
             confidence: 90,
             matched_alias: baseKey,
             search_method: "base_entity_resolution",

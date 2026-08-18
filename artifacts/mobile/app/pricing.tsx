@@ -13,6 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -250,9 +251,7 @@ export default function PricingScreen() {
           },
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]} activeOpacity={0.7}>
-          <Icon name={rtl ? "arrow-back" : "arrow-forward"} size={22} color="#064E24" />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
         <View style={{ width: 44 }} />
       </View>

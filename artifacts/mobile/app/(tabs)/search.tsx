@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { useColors } from "@/hooks/useColors";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
@@ -86,13 +87,7 @@ export default function SearchScreen() {
             ]}
           >
             <View style={{ flexDirection: rtl ? "row-reverse" : "row", alignItems: "center", gap: 12, marginBottom: 10 }}>
-              <TouchableOpacity
-                onPress={() => router.back()}
-                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1, alignItems: "center", justifyContent: "center" }}
-                activeOpacity={0.7}
-              >
-                <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
-              </TouchableOpacity>
+              <BackButton />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
                   بحث عن طعام

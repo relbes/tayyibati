@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { useColors } from "@/hooks/useColors";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { useAnalysis } from "@/context/AnalysisContext";
@@ -60,9 +61,7 @@ export default function ResultScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
-        <TouchableOpacity style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]} onPress={() => router.back()}>
-          <Icon name="arrow-back" size={22} color="#064E24" />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={[styles.title, { color: "#064E24" }]}>نتيجة التحليل</Text>
         <View style={{ width: 36 }} />
       </View>

@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
@@ -207,9 +208,7 @@ export default function AuthScreen() {
       >
         <View style={{ width: 40 }} />
         <Text style={[styles.topTitle, { color: "#064E24" }]}>طيباتي</Text>
-        <TouchableOpacity style={[styles.closeBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]} onPress={() => router.back()}>
-          <Icon name="close" size={20} color="#064E24" />
-        </TouchableOpacity>
+        <BackButton />
       </View>
 
       <KeyboardAvoidingView

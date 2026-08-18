@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -115,13 +116,7 @@ export default function HistoryScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
         <View style={{ flexDirection: rtl ? "row-reverse" : "row", alignItems: "center", gap: 12, width: "100%" }}>
-          <TouchableOpacity
-            onPress={() => router.back()}
-            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1, alignItems: "center", justifyContent: "center" }}
-            activeOpacity={0.7}
-          >
-            <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
-          </TouchableOpacity>
+          <BackButton />
           <View style={{ flex: 1 }}>
             <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>سجل التحليلات</Text>
             {user && (

@@ -10,6 +10,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { BackButton } from "@/components/BackButton";
 import { useColors } from "@/hooks/useColors";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
@@ -94,13 +95,7 @@ export default function PrivacyPolicyScreen() {
           },
         ]}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Icon name="arrow-back" size={24} color="#064E24" />
-        </TouchableOpacity>
+        <BackButton />
         <Text style={[styles.title, { color: "#064E24" }]}>
           سياسة الخصوصية
         </Text>
