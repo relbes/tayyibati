@@ -205,10 +205,9 @@ export function AnalysisResultCard({
           onGoHome={handleGoHome}
         />
         <ResultActionButtons
-          onRetry={onRetry}
+          onAnalyzeAnother={onRetry || (() => {})}
           onGoHome={handleGoHome}
           onShare={onShare}
-          isPremium={true}
         />
       </View>
     );

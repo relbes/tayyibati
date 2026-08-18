@@ -19,6 +19,8 @@ import type { Product } from "./productAnalysisEngine";
 
 export interface ProductDbRecord extends Product {
   id: number;
+  nameAr?: string;
+  nameEn?: string;
   ingredientTextNormalized: string;
   category?: string | null;
   status: "active" | "draft" | "archived";

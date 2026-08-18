@@ -19,11 +19,11 @@ async function runPhase75FreezeSuite() {
   console.log("[PHASE 7.5 SEARCH FREEZE]: Verifying pure ranking priority & full matching...");
 
   // 1. Query "من"
-  const minRes = await CanonicalSearchEngine.search("من", { mode: SearchMode.AUTOCOMPLETE });
-  const minNames = (minRes.candidateDishes || [minRes]).map(c => c.canonicalName);
+  const minRes = await CanonicalSearchEngine.search("من");
+  const minNames = minRes ? ((minRes as any).candidateDishes || [minRes]).map((c: any) => c?.canonicalName || "") : [];
   console.log(" -> Top candidate names for 'من':", minNames);
 
-  if (minNames.length >= 4 && minNames.some(n => n.includes("منسف")) && minNames.some(n => n.includes("مندي"))) {
+  if (minNames.length >= 4 && minNames.some((n: string) => n.includes("منسف")) && minNames.some((n: string) => n.includes("مندي"))) {
     console.log(` -> PASS ✅: Query 'من' returned all expected matching dish records!`);
   } else {
     console.error(` -> FAIL ❌: Query 'من' missing expected records! Got:`, minNames);
@@ -31,11 +31,11 @@ async function runPhase75FreezeSuite() {
   }
 
   // 2. Query "منسف"
-  const mansafRes = await CanonicalSearchEngine.search("منسف", { mode: SearchMode.AUTOCOMPLETE });
-  const mansafNames = (mansafRes.candidateDishes || [mansafRes]).map(c => c.canonicalName);
+  const mansafRes = await CanonicalSearchEngine.search("منسف");
+  const mansafNames = mansafRes ? ((mansafRes as any).candidateDishes || [mansafRes]).map((c: any) => c?.canonicalName || "") : [];
   console.log(" -> Top candidate names for 'منسف':", mansafNames);
 
-  if (mansafNames.length >= 2 && mansafNames.every(n => n.includes("منسف"))) {
+  if (mansafNames.length >= 2 && mansafNames.every((n: string) => n.includes("منسف"))) {
     console.log(` -> PASS ✅: Query 'منسف' returned all matching Mansaf dishes!`);
   } else {
     console.error(` -> FAIL ❌: Query 'منسف' returned invalid candidates:`, mansafNames);
@@ -43,11 +43,11 @@ async function runPhase75FreezeSuite() {
   }
 
   // 3. Query "مندي"
-  const mandiRes = await CanonicalSearchEngine.search("مندي", { mode: SearchMode.AUTOCOMPLETE });
-  const mandiNames = (mandiRes.candidateDishes || [mandiRes]).map(c => c.canonicalName);
+  const mandiRes = await CanonicalSearchEngine.search("مندي");
+  const mandiNames = mandiRes ? ((mandiRes as any).candidateDishes || [mandiRes]).map((c: any) => c?.canonicalName || "") : [];
   console.log(" -> Top candidate names for 'مندي':", mandiNames);
 
-  if (mandiNames.length >= 2 && mandiNames.every(n => n.includes("مندي"))) {
+  if (mandiNames.length >= 2 && mandiNames.every((n: string) => n.includes("مندي"))) {
     console.log(` -> PASS ✅: Query 'مندي' returned all matching Mandi dishes!`);
   } else {
     console.error(` -> FAIL ❌: Query 'مندي' returned invalid candidates:`, mandiNames);
@@ -55,8 +55,8 @@ async function runPhase75FreezeSuite() {
   }
 
   // 4. Query "تف"
-  const tafRes = await CanonicalSearchEngine.search("تف", { mode: SearchMode.AUTOCOMPLETE });
-  const tafNames = (tafRes.candidateDishes || [tafRes]).map(c => c.canonicalName);
+  const tafRes = await CanonicalSearchEngine.search("تف");
+  const tafNames = tafRes ? ((tafRes as any).candidateDishes || [tafRes]).map((c: any) => c?.canonicalName || "") : [];
   console.log(" -> Top candidate names for 'تف':", tafNames);
 
   if (tafNames.length >= 1 && (tafNames[0] === "التفاح" || tafNames[0] === "تفاح")) {

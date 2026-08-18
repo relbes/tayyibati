@@ -33,7 +33,7 @@ async function runProductIntelligenceTest() {
           productName: "شوكولاتة بالحليب فاخرة",
           brand: "Lindt",
           ingredientText: "حليب مجفف، سكر، كاكاو، زبدة الكاكاو",
-          language: "ar",
+          language: "ar" as const,
         },
       },
       expectedProduct: "شوكولاتة بالحليب فاخرة",

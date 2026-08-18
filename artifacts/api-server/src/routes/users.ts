@@ -176,7 +176,7 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
     let finalPremium = currentUser.isPremium === "true";
     let finalPlanId = currentUser.planId;
 
-    if (isCurrentPlanAdminAssigned) {
+    if (currentPlan && isCurrentPlanAdminAssigned) {
       // Admin-assigned, so preserve it
       finalPlanId = currentPlan.id;
       finalPremium = true;

@@ -124,7 +124,7 @@ adminAiCacheRouter.get("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
-      return res.status(400).json({ success: false, error: "Invalid cache item ID" });
+      return void res.status(400).json({ success: false, error: "Invalid cache item ID" });
     }
 
     const [item] = await db
@@ -134,7 +134,7 @@ adminAiCacheRouter.get("/:id", async (req, res) => {
       .limit(1);
 
     if (!item) {
-      return res.status(404).json({ success: false, error: "AI cache item not found" });
+      return void res.status(404).json({ success: false, error: "AI cache item not found" });
     }
 
     res.json({ success: true, item });
@@ -148,7 +148,7 @@ adminAiCacheRouter.post("/:id/delete", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
-      return res.status(400).json({ success: false, error: "Invalid cache item ID" });
+      return void res.status(400).json({ success: false, error: "Invalid cache item ID" });
     }
 
     const [updated] = await db

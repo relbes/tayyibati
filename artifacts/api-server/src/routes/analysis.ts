@@ -177,7 +177,6 @@ export interface AnalysisReport {
   needsClarification?: boolean;
   clarificationType?: string;
   questionAr?: string;
-  suggestions?: any[];
   resolutionState?: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN";
   aiConfidence?: number;
 
@@ -1141,15 +1140,15 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
         ...c,
         resolution: resolution ? {
           resolved: true,
-          canonicalNameAr: resolution.primaryFood?.nameAr || resolution.resolvedEntity?.nameAr || c.nameAr,
-          canonicalNameEn: resolution.primaryFood?.nameEn || resolution.resolvedEntity?.nameEn || c.nameEn,
+          canonicalNameAr: (resolution as any).primaryFood?.nameAr || (resolution as any).resolvedEntity?.nameAr || c.nameAr,
+          canonicalNameEn: (resolution as any).primaryFood?.nameEn || (resolution as any).resolvedEntity?.nameEn || c.nameEn,
           resolutionType: resolution.matchType
         } : undefined
       };
     });
     ir.candidates = enrichedCandidates as any;
 
-    if (status === "AMBIGUOUS" || status === "UNKNOWN" || status === "INSUFFICIENT_IMAGE") {
+    if ((status as any) === "AMBIGUOUS" || (status as any) === "UNKNOWN" || (status as any) === "INSUFFICIENT_IMAGE") {
       const report: AnalysisReport = {
         query: queryLabel,
         analysisType: imageAnalysisType,
@@ -1201,7 +1200,7 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
            dbReason: resolution.food.reason,
            dbNotes: resolution.food.notes,
            isInherited: resolution.matchType === "SPECIFIC_INHERITED",
-           inheritsFrom: resolution.inheritedFromCategory ? { nameAr: resolution.inheritedFromCategory.nameAr, nameEn: resolution.inheritedFromCategory.nameEn } : undefined
+           inheritsFrom: resolution.inheritsFrom ? { nameAr: resolution.inheritsFrom.nameAr, nameEn: resolution.inheritsFrom.nameEn } : undefined
          };
          if (resolution.food.status === "allowed") allowed.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "allowed", reason: resolution.food.reason });
          else if (resolution.food.status === "forbidden") forbidden.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "forbidden", reason: resolution.food.reason });

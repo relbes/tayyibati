@@ -88,10 +88,10 @@ router.get("/dishes", async (req, res) => {
 router.get("/dishes/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid dish ID" });
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid dish ID" }); return; }
 
     const [dish] = await db.select().from(dishes).where(eq(dishes.id, id)).limit(1);
-    if (!dish) return res.status(404).json({ error: "Dish not found" });
+    if (!dish) { res.status(404).json({ error: "Dish not found" }); return; }
 
     const ings = await db.select().from(dishIngredients).where(eq(dishIngredients.dishId, id));
 
@@ -106,7 +106,8 @@ router.post("/dishes", requireAdmin, async (req, res) => {
   try {
     const { nameAr, nameEn, category, description, ingredientNames } = req.body || {};
     if (!nameAr || typeof nameAr !== "string") {
-      return res.status(400).json({ error: "Arabic name is required" });
+      res.status(400).json({ error: "Arabic name is required" });
+      return;
     }
 
     const [created] = await db
@@ -145,8 +146,9 @@ router.post("/dishes", requireAdmin, async (req, res) => {
 // PUT /api/dishes/:id - Update dish (Admin)
 router.put("/dishes/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid dish ID" });
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = parseInt(String(rawId), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid dish ID" }); return; }
 
     const { nameAr, nameEn, category, description, ingredientNames } = req.body || {};
     const updates: Record<string, any> = { updatedAt: new Date() };
@@ -162,7 +164,7 @@ router.put("/dishes/:id", requireAdmin, async (req, res) => {
       .where(eq(dishes.id, id))
       .returning();
 
-    if (!updated) return res.status(404).json({ error: "Dish not found" });
+    if (!updated) { res.status(404).json({ error: "Dish not found" }); return; }
 
     if (ingredientNames !== undefined) {
       await db.delete(dishIngredients).where(eq(dishIngredients.dishId, id));
@@ -191,8 +193,9 @@ router.put("/dishes/:id", requireAdmin, async (req, res) => {
 // DELETE /api/dishes/:id - Delete dish (Admin)
 router.delete("/dishes/:id", requireAdmin, async (req, res) => {
   try {
-    const id = parseInt(req.params.id, 10);
-    if (isNaN(id)) return res.status(400).json({ error: "Invalid dish ID" });
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const id = parseInt(String(rawId), 10);
+    if (isNaN(id)) { res.status(400).json({ error: "Invalid dish ID" }); return; }
 
     await db.delete(dishes).where(eq(dishes.id, id));
     res.json({ success: true, message: "Dish deleted successfully" });

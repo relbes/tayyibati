@@ -49,9 +49,29 @@ export interface DishAnalysisPayload {
   };
 }
 
+export interface ReportResolvedIngredient {
+  input: string;
+  searchOutcome: "FOUND" | "AMBIGUOUS" | "NOT_FOUND";
+  canonicalId: number | string;
+  canonicalEntityType: "food" | "dish" | "product";
+  canonicalName: string;
+  confidence: number;
+  matchedAlias: string | null;
+  searchMethod: string;
+}
+
+export interface ReportIngredientDecision {
+  input: string;
+  canonicalId: number | string;
+  canonicalName: string;
+  status: "allowed" | "forbidden" | "conditional" | "unknown";
+  reason: string;
+  source: string;
+}
+
 export interface AnalysisReport {
   query: string;
-  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD";
+  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND" | "MULTIPLE_DISHES";
   dishAnalysis?: DishAnalysisPayload;
 
   primaryRuling?: {
@@ -123,24 +143,8 @@ export interface AnalysisReport {
     confidence: number;
     ingredients: string[];
   };
-  resolvedIngredients?: {
-    input: string;
-    searchOutcome: "FOUND" | "AMBIGUOUS" | "NOT_FOUND";
-    canonicalId: number | string;
-    canonicalEntityType: "food" | "dish" | "product";
-    canonicalName: string;
-    confidence: number;
-    matchedAlias: string | null;
-    searchMethod: string;
-  }[];
-  ingredientDecisions?: {
-    input: string;
-    canonicalId: number | string;
-    canonicalName: string;
-    status: "allowed" | "forbidden" | "conditional" | "unknown";
-    reason: string;
-    source: string;
-  }[];
+  resolvedIngredients?: ReportResolvedIngredient[];
+  ingredientDecisions?: ReportIngredientDecision[];
   mealDecision?: {
     status: "allowed" | "forbidden" | "conditional" | "unknown";
     forbiddenCount: number;

@@ -1,7 +1,7 @@
 import type { IngredientDecisionVM } from "./IngredientDecisionVM";
 import type { MealDecisionVM, MealDecisionItemVM } from "./MealDecisionVM";
 import type { CanonicalResultVM } from "./CanonicalResultVM";
-import type { AnalysisReport } from "@/context/AnalysisContext";
+import type { AnalysisReport, IngredientResult, ReportIngredientDecision, ReportResolvedIngredient } from "../../context/AnalysisContext";
 
 import { extractBaseEntityWithModifiers } from "../../../api-server/src/lib/arabicNormalization";
 
@@ -30,6 +30,7 @@ export interface AnalysisResultViewModel {
   recognizedName: string;
   presentationMode: ResultPresentationMode;
   familyViewModel?: FoodFamilyViewModel | null;
+  familyData?: FoodFamilyViewModel | null;
   analysis?: AnalysisReport | null;
   ingredientDecisions: IngredientDecisionVM[];
   mealDecision: MealDecisionVM | null;
@@ -65,7 +66,7 @@ export function createAnalysisResultViewModel(
 
   const ingredientDecisions: IngredientDecisionVM[] =
     rawDecisions.length > 0
-      ? rawDecisions.map((d, i) => {
+      ? rawDecisions.map((d: ReportIngredientDecision, i: number) => {
           const res = rawResolved[i];
           return {
             input: d.input,
@@ -78,7 +79,7 @@ export function createAnalysisResultViewModel(
             confidence: res?.confidence || 100,
           };
         })
-      : rawResolved.map((res) => ({
+      : rawResolved.map((res: ReportResolvedIngredient) => ({
           input: res.input,
           canonicalId: res.canonicalId,
           canonicalName: res.canonicalName,
@@ -94,7 +95,7 @@ export function createAnalysisResultViewModel(
     ingredientDecisions.length > 0
       ? ingredientDecisions
       : [
-          ...(report.forbidden || []).map((i) => ({
+          ...(report.forbidden || []).map((i: IngredientResult) => ({
             input: i.rawNameAr || i.nameAr || i.name,
             canonicalId: i.id || 0,
             canonicalName: i.nameAr || i.name,
@@ -102,7 +103,7 @@ export function createAnalysisResultViewModel(
             reason: i.dbReason || i.reason || "",
             source: "foods",
           })),
-          ...(report.conditional || []).map((i) => ({
+          ...(report.conditional || []).map((i: IngredientResult) => ({
             input: i.rawNameAr || i.nameAr || i.name,
             canonicalId: i.id || 0,
             canonicalName: i.nameAr || i.name,
@@ -110,7 +111,7 @@ export function createAnalysisResultViewModel(
             reason: i.dbReason || i.reason || "",
             source: "foods",
           })),
-          ...(report.allowed || []).map((i) => ({
+          ...(report.allowed || []).map((i: IngredientResult) => ({
             input: i.rawNameAr || i.nameAr || i.name,
             canonicalId: i.id || 0,
             canonicalName: i.nameAr || i.name,
@@ -118,7 +119,7 @@ export function createAnalysisResultViewModel(
             reason: i.dbReason || i.reason || "",
             source: "foods",
           })),
-          ...(report.unknown || []).map((i) => ({
+          ...(report.unknown || []).map((i: IngredientResult) => ({
             input: i.rawNameAr || i.nameAr || i.name,
             canonicalId: i.id || 0,
             canonicalName: i.nameAr || i.name,
@@ -139,25 +140,25 @@ export function createAnalysisResultViewModel(
           unknownCount: report.unknown?.length || 0,
           totalIngredients: finalDecisions.length,
           breakdown: {
-            forbidden: (report.forbidden || []).map((f): MealDecisionItemVM => ({
+            forbidden: (report.forbidden || []).map((f: IngredientResult): MealDecisionItemVM => ({
               input: f.rawNameAr || f.nameAr || f.name,
               canonicalName: f.nameAr || f.name,
               canonicalId: f.id || 0,
               status: "forbidden" as const,
             })),
-            conditional: (report.conditional || []).map((c): MealDecisionItemVM => ({
+            conditional: (report.conditional || []).map((c: IngredientResult): MealDecisionItemVM => ({
               input: c.rawNameAr || c.nameAr || c.name,
               canonicalName: c.nameAr || c.name,
               canonicalId: c.id || 0,
               status: "conditional" as const,
             })),
-            allowed: (report.allowed || []).map((a): MealDecisionItemVM => ({
+            allowed: (report.allowed || []).map((a: IngredientResult): MealDecisionItemVM => ({
               input: a.rawNameAr || a.nameAr || a.name,
               canonicalName: a.nameAr || a.name,
               canonicalId: a.id || 0,
               status: "allowed" as const,
             })),
-            unknown: (report.unknown || []).map((u): MealDecisionItemVM => ({
+            unknown: (report.unknown || []).map((u: IngredientResult): MealDecisionItemVM => ({
               input: u.rawNameAr || u.nameAr || u.name,
               canonicalName: u.nameAr || u.name,
               canonicalId: u.id || 0,
@@ -193,7 +194,7 @@ export function createAnalysisResultViewModel(
     report.analysisType === "image" ||
     report.analysisType === "label" ||
     (report as any).entityType === "dish" ||
-    ((report as any).dish !== undefined && report.resultMode === "COMPOSITE_FOOD")
+    (report as any).dish !== undefined
   ) {
     presentationMode = "DISH";
   } else if (report.resultMode === "EXACT_FOOD") {
@@ -213,28 +214,28 @@ export function createAnalysisResultViewModel(
     if (isGenericFamily) {
       presentationMode = "GENERIC_FOOD_FAMILY";
 
-      const allowedVariants: FoodFamilyMemberVM[] = (report.allowed || []).map((i) => ({
+      const allowedVariants: FoodFamilyMemberVM[] = (report.allowed || []).map((i: IngredientResult) => ({
         nameAr: i.nameAr || i.name || "",
-        nameEn: i.nameEn,
+        nameEn: i.rawNameEn || undefined,
         status: "allowed" as const,
-        reason: i.dbReason || i.reason,
-        notes: i.notes,
+        reason: (i.dbReason || i.reason) || undefined,
+        notes: i.notes || undefined,
       }));
 
-      const forbiddenVariants: FoodFamilyMemberVM[] = (report.forbidden || []).map((i) => ({
+      const forbiddenVariants: FoodFamilyMemberVM[] = (report.forbidden || []).map((i: IngredientResult) => ({
         nameAr: i.nameAr || i.name || "",
-        nameEn: i.nameEn,
+        nameEn: i.rawNameEn || undefined,
         status: "forbidden" as const,
-        reason: i.dbReason || i.reason,
-        notes: i.notes,
+        reason: (i.dbReason || i.reason) || undefined,
+        notes: i.notes || undefined,
       }));
 
-      const conditionalVariants: FoodFamilyMemberVM[] = (report.conditional || []).map((i) => ({
+      const conditionalVariants: FoodFamilyMemberVM[] = (report.conditional || []).map((i: IngredientResult) => ({
         nameAr: i.nameAr || i.name || "",
-        nameEn: i.nameEn,
+        nameEn: i.rawNameEn || undefined,
         status: "conditional" as const,
-        reason: i.dbReason || i.reason,
-        notes: i.notes,
+        reason: (i.dbReason || i.reason) || undefined,
+        notes: i.notes || undefined,
       }));
 
       const rawFamilyStatus = (report as any).familyStatus || report.primaryRuling?.status || "allowed";
@@ -269,6 +270,7 @@ export function createAnalysisResultViewModel(
     recognizedName,
     presentationMode,
     familyViewModel,
+    familyData: familyViewModel,
     analysis: report,
     ingredientDecisions: finalDecisions,
     mealDecision,

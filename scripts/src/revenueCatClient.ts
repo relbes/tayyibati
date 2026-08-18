@@ -38,5 +38,5 @@ export async function getUncachableRevenueCatClient() {
       if (!response.ok) return { data: undefined as any, error: data };
       return { data, error: undefined };
     },
-  };
+  } as any;
 }

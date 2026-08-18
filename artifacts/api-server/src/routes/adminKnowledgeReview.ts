@@ -58,12 +58,12 @@ adminKnowledgeReviewRouter.get("/:id", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
-      return res.status(400).json({ success: false, error: "Invalid review item ID" });
+      return void res.status(400).json({ success: false, error: "Invalid review item ID" });
     }
 
     const item = await getReviewItemById(id);
     if (!item) {
-      return res.status(404).json({ success: false, error: "Review item not found" });
+      return void res.status(404).json({ success: false, error: "Review item not found" });
     }
 
     res.json({ success: true, item });
@@ -77,13 +77,13 @@ adminKnowledgeReviewRouter.post("/:id/approve", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
-      return res.status(400).json({ success: false, error: "Invalid review item ID" });
+      return void res.status(400).json({ success: false, error: "Invalid review item ID" });
     }
 
     const { notes } = req.body || {};
     const updated = await approveReviewItem(id, notes);
     if (!updated) {
-      return res.status(404).json({ success: false, error: "Review item not found" });
+      return void res.status(404).json({ success: false, error: "Review item not found" });
     }
 
     res.json({ success: true, item: updated });
@@ -97,13 +97,13 @@ adminKnowledgeReviewRouter.post("/:id/reject", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
-      return res.status(400).json({ success: false, error: "Invalid review item ID" });
+      return void res.status(400).json({ success: false, error: "Invalid review item ID" });
     }
 
     const { notes } = req.body || {};
     const updated = await rejectReviewItem(id, notes);
     if (!updated) {
-      return res.status(404).json({ success: false, error: "Review item not found" });
+      return void res.status(404).json({ success: false, error: "Review item not found" });
     }
 
     res.json({ success: true, item: updated });
@@ -117,12 +117,12 @@ adminKnowledgeReviewRouter.post("/:id/merge", async (req, res) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (isNaN(id)) {
-      return res.status(400).json({ success: false, error: "Invalid review item ID" });
+      return void res.status(400).json({ success: false, error: "Invalid review item ID" });
     }
 
     const { canonicalFoodId, notes } = req.body || {};
     if (typeof canonicalFoodId !== "number" || isNaN(canonicalFoodId)) {
-      return res.status(400).json({ success: false, error: "Valid canonicalFoodId is required for merge" });
+      return void res.status(400).json({ success: false, error: "Valid canonicalFoodId is required for merge" });
     }
 
     const updated = await mergeReviewItem(id, canonicalFoodId, notes);

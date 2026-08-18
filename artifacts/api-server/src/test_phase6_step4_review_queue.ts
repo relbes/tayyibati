@@ -49,8 +49,8 @@ async function runStep4RefinementTests() {
   const pageRes = await getReviewQueuePaginated(1, 50, "pending");
   const item1 = pageRes.items.find((i) => i.ingredientName === testIng1);
 
-  if (item1 && Array.isArray(item1.exampleQueries) && item1.exampleQueries.includes("زنجر حار") && item1.resolutionAttempts) {
-    console.log(` -> PASS ✅: Captured item ID #${item1.id} | exampleQueries: [${item1.exampleQueries.join(", ")}] | resolutionAttempts.token: ${item1.resolutionAttempts.token}`);
+  if (item1 && Array.isArray((item1 as any).exampleQueries) && (item1 as any).exampleQueries.includes("زنجر حار") && (item1 as any).resolutionAttempts) {
+    console.log(` -> PASS ✅: Captured item ID #${item1.id} | exampleQueries: [${(item1 as any).exampleQueries.join(", ")}] | resolutionAttempts.token: ${(item1 as any).resolutionAttempts.token}`);
   } else {
     console.error(` -> FAIL ❌: Item capture or schema format failed!`);
     process.exit(1);

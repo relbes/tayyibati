@@ -35,9 +35,10 @@ export interface UnifiedAnalysisRequest {
 export type AnalysisInputType = "text" | "camera" | "ocr" | "barcode" | "voice";
 
 export interface UnifiedAnalysisInput {
-  inputType: AnalysisInputType;
+  inputType?: AnalysisInputType;
   query?: string;
   displayQuery?: string;
+  userId?: string;
   dishId?: number;
   foodId?: number | string;
   entityType?: "food" | "dish" | "product";

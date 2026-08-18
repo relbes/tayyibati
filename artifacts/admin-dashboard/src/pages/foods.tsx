@@ -890,7 +890,7 @@ export default function Foods() {
                           <ChevronDown className="h-3 w-3" />
                         </Button>
                       </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" dir={lang === "ar" ? "rtl" : "ltr"}>
+                      <DropdownMenuContent align="end">
                         <DropdownMenuItem
                           className="text-destructive focus:text-destructive text-xs"
                           onClick={() => setBulkDeletePayload({ status: "forbidden" })}

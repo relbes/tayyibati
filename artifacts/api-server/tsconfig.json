@@ -4,10 +4,20 @@
     "incremental": true,
     "tsBuildInfoFile": ".tsbuildinfo",
     "outDir": "dist",
-    "rootDir": "src",
+    "jsx": "react-jsx",
     "types": ["node"]
   },
   "include": ["src"],
+  "exclude": [
+    "src/test_*.ts",
+    "src/scratch_*.ts",
+    "src/debug_*.ts",
+    "src/verify_*.ts",
+    "src/trace_*.ts",
+    "src/check_*.ts",
+    "src/inspect_*.ts",
+    "src/seed_*.ts"
+  ],
   "references": [
     {
       "path": "../../lib/db"

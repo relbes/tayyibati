@@ -250,6 +250,7 @@ export interface StructuredEntitiesSearchResult {
 }
 
 export interface SearchOptions {
+  mode?: SearchMode;
   debug?: boolean;
 }
 

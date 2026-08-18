@@ -271,6 +271,8 @@ export async function getReviewItemById(id: number) {
     sourceType: rec.sourceType,
     seenCount: rec.seenCount,
     canonicalFoodId: rec.canonicalFoodId || resolvedFood?.id || null,
+    exampleQueries: rec.exampleQueries || [],
+    resolutionAttempts: rec.resolutionAttempts,
   };
 }
 

@@ -75,7 +75,7 @@ async function verifyFinalProductionSuite() {
         console.log(`Query "شاورما عربي" -> Entity: ${sType} | Name: "${sName}" | Confidence: ${shawarmaRes?.confidence}%`);
         console.log(`Matched Reason: ${sReason}`);
 
-        if (sType === "dish" && sName === "شاورما" && sName !== "حمص بالطحينة والشاورما") {
+        if (sType === "dish" && sName === "شاورما") {
           console.log(">>> SHAWARMA ARABI RESOLVED DIRECTLY TO CANONICAL DISH 'شاورما' ✅");
         } else {
           server.close();
