@@ -13,6 +13,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -68,13 +70,13 @@ export default function AdminScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 8, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
         <TouchableOpacity onPress={() => setShowAdd(!showAdd)}>
-          <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color={colors.primary} />
+          <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color="#064E24" />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.foreground }]}>لوحة الإدارة</Text>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Icon name="arrow-back" size={22} color={colors.foreground} />
+        <Text style={[styles.title, { color: "#064E24" }]}>لوحة الإدارة</Text>
+        <TouchableOpacity style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1, alignItems: "center", justifyContent: "center" }} onPress={() => router.back()}>
+          <Icon name="arrow-back" size={20} color="#064E24" />
         </TouchableOpacity>
       </View>
 
@@ -203,7 +205,7 @@ const styles = StyleSheet.create({
     paddingBottom: 14,
     borderBottomWidth: 1,
   },
-  title: { fontSize: 18, fontFamily: "Tajawal_700Bold" },
+  title: { fontSize: 26, fontFamily: "Tajawal_700Bold" },
   addForm: {
     padding: 16,
     gap: 10,

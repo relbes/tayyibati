@@ -1,55 +1,83 @@
-﻿export const TayyibatiTheme = {
+export const TayyibatiTheme = {
   colors: {
     // ─────────────────────────────────────────────
-    // Base
+    // Base & Card Colors (Warm Organic Palette)
     // ─────────────────────────────────────────────
-    background: "#FCFCFA",
+    background: "#FAFAF7",
     surface: "#FFFFFF",
     surfaceWarm: "#FFFDF7",
 
     // ─────────────────────────────────────────────
     // Tayyibati Green
     // ─────────────────────────────────────────────
-    primary: "#0B8F55",
-    primaryDark: "#087344",
+    primary: "#16A34A",
+    primaryDark: "#15803D",
     primaryDarker: "#075C38",
-    primarySoft: "#EFF8E9",
-    primaryMuted: "#DFF1D5",
+    primarySoft: "#EAF7EF",
+    primaryMuted: "#D4F0DF",
 
     // ─────────────────────────────────────────────
-    // Supporting accents
+    // Header & Mint Hero Specific Palette
     // ─────────────────────────────────────────────
+    headerBackground: "#FFF9EC",
+    headerBorder: "#F1EBD9",
+    headerBgIvory: "#C9E4D4",
+    headerBorderSubtle: "#A3CDB3",
+    profileBtnBorder: "#A3CDB3",
+    subtitleMuted: "#244231",
+
+    mintHeroCard: "#E8F7EE",
+    mintHeroBorder: "#CDEBD8",
+    mintHeroBody: "#5F756A",
+
+    heroCardBg: "#FFF7F2",
+    heroCardBorder: "#FFE8DC",
+
+    // ─────────────────────────────────────────────
+    // Pastel Card Module Colors & Accents
+    // ─────────────────────────────────────────────
+    greenCard: "#EAF7EF",
+
+    orangeCard: "#FFF3D6",
     orange: "#F59E0B",
-    orangeDark: "#E88900",
+    orangeDark: "#D97706",
     orangeSoft: "#FFF7E6",
+
+    pinkCard: "#FFF0F2",
+    pink: "#EF476F",
+    pinkDark: "#D9365A",
+    pinkSoft: "#FFF0F3",
+
+    purpleCard: "#F4F0FF",
+    purple: "#8B5CF6",
+    purpleDark: "#7C3AED",
+    purpleSoft: "#F5F0FF",
+
+    blueCard: "#EEF6FF",
+    blue: "#3B82F6",
+    blueDark: "#2563EB",
+    blueSoft: "#EEF8FF",
+
+    tealCard: "#EAF9F5",
+    teal: "#0F9F7A",
+    tealSoft: "#EAF9F5",
 
     danger: "#EF476F",
     dangerDark: "#D9365A",
     dangerSoft: "#FFF0F3",
 
-    purple: "#7B61C9",
-    purpleDark: "#6549B2",
-    purpleSoft: "#F5F0FF",
-
-    blue: "#168FD3",
-    blueDark: "#0877B8",
-    blueSoft: "#EEF8FF",
-
-    lime: "#8BC34A",
-    limeSoft: "#F2F8E9",
-
     // ─────────────────────────────────────────────
     // Typography
     // ─────────────────────────────────────────────
-    text: "#171B18",
-    textSecondary: "#606861",
-    textTertiary: "#929A94",
+    text: "#111827",
+    textSecondary: "#6B7280",
+    textTertiary: "#9CA3AF",
     textOnPrimary: "#FFFFFF",
 
     // ─────────────────────────────────────────────
     // Borders
     // ─────────────────────────────────────────────
-    border: "#E5EAE5",
+    border: "#E5E7EB",
     borderSoft: "#EEF2ED",
 
     // ─────────────────────────────────────────────
@@ -115,7 +143,7 @@
         width: 0,
         height: 2,
       },
-      shadowOpacity: 0.045,
+      shadowOpacity: 0.04,
       shadowRadius: 8,
       elevation: 2,
     },
@@ -126,9 +154,9 @@
         width: 0,
         height: 5,
       },
-      shadowOpacity: 0.12,
+      shadowOpacity: 0.1,
       shadowRadius: 14,
-      elevation: 6,
+      elevation: 5,
     },
 
     search: {
@@ -137,9 +165,9 @@
         width: 0,
         height: 3,
       },
-      shadowOpacity: 0.07,
-      shadowRadius: 12,
-      elevation: 4,
+      shadowOpacity: 0.06,
+      shadowRadius: 10,
+      elevation: 3,
     },
   },
 } as const;

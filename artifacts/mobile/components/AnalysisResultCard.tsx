@@ -88,6 +88,23 @@ export function AnalysisResultCard({
     OSTRICH: "ممنوع (النعام التجاري ممنوع في نظام طيباتي)",
   };
 
+  const getSuggestionEmoji = (spec?: string, label?: string): string => {
+    if (spec && SPECIFICITY_EMOJIS[spec]) {
+      return SPECIFICITY_EMOJIS[spec];
+    }
+    const text = (label || "").toLowerCase();
+    if (text.includes("دجاج") || text.includes("طيور") || text.includes("دواجن")) return "🍗";
+    if (text.includes("لحم") || text.includes("بقر") || text.includes("غنم") || text.includes("ضأن") || text.includes("عجل")) return "🥩";
+    if (text.includes("سمك") || text.includes("جمبري") || text.includes("روبيان") || text.includes("بحري")) return "🐟";
+    if (text.includes("أرز") || text.includes("رز")) return "🍚";
+    if (text.includes("حليب") || text.includes("لبن") || text.includes("جبن") || text.includes("قشطة")) return "🥛";
+    if (text.includes("خضار") || text.includes("سلطة")) return "🥗";
+    if (text.includes("شوربة") || text.includes("حساء")) return "🥣";
+    if (text.includes("خبز") || text.includes("معجنات")) return "🍞";
+    if (text.includes("فاكهة") || text.includes("فواكه")) return "🍎";
+    return "🍲";
+  };
+
   // Handle Clarification Requests
   if (report?.needsClarification) {
     const question = report.questionAr || "أحتاج تحديد النوع حتى أعطيك نتيجة دقيقة";
@@ -120,7 +137,7 @@ export function AnalysisResultCard({
             const isObj = typeof sug === "object" && sug !== null && "label" in sug;
             const label = isObj ? (sug as any).label : String(sug);
             const spec = isObj ? (sug as any).proteinSpecificity || "" : "";
-            const emoji = SPECIFICITY_EMOJIS[spec] || "🥩";
+            const emoji = getSuggestionEmoji(spec, label);
             const subtitle = SPECIFICITY_SUBTITLES[spec] || "";
             const isThisLoading = isAnalyzing && selectedSuggestion === label;
 
@@ -363,24 +380,24 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   clarificationQuestion: {
-    fontSize: 16,
+    fontSize: 20,
     fontFamily: "Tajawal_700Bold",
     textAlign: "center",
-    lineHeight: 24,
+    lineHeight: 28,
   },
   clarificationSubtitle: {
-    fontSize: 13,
-    fontFamily: "Tajawal_400Regular",
+    fontSize: 15,
+    fontFamily: "Tajawal_500Medium",
     textAlign: "center",
   },
   suggestionsList: {
-    gap: 10,
+    gap: 12,
   },
   suggestionButton: {
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingVertical: 16,
     flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "space-between",
@@ -392,21 +409,21 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   suggestionEmoji: {
-    fontSize: 22,
+    fontSize: 26,
   },
   suggestionTextContainer: {
     flex: 1,
     alignItems: "flex-end",
-    gap: 2,
+    gap: 3,
   },
   suggestionLabel: {
-    fontSize: 14,
+    fontSize: 17.5,
     fontFamily: "Tajawal_700Bold",
     textAlign: "right",
   },
   suggestionSub: {
-    fontSize: 11,
-    fontFamily: "Tajawal_400Regular",
+    fontSize: 13.5,
+    fontFamily: "Tajawal_500Medium",
     textAlign: "right",
   },
   devAccordion: {

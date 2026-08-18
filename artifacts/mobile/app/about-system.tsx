@@ -7,16 +7,19 @@ import {
   ScrollView,
   Platform,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 export default function AboutSystemScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const isAppOnly = mode === "app";
 
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -54,28 +57,34 @@ export default function AboutSystemScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
           <View style={[styles.titleRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
             <TouchableOpacity
               onPress={() => router.back()}
-              style={[styles.backBtn, { backgroundColor: colors.muted }]}
+              style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]}
             >
               <View>
-                <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color={colors.foreground} />
+                <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
               </View>
             </TouchableOpacity>
             <View style={{ flex: 1, alignItems: rtl ? "flex-end" : "flex-start" }}>
-              <Text style={[styles.pageTitle, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
-                {rtl ? "عن نظام الطيبات" : "About Tayyibati System"}
+              <Text style={[styles.pageTitle, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
+                {isAppOnly
+                  ? (rtl ? "عن تطبيق طيباتي" : "About Tayyibati App")
+                  : (rtl ? "عن نظام الطيبات" : "About Tayyibati System")}
               </Text>
-              <Text style={[styles.pageSubtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
-                {rtl ? "تعرف على فلسفة النظام وقواعده الأساسية" : "Learn about the philosophy and core rules of the system"}
+              <Text style={[styles.pageSubtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
+                {isAppOnly
+                  ? (rtl ? "تعرف على تطبيق طيباتي ومميزاته" : "Learn about Tayyibati App and its features")
+                  : (rtl ? "تعرف على فلسفة النظام وقواعده الأساسية" : "Learn about the philosophy and core rules of the system")}
               </Text>
             </View>
           </View>
         </View>
 
         <View style={styles.contentBody}>
+          {!isAppOnly && (
+            <>
           {/* Section 1: Warning Card */}
           <View style={[styles.warningCard, { backgroundColor: "#FEF7E0", borderColor: "#FBBC04" }]}>
             <View style={[styles.warningHeader, { flexDirection: rtl ? "row-reverse" : "row" }]}>
@@ -225,6 +234,8 @@ export default function AboutSystemScreen() {
                 : "Tayyibati displays this information for educational awareness. Always consult medical specialists before fully adopting any dietary regimen."}
             </Text>
           </View>
+            </>
+          )}
 
           {/* Section 9: About Tayyibati App */}
           <View style={[styles.sectionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -233,13 +244,18 @@ export default function AboutSystemScreen() {
             </Text>
             <Text style={[styles.bodyText, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
               {rtl
-                ? "يساعدك تطبيق طيباتي على التحقق من توافق الأطعمة مع نظام الطيبات من خلال قاعدة بيانات يتم تحديثها باستمرار، بالإضافة إلى البحث النصي وتحليل الصور."
-                : "Tayyibati helps you verify food compatibility with the Tayyibati system through a continuously updated database, text search, and image analysis."}
+                ? "طيباتي هو تطبيق ذكي يساعدك على معرفة الأطعمة والمكونات المناسبة لك بسهولة وسرعة، ويوفر لك تجربة مبسطة للوصول إلى المعلومات الغذائية واتخاذ قرارات أفضل عند اختيار الطعام."
+                : "Tayyibati is a smart app that helps you discover suitable foods and ingredients quickly and easily, providing a simplified experience for accessing nutritional information and making better choices."}
             </Text>
             <Text style={[styles.bodyText, { color: colors.foreground, textAlign: rtl ? "right" : "left", marginTop: 10 }]}>
               {rtl
-                ? "هدف التطبيق هو تسهيل الوصول إلى المعلومات بطريقة منظمة وسريعة."
-                : "The goal of the app is to make information accessible in an organized and fast manner."}
+                ? "من خلال طيباتي يمكنك البحث عن الأطعمة والمكونات، معرفة المسموح والممنوع، وتحليل صور المنتجات والملصقات الغذائية باستخدام تقنيات الذكاء الاصطناعي، مع إمكانية الرجوع إلى سجل تحليلاتك."
+                : "Through Tayyibati, you can search for foods and ingredients, learn allowed and forbidden items, and analyze product and nutrition label images using AI technology, with full access to your analysis history."}
+            </Text>
+            <Text style={[styles.bodyText, { color: colors.foreground, textAlign: rtl ? "right" : "left", marginTop: 10 }]}>
+              {rtl
+                ? "هدفنا هو جعل الوصول إلى المعلومات المتعلقة بالطعام أكثر سهولة ووضوحًا، ومساعدتك على اختيار ما يناسبك بثقة."
+                : "Our goal is to make accessing food information clearer and easier, helping you select what suits you with confidence."}
             </Text>
           </View>
         </View>
@@ -269,13 +285,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pageTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontFamily: "Tajawal_700Bold",
   },
   pageSubtitle: {
-    fontSize: 13,
-    fontFamily: "Tajawal_400Regular",
-    marginTop: 2,
+    fontSize: 15,
+    fontFamily: "Tajawal_500Medium",
+    marginTop: 3,
   },
   contentBody: {
     padding: 16,

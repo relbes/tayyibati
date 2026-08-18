@@ -1,9 +1,5 @@
 import React from "react";
-import {
-  View,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
 import { LocalizedText, LocalizedParagraph } from "./LocalizedText";
@@ -18,6 +14,7 @@ export function HomeQuickActions({
 }) {
   const colors = useColors();
   const router = useRouter();
+  const rtl = isRTL();
 
   const cards = [
     {
@@ -26,7 +23,8 @@ export function HomeQuickActions({
       desc: t("home.searchFoodDesc"),
       onPress: focusSearch,
       color: TayyibatiTheme.colors.primary,
-      background: TayyibatiTheme.colors.primarySoft,
+      background: TayyibatiTheme.colors.greenCard,
+      borderColor: "#C6EFD9",
     },
     {
       icon: "camera",
@@ -34,15 +32,22 @@ export function HomeQuickActions({
       desc: t("home.analyzeImageDesc"),
       onPress: () => router.push("/(tabs)/camera?action=camera"),
       color: TayyibatiTheme.colors.orange,
-      background: TayyibatiTheme.colors.orangeSoft,
+      background: TayyibatiTheme.colors.orangeCard,
+      borderColor: "#FFE4A0",
     },
     {
       icon: "scan",
       title: t("home.scanIngredients"),
       desc: t("home.scanIngredientsDesc"),
-      onPress: () => router.push("/(tabs)/camera?action=camera"),
-      color: TayyibatiTheme.colors.purple,
-      background: TayyibatiTheme.colors.purpleSoft,
+      onPress: () => {
+        Alert.alert(
+          "هذه الخاصية غير متاحة حاليا",
+          "قريباً سيتم تفعيل هذه الخاصية للاشتراك البريميوم"
+        );
+      },
+      color: TayyibatiTheme.colors.pink,
+      background: TayyibatiTheme.colors.pinkCard,
+      borderColor: "#FFD6DC",
     },
     {
       icon: "book",
@@ -50,15 +55,18 @@ export function HomeQuickActions({
       desc: t("home.exploreDatabaseDesc"),
       onPress: () => router.push("/(tabs)/browse"),
       color: TayyibatiTheme.colors.blue,
-      background: TayyibatiTheme.colors.blueSoft,
+      background: TayyibatiTheme.colors.blueCard,
+      borderColor: "#C7E2FE",
     },
     {
       icon: "information-circle",
       title: t("home.aboutSystem"),
       desc: t("home.aboutSystemDesc"),
       onPress: () => router.push("/about-system"),
-      color: TayyibatiTheme.colors.primary,
-      background: TayyibatiTheme.colors.primarySoft,
+      color: TayyibatiTheme.colors.purple,
+      background: TayyibatiTheme.colors.purpleCard,
+      borderColor: "#DDD0FF",
+      isFullWidth: true,
     },
   ];
 
@@ -69,7 +77,7 @@ export function HomeQuickActions({
           styles.sectionTitle,
           {
             color: colors.foreground,
-            textAlign: isRTL() ? "right" : "left",
+            textAlign: rtl ? "right" : "left",
           },
         ]}
       >
@@ -77,78 +85,102 @@ export function HomeQuickActions({
       </LocalizedText>
 
       <View style={styles.grid}>
-        {cards.map((card, index) => (
-          <TouchableOpacity
-            key={index}
-            style={[
-              styles.card,
-              {
-                backgroundColor: TayyibatiTheme.colors.surface,
-                borderColor: TayyibatiTheme.colors.borderSoft,
-              },
-              index === cards.length - 1 && styles.lastCard,
-            ]}
-            activeOpacity={0.82}
-            onPress={card.onPress}
-          >
-            <View
+        {cards.map((card, index) => {
+          if (card.isFullWidth) {
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.fullWidthCard,
+                  {
+                    backgroundColor: card.background,
+                    borderColor: card.borderColor,
+                    flexDirection: rtl ? "row-reverse" : "row",
+                  },
+                ]}
+                activeOpacity={0.82}
+                onPress={card.onPress}
+              >
+                {/* Decorative organic background circle */}
+                <View style={[styles.decorCircleFull, { backgroundColor: card.color + "15" }]} />
+
+                <View style={styles.iconBox}>
+                  <Icon name={card.icon as any} size={22} color={card.color} strokeWidth={2} />
+                </View>
+                <View style={{ flex: 1, marginHorizontal: 12 }}>
+                  <LocalizedText
+                    style={[styles.cardTitle, { color: TayyibatiTheme.colors.text, textAlign: rtl ? "right" : "left" }]}
+                    numberOfLines={1}
+                  >
+                    {card.title}
+                  </LocalizedText>
+                  <LocalizedParagraph
+                    style={[styles.cardDesc, { color: TayyibatiTheme.colors.textSecondary, textAlign: rtl ? "right" : "left" }]}
+                    numberOfLines={1}
+                  >
+                    {card.desc}
+                  </LocalizedParagraph>
+                </View>
+                <View style={[styles.arrowCircle, { backgroundColor: TayyibatiTheme.colors.white }]}>
+                  <Icon name={rtl ? "arrow-back" : "arrow-forward"} size={14} color={card.color} />
+                </View>
+              </TouchableOpacity>
+            );
+          }
+
+          return (
+            <TouchableOpacity
+              key={index}
               style={[
-                styles.iconBox,
+                styles.card,
                 {
                   backgroundColor: card.background,
+                  borderColor: card.borderColor,
                 },
               ]}
+              activeOpacity={0.82}
+              onPress={card.onPress}
             >
-              <Icon
-                name={card.icon as any}
-                size={23}
-                color={card.color}
-                strokeWidth={2}
-              />
-            </View>
+              {/* Decorative organic background circle */}
+              <View style={[styles.decorCircle, { backgroundColor: card.color + "15" }]} />
 
-            <LocalizedText
-              style={[
-                styles.cardTitle,
-                {
-                  color: colors.foreground,
-                  textAlign: isRTL() ? "right" : "left",
-                },
-              ]}
-              numberOfLines={2}
-            >
-              {card.title}
-            </LocalizedText>
+              <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.cardTopRow]}>
+                <View style={styles.iconBox}>
+                  <Icon name={card.icon as any} size={22} color={card.color} strokeWidth={2} />
+                </View>
+                <View style={[styles.arrowCircle, { backgroundColor: TayyibatiTheme.colors.white }]}>
+                  <Icon name={rtl ? "arrow-back" : "arrow-forward"} size={12} color={card.color} />
+                </View>
+              </View>
 
-            <LocalizedParagraph
-              style={[
-                styles.cardDesc,
-                {
-                  color: colors.mutedForeground,
-                  textAlign: isRTL() ? "right" : "left",
-                },
-              ]}
-              numberOfLines={2}
-            >
-              {card.desc}
-            </LocalizedParagraph>
+              <LocalizedText
+                style={[
+                  styles.cardTitle,
+                  {
+                    color: TayyibatiTheme.colors.text,
+                    textAlign: rtl ? "right" : "left",
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {card.title}
+              </LocalizedText>
 
-            <View
-              style={[
-                styles.arrow,
-                {
-                  alignSelf: isRTL() ? "flex-start" : "flex-end",
-                },
-              ]}
-            >
-              <Icon
-                name={isRTL() ? "arrow-back" : "arrow-forward"}
-                size={16}
-                color={card.color}
-              />
-            </View>
-          </TouchableOpacity>
-        ))}
+              <LocalizedParagraph
+                style={[
+                  styles.cardDesc,
+                  {
+                    color: TayyibatiTheme.colors.textSecondary,
+                    textAlign: rtl ? "right" : "left",
+                  },
+                ]}
+                numberOfLines={2}
+              >
+                {card.desc}
+              </LocalizedParagraph>
+            </TouchableOpacity>
+          );
+        })}
       </View>
     </View>
   );
@@ -156,60 +188,90 @@ export function HomeQuickActions({
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 28,
+    marginTop: 22,
     paddingHorizontal: 16,
   },
-
   sectionTitle: {
     fontSize: TayyibatiTheme.typography.size.lg,
     fontFamily: TayyibatiTheme.typography.fontFamily.bold,
     marginBottom: 14,
   },
-
   grid: {
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 12,
   },
-
   card: {
     width: "48.2%",
-    minHeight: 158,
-    padding: 15,
+    padding: 14,
     borderRadius: TayyibatiTheme.radius.large,
     borderWidth: 1,
+    position: "relative",
+    overflow: "hidden",
     ...TayyibatiTheme.shadows.card,
   },
-
-  lastCard: {
+  fullWidthCard: {
     width: "100%",
-    minHeight: 112,
+    padding: 14,
+    borderRadius: TayyibatiTheme.radius.large,
+    borderWidth: 1,
+    alignItems: "center",
+    position: "relative",
+    overflow: "hidden",
+    ...TayyibatiTheme.shadows.card,
   },
-
+  decorCircle: {
+    position: "absolute",
+    top: -15,
+    right: -15,
+    width: 65,
+    height: 65,
+    borderRadius: 32.5,
+  },
+  decorCircleFull: {
+    position: "absolute",
+    bottom: -20,
+    right: -20,
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  cardTopRow: {
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 10,
+    zIndex: 2,
+  },
   iconBox: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    backgroundColor: TayyibatiTheme.colors.white,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 12,
+    zIndex: 2,
+    ...TayyibatiTheme.shadows.card,
   },
-
+  arrowCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2,
+  },
   cardTitle: {
-    fontSize: TayyibatiTheme.typography.size.md,
+    fontSize: 14.5,
     fontFamily: TayyibatiTheme.typography.fontFamily.bold,
-    lineHeight: 22,
+    lineHeight: 19,
+    zIndex: 2,
   },
-
   cardDesc: {
-    fontSize: TayyibatiTheme.typography.size.sm,
+    fontSize: TayyibatiTheme.typography.size.xs + 1,
     fontFamily: TayyibatiTheme.typography.fontFamily.regular,
-    lineHeight: 20,
-    marginTop: 4,
-  },
-
-  arrow: {
-    marginTop: 8,
+    lineHeight: 18,
+    marginTop: 3,
+    zIndex: 2,
   },
 });

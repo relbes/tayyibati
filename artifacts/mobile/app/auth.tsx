@@ -1,5 +1,6 @@
 import { I18nManager } from "react-native";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -201,16 +202,15 @@ export default function AuthScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <LinearGradient
-        colors={[colors.primary, colors.primary + "99"]}
-        style={[styles.topBar, { paddingTop: topPadding + 8 }]}
+      <View
+        style={[styles.topBar, { paddingTop: topPadding + 10, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3", borderBottomWidth: 1 }]}
       >
         <View style={{ width: 40 }} />
-        <Text style={styles.topTitle}>طيباتي</Text>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()}>
-          <Icon name="close" size={24} color="#fff" />
+        <Text style={[styles.topTitle, { color: "#064E24" }]}>طيباتي</Text>
+        <TouchableOpacity style={[styles.closeBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]} onPress={() => router.back()}>
+          <Icon name="close" size={20} color="#064E24" />
         </TouchableOpacity>
-      </LinearGradient>
+      </View>
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
@@ -425,7 +425,7 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   closeBtn: { width: 40, height: 40, alignItems: "center", justifyContent: "center" },
-  topTitle: { fontSize: 20, fontFamily: "Tajawal_700Bold", color: "#fff" },
+  topTitle: { fontSize: 26, fontFamily: "Tajawal_700Bold", color: "#fff" },
   form: {
       paddingHorizontal: 24,
       paddingTop: 18,

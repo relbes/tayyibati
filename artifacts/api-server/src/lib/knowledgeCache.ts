@@ -997,8 +997,11 @@ export function aggregateFoodFamilySafety(
         const candNormBase = stripArticle(normalizeName(candBaseName));
         const isSameFamily =
           cand.parentFoodId === food.id ||
+          food.parentFoodId === cand.id ||
+          (cand.parentFoodId !== null && cand.parentFoodId === food.parentFoodId) ||
           candNormBase === familyNormBase ||
-          (candNormBase.length >= 2 && familyNormBase.length >= 2 && (candNormBase.includes(familyNormBase) || familyNormBase.includes(candNormBase)));
+          candNormBase.startsWith(familyNormBase + " ") ||
+          familyNormBase.startsWith(candNormBase + " ");
 
         if (isSameFamily) {
           memberIds.add(cand.id);

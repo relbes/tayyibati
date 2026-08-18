@@ -122,7 +122,7 @@ export default function CameraScreen() {
       if (err instanceof NetworkError || (err as any)?.isNetworkError) {
         Alert.alert("خطأ في الاتصال", (err as Error).message);
       } else if (err instanceof AnalysisError && err.limitReached) {
-        Alert.alert("انتهى الحد المجاني", err.message, [
+        Alert.alert("تنبيه", "لقد انتهت محاولات تحليل الصور المتاحة لك حالياً.\nقم بالترقية إلى الباقة المميزة للاستمرار.", [
           { text: "لاحقاً", style: "cancel" },
           { text: "الترقية", onPress: () => router.push("/pricing") },
         ]);
@@ -154,7 +154,7 @@ export default function CameraScreen() {
       if (err instanceof NetworkError || (err as any)?.isNetworkError) {
         Alert.alert("خطأ في الاتصال", (err as Error).message);
       } else if (err instanceof AnalysisError && err.limitReached) {
-        Alert.alert("انتهى الحد المجاني", (err as AnalysisError).message, [
+        Alert.alert("تنبيه", "لقد انتهت محاولاتك المتاحة حالياً.\nقم بالترقية إلى الباقة المميزة للاستمرار في استخدام التحليل والبحث.", [
           { text: "لاحقاً", style: "cancel" },
           { text: "الترقية", onPress: () => router.push("/pricing") },
         ]);

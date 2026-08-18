@@ -155,10 +155,10 @@ export function useFoodSearch() {
         setCurrentReport(report);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } catch (err: unknown) {
-        console.error("[TRACE ERROR] _runAnalysis threw:", err);
         if (err instanceof AnalysisError && err.limitReached) {
           setLimitReached(true);
         } else {
+          console.error("[TRACE ERROR] _runAnalysis threw:", err);
           if (typeof __DEV__ !== "undefined" && __DEV__) {
             console.error("[useFoodSearch Error]", err);
           }

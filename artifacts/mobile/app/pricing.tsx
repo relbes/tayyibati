@@ -20,6 +20,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSubscription } from "@/lib/revenuecat";
 import { syncPremium, getPlans } from "@/lib/api";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 
 interface Plan {
@@ -206,7 +207,7 @@ export default function PricingScreen() {
         </Text>
         {planFeatures.map((f) => (
           <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-            <Icon name="checkmark-circle" size={18} color={colors.accent} />
+            <Icon name="checkmark-circle" size={21} color={colors.accent} />
             <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
               <Text style={[styles.featureTextText, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
             </View>
@@ -242,17 +243,17 @@ export default function PricingScreen() {
         style={[
           styles.header,
           {
-            paddingTop: topPadding + 8,
-            backgroundColor: colors.card,
-            borderBottomColor: colors.border,
+            paddingTop: topPadding + 12,
+            backgroundColor: "#C9E4D4",
+            borderBottomColor: "#A3CDB3",
             flexDirection: rtl ? "row-reverse" : "row",
           },
         ]}
       >
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} activeOpacity={0.7}>
-          <Icon name={rtl ? "arrow-back" : "arrow-forward"} size={22} color={colors.foreground} />
+        <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]} activeOpacity={0.7}>
+          <Icon name={rtl ? "arrow-back" : "arrow-forward"} size={22} color="#064E24" />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
+        <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
         <View style={{ width: 44 }} />
       </View>
 
@@ -317,9 +318,9 @@ export default function PricingScreen() {
             </Text>
             {freePlanFeaturesList.map((f) => (
               <View key={f} style={[styles.featureRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-                <Icon name="checkmark-circle" size={18} color={colors.allowed} />
+                <Icon name="checkmark-circle" size={21} color={colors.allowed} />
                 <View style={[styles.featureTextWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
-                  <Text style={[styles.featureTextText, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
+                  <Text style={[styles.featureTextText, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>{f}</Text>
                 </View>
               </View>
             ))}
@@ -396,7 +397,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   backBtn: { width: 44, paddingVertical: 4 },
-  title: { fontSize: 18, fontFamily: "Tajawal_700Bold" },
+  title: { fontSize: 26, fontFamily: "Tajawal_700Bold" },
   loadingCenter: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
   loadingText: { fontSize: 14, fontFamily: "Tajawal_400Regular" },
   statusBox: {
@@ -422,17 +423,17 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
   },
-  popularText: { color: "#fff", fontSize: 12, fontFamily: "Tajawal_700Bold" },
-  planName: { fontSize: 24, fontFamily: "Tajawal_700Bold" },
+  popularText: { color: "#fff", fontSize: 13.5, fontFamily: "Tajawal_700Bold" },
+  planName: { fontSize: 27, fontFamily: "Tajawal_700Bold" },
   priceRow: { alignItems: "flex-end", justifyContent: "flex-start" },
   planAmount: { fontSize: 38, fontFamily: "Tajawal_700Bold" },
-  planCurrency: { fontSize: 15, fontFamily: "Tajawal_400Regular", paddingBottom: 6 },
+  planCurrency: { fontSize: 16.5, fontFamily: "Tajawal_500Medium", paddingBottom: 6 },
   divider: { height: 1, marginVertical: 4, alignSelf: "stretch" },
   limitBadge: {
-    fontSize: 14,
+    fontSize: 15.5,
     fontFamily: "Tajawal_700Bold",
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 7,
+    paddingHorizontal: 14,
     borderRadius: 8,
     overflow: "hidden",
   },
@@ -446,8 +447,8 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   featureTextText: {
-    fontSize: 15,
-    fontFamily: "Tajawal_400Regular",
+    fontSize: 16.5,
+    fontFamily: "Tajawal_500Medium",
   },
   currentBadge: { padding: 10, borderRadius: 10, alignItems: "center", marginTop: 4, alignSelf: "stretch" },
   currentText: { fontSize: 14, fontFamily: "Tajawal_700Bold" },

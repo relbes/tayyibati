@@ -184,11 +184,12 @@ export function createAnalysisResultViewModel(
   let presentationMode: ResultPresentationMode = "SPECIFIC_FOOD";
   let familyViewModel: FoodFamilyViewModel | null = null;
 
-  if (report.notFound || report.resultMode === "NOT_FOUND") {
+  if ((report.notFound || report.resultMode === "NOT_FOUND") && !report.needsClarification && !(report.suggestions && report.suggestions.length > 0)) {
     presentationMode = "NOT_FOUND";
   } else if (
     report.resultMode === "COMPOSITE_FOOD" ||
     report.resultMode === "MULTIPLE_DISHES" ||
+    report.needsClarification ||
     report.analysisType === "image" ||
     report.analysisType === "label" ||
     (report as any).entityType === "dish" ||

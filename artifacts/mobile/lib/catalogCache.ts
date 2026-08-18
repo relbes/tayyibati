@@ -4,6 +4,7 @@ export interface CatalogFoodItem {
   id: number;
   nameAr: string;
   category: string;
+  categoryAr?: string;
   status: "allowed" | "forbidden" | "conditional";
 }
 

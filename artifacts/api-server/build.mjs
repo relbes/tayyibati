@@ -36,7 +36,12 @@ async function buildAll() {
       path.resolve(artifactDir, "src/test_invalid_query_guard.ts"),
       path.resolve(artifactDir, "src/test_food_family_ui_mode.ts"),
       path.resolve(artifactDir, "src/scratch_inspect_dates.ts"),
-      path.resolve(artifactDir, "src/test_catalog_api_sync.ts")
+      path.resolve(artifactDir, "src/test_catalog_api_sync.ts"),
+      path.resolve(artifactDir, "src/scratch_inspect_noise.ts"),
+      path.resolve(artifactDir, "src/scratch_inspect_db_categories.ts"),
+      path.resolve(artifactDir, "src/test_noise_and_arabic_categories.ts"),
+      path.resolve(artifactDir, "src/scratch_inspect_maqluba.ts"),
+      path.resolve(artifactDir, "src/test_potato_family_fix.ts")
     ],
     platform: "node",
     bundle: true,

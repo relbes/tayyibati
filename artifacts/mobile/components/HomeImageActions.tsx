@@ -1,57 +1,135 @@
-import React from 'react';
-import { View, TouchableOpacity, StyleSheet } from 'react-native';
-import { Icon } from '@/components/Icon';
-import { useColors } from '@/hooks/useColors';
-import { LocalizedText } from './LocalizedText';
-import { useRouter } from 'expo-router';
-import { isRTL, t } from '@/lib/i18n';
+import React from "react";
+import { View, TouchableOpacity, StyleSheet } from "react-native";
+import { Icon } from "@/components/Icon";
+import { useColors } from "@/hooks/useColors";
+import { LocalizedText } from "./LocalizedText";
+import { useRouter } from "expo-router";
+import { isRTL, t } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 export function HomeImageActions() {
   const colors = useColors();
   const router = useRouter();
+  const rtl = isRTL();
 
   return (
     <View style={styles.container}>
-      <LocalizedText style={[styles.title, { color: colors.mutedForeground, textAlign: 'center' }]}>
-        {t("home.orVerifyWithImage")}
-      </LocalizedText>
-      <View style={styles.buttons}>
-        <TouchableOpacity 
-          style={[{ flexDirection: isRTL() ? 'row-reverse' : 'row' }, styles.button, { backgroundColor: colors.primary }]}
-          activeOpacity={0.8}
-          onPress={() => router.push("/(tabs)/camera?action=camera")}
-        >
-          <Icon name="camera" size={24} color="#fff" />
-          <LocalizedText style={[styles.buttonText, { color: '#fff' }]}>
-            {t("home.takePhoto")}
+      <View
+        style={[
+          styles.card,
+          {
+            backgroundColor: TayyibatiTheme.colors.surface,
+            borderColor: TayyibatiTheme.colors.borderSoft,
+          },
+        ]}
+      >
+        <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.headerRow]}>
+          <View style={styles.iconCircle}>
+            <Icon name="camera" size={18} color={TayyibatiTheme.colors.primary} />
+          </View>
+          <LocalizedText style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
+            {t("home.orVerifyWithImage")}
           </LocalizedText>
-        </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity 
-          style={[{ flexDirection: isRTL() ? 'row-reverse' : 'row' }, styles.button, { backgroundColor: colors.secondary, borderWidth: 1, borderColor: colors.border }]}
-          activeOpacity={0.8}
-          onPress={() => router.push("/(tabs)/camera?action=gallery")}
-        >
-          <Icon name="images" size={24} color={colors.secondaryForeground} />
-          <LocalizedText style={[styles.buttonText, { color: colors.secondaryForeground }]}>
-            {t("home.chooseFromGallery")}
-          </LocalizedText>
-        </TouchableOpacity>
+        <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.buttonsRow]}>
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              {
+                backgroundColor: TayyibatiTheme.colors.greenCard,
+                borderColor: "#C6EFD9",
+                flexDirection: rtl ? "row-reverse" : "row",
+              },
+            ]}
+            activeOpacity={0.82}
+            onPress={() => router.push("/(tabs)/camera?action=camera")}
+          >
+            <View style={styles.btnIconCircle}>
+              <Icon name="camera" size={16} color={TayyibatiTheme.colors.primary} />
+            </View>
+            <LocalizedText style={[styles.btnText, { color: TayyibatiTheme.colors.primary }]}>
+              {t("home.takePhoto")}
+            </LocalizedText>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.actionBtn,
+              {
+                backgroundColor: TayyibatiTheme.colors.orangeCard,
+                borderColor: "#FFE4A0",
+                flexDirection: rtl ? "row-reverse" : "row",
+              },
+            ]}
+            activeOpacity={0.82}
+            onPress={() => router.push("/(tabs)/camera?action=gallery")}
+          >
+            <View style={styles.btnIconCircle}>
+              <Icon name="images" size={16} color={TayyibatiTheme.colors.orange} />
+            </View>
+            <LocalizedText style={[styles.btnText, { color: TayyibatiTheme.colors.orangeDark }]}>
+              {t("home.chooseFromGallery")}
+            </LocalizedText>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { marginTop: 24, paddingHorizontal: 16 },
-  title: { fontSize: 14, fontFamily: 'Tajawal_500Medium', marginBottom: 12 },
-  buttons: { gap: 12 },
-  button: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    padding: 16, 
-    borderRadius: 12,
-    gap: 12
+  container: {
+    marginTop: 20,
+    paddingHorizontal: 16,
   },
-  buttonText: { fontSize: 18, fontFamily: 'Tajawal_700Bold', textAlign: 'center' }
+  card: {
+    padding: 16,
+    borderRadius: TayyibatiTheme.radius.large,
+    borderWidth: 1,
+    ...TayyibatiTheme.shadows.card,
+  },
+  headerRow: {
+    alignItems: "center",
+    marginBottom: 14,
+    gap: 10,
+  },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: TayyibatiTheme.colors.greenCard,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: {
+    fontSize: TayyibatiTheme.typography.size.md,
+    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+  },
+  buttonsRow: {
+    gap: 10,
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    paddingHorizontal: 6,
+    borderRadius: TayyibatiTheme.radius.medium,
+    borderWidth: 1,
+    gap: 5,
+  },
+  btnIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: TayyibatiTheme.colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  btnText: {
+    fontSize: 13,
+    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+    flexShrink: 1,
+  },
 });

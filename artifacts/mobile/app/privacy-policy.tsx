@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { useColors } from "@/hooks/useColors";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 interface Section {
   title: string;
@@ -88,19 +89,19 @@ export default function PrivacyPolicyScreen() {
           styles.header,
           {
             paddingTop: topPadding + 12,
-            backgroundColor: colors.card,
-            borderBottomColor: colors.border,
+            backgroundColor: "#C9E4D4",
+            borderBottomColor: "#A3CDB3",
           },
         ]}
       >
         <TouchableOpacity
           onPress={() => router.back()}
-          style={styles.backBtn}
+          style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Icon name="arrow-back" size={24} color={colors.primary} />
+          <Icon name="arrow-back" size={24} color="#064E24" />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: colors.foreground }]}>
+        <Text style={[styles.title, { color: "#064E24" }]}>
           سياسة الخصوصية
         </Text>
         <View style={{ width: 36 }} />
@@ -180,7 +181,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   title: {
-    fontSize: 18,
+    fontSize: 26,
     fontFamily: "Tajawal_700Bold",
     textAlign: "center",
     flex: 1,

@@ -19,6 +19,7 @@ import { getCachedCatalog, setCachedCatalog, CatalogFoodItem } from "@/lib/catal
 import { useAuth } from "@/context/AuthContext";
 import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 interface DisplayCategoryGroup {
   categoryKey: string;
@@ -160,26 +161,30 @@ export default function BrowseScreen() {
     };
   }, [userId, rtl]);
 
-  // Derived Category Options for Filter Chips
+  // Derived Category Options for Filter Chips (always displaying Arabic category name)
   const categoryOptions = useMemo(() => {
-    const categoriesSet = new Set<string>();
+    const categoriesMap = new Map<string, string>(); // rawCategory -> displayCategoryAr
     for (const f of foods) {
-      if (f.category) categoriesSet.add(f.category);
+      const rawCat = f.category || "أخرى";
+      const displayCat = f.categoryAr || f.category || "أخرى";
+      if (!categoriesMap.has(rawCat)) {
+        categoriesMap.set(rawCat, displayCat);
+      }
     }
-    return Array.from(categoriesSet).map((catKey) => ({
-      key: catKey,
-      label: catKey,
+    return Array.from(categoriesMap.entries()).map(([rawKey, displayLabel]) => ({
+      key: rawKey,
+      label: displayLabel,
     }));
   }, [foods]);
 
-  // Client-Side Instant Local Filtering & Grouping
+  // Client-Side Instant Local Filtering & Grouping (grouped & titled by Arabic category)
   const filteredCategories = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
 
     // 1. Filter foods array
     const matchingFoods = foods.filter((food) => {
       // Category filter
-      if (selectedCategory !== "all" && food.category !== selectedCategory) {
+      if (selectedCategory !== "all" && food.category !== selectedCategory && food.categoryAr !== selectedCategory) {
         return false;
       }
       // Status filter
@@ -196,20 +201,23 @@ export default function BrowseScreen() {
       return true;
     });
 
-    // 2. Group into categories
-    const groupsMap = new Map<string, CatalogFoodItem[]>();
+    // 2. Group into categories with Arabic display titles
+    const groupsMap = new Map<string, { displayAr: string; foods: CatalogFoodItem[] }>();
     for (const food of matchingFoods) {
-      const cat = food.category || "أخرى";
-      if (!groupsMap.has(cat)) groupsMap.set(cat, []);
-      groupsMap.get(cat)!.push(food);
+      const rawCat = food.category || "أخرى";
+      const displayAr = food.categoryAr || food.category || "أخرى";
+      if (!groupsMap.has(rawCat)) {
+        groupsMap.set(rawCat, { displayAr, foods: [] });
+      }
+      groupsMap.get(rawCat)!.foods.push(food);
     }
 
     const groups: DisplayCategoryGroup[] = [];
-    for (const [catKey, groupFoods] of groupsMap.entries()) {
+    for (const [catKey, groupData] of groupsMap.entries()) {
       groups.push({
         categoryKey: catKey,
-        nameAr: catKey,
-        foods: groupFoods,
+        nameAr: groupData.displayAr,
+        foods: groupData.foods,
       });
     }
 
@@ -263,21 +271,21 @@ export default function BrowseScreen() {
 
   const renderListHeader = useMemo(() => {
     return (
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
         <View style={[styles.titleRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
           <TouchableOpacity
             onPress={() => router.back()}
-            style={[styles.backBtn, { backgroundColor: colors.muted }]}
+            style={[styles.backBtn, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1 }]}
           >
             <View>
-              <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color={colors.foreground} />
+              <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
             </View>
           </TouchableOpacity>
           <View style={{ flex: 1, alignItems: rtl ? "flex-end" : "flex-start" }}>
-            <Text style={[styles.pageTitle, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
+            <Text style={[styles.pageTitle, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
               {rtl ? "قائمة المسموح والممنوع" : "Allowed & Forbidden List"}
             </Text>
-            <Text style={[styles.pageSubtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
+            <Text style={[styles.pageSubtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
               {rtl
                 ? "تصفح قائمة الأغذية المسموحة والممنوعة والمشروطة في نظام الطيبات"
                 : "Browse allowed, forbidden, and conditional foods in Tayyibati system"}
@@ -546,13 +554,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pageTitle: {
-    fontSize: 22,
+    fontSize: 26,
     fontFamily: "Tajawal_700Bold",
   },
   pageSubtitle: {
-    fontSize: 13,
-    fontFamily: "Tajawal_400Regular",
-    marginTop: 2,
+    fontSize: 15,
+    fontFamily: "Tajawal_500Medium",
+    marginTop: 3,
   },
   filterSection: {
     marginTop: 14,

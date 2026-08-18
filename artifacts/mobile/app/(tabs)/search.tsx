@@ -21,6 +21,7 @@ import { useFoodSearch } from "@/hooks/useFoodSearch";
 import { FoodSearchInput } from "@/components/FoodSearchInput";
 import { RefinementSuggestions } from "@/components/RefinementSuggestions";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 const QUICK_SUGGESTIONS = [
   "بيتزا", "كنتاكي", "همبرغر", "شاورما", "كباب", "فول مدمس",
@@ -81,15 +82,26 @@ export default function SearchScreen() {
           <View
             style={[
               styles.header,
-              { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
+              { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" },
             ]}
           >
-            <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
-              بحث عن طعام
-            </Text>
-            <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
-              أدخل اسم الطعام أو الوجبة أو المنتج
-            </Text>
+            <View style={{ flexDirection: rtl ? "row-reverse" : "row", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <TouchableOpacity
+                onPress={() => router.back()}
+                style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1, alignItems: "center", justifyContent: "center" }}
+                activeOpacity={0.7}
+              >
+                <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
+              </TouchableOpacity>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
+                  بحث عن طعام
+                </Text>
+                <Text style={[styles.subtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
+                  أدخل اسم الطعام أو الوجبة أو المنتج
+                </Text>
+              </View>
+            </View>
 
             <View style={{ zIndex: 999 }}>
               <FoodSearchInput
@@ -112,10 +124,10 @@ export default function SearchScreen() {
             {limitReached && (
               <View style={[styles.limitBanner, { backgroundColor: colors.error + "15", borderColor: colors.error + "40" }]}>
                 <Text style={[styles.limitBannerTitle, { color: colors.error, textAlign: rtl ? "right" : "left" }]}>
-                  وصلت إلى الحد الشهري للبحث النصي
+                  لقد انتهت محاولاتك المتاحة حالياً.
                 </Text>
                 <Text style={[styles.limitBannerSub, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
-                  يتجدد في أول الشهر القادم — أو اشترك في بريميوم للوصول غير المحدود
+                  قم بالترقية إلى الباقة المميزة للاستمرار في استخدام التحليل والبحث.
                 </Text>
                 <TouchableOpacity
                   style={[styles.limitBannerBtn, { backgroundColor: colors.accent, alignSelf: rtl ? "flex-start" : "flex-end" }]}
@@ -216,8 +228,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     gap: 6,
   },
-  title: { fontSize: 24, fontFamily: "Tajawal_700Bold", width: "100%" },
-  subtitle: { fontSize: 15, fontFamily: "Tajawal_400Regular", marginBottom: 8, width: "100%" },
+  title: { fontSize: 26, fontFamily: "Tajawal_700Bold", width: "100%" },
+  subtitle: { fontSize: 15.5, fontFamily: "Tajawal_500Medium", marginBottom: 8, width: "100%" },
   content: { padding: 16, gap: 12 },
   sectionLabel: { fontSize: 14, fontFamily: "Tajawal_500Medium" },
   suggestionsWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

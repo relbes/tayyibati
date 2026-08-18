@@ -17,6 +17,7 @@ import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { getUserUsage, getPublicConfig } from "@/lib/api";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 interface UsageInfo {
   monthlyTextCount: number;
@@ -73,12 +74,17 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-          <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>حسابي</Text>
+        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
+          <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left", width: "100%" }]}>الملف الشخصي</Text>
         </View>
         <View style={styles.guestCenter}>
-          <View style={[styles.avatarLarge, { backgroundColor: colors.muted }]}>
-            <Icon name="person-outline" size={40} color={colors.mutedForeground} />
+          <View style={{ position: "relative" }}>
+            <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1.5 }]}>
+              <Icon name="person-outline" size={40} color="#064E24" />
+            </View>
+            <View style={{ position: "absolute", bottom: -2, right: -2, backgroundColor: "#16A34A", borderRadius: 10, width: 22, height: 22, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#FFFFFF" }}>
+              <Icon name="leaf" size={12} color="#FFFFFF" />
+            </View>
           </View>
           <Text style={[styles.guestTitle, { color: colors.foreground }]}>مرحباً بك</Text>
           <Text style={[styles.guestDesc, { color: colors.mutedForeground }]}>
@@ -102,24 +108,32 @@ export default function ProfileScreen() {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
-        <LinearGradient
-          colors={[colors.primary, colors.primary + "BB"]}
-          style={[styles.profileHeader, { paddingTop: topPadding + 12 }]}
+        <View
+          style={[styles.profileHeader, { paddingTop: topPadding + 14, paddingBottom: 24, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3", borderBottomWidth: 1, position: "relative", overflow: "hidden" }]}
         >
+          {/* Decorative background shapes for richness */}
+          <View style={{ position: "absolute", top: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: "#0A4D2412" }} />
+          <View style={{ position: "absolute", bottom: -30, right: -15, width: 130, height: 130, borderRadius: 65, backgroundColor: "#F59E0B12" }} />
+
           <View style={styles.avatarRow}>
-            <View style={[styles.avatarLarge, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-              <Text style={styles.avatarInitial}>{user.name.charAt(0)}</Text>
+            <View style={{ position: "relative" }}>
+              <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1.5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }]}>
+                <Text style={[styles.avatarInitial, { color: "#064E24", fontSize: 36 }]}>{user.name.charAt(0)}</Text>
+              </View>
+              <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: "#16A34A", borderRadius: 11, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" }}>
+                <Icon name="leaf" size={13} color="#FFFFFF" />
+              </View>
             </View>
           </View>
-          <Text style={styles.userName}>{user.name}</Text>
-          <Text style={styles.userEmail}>{user.email}</Text>
+          <Text style={[styles.userName, { color: "#064E24", fontSize: 28 }]}>{user.name}</Text>
+          <Text style={[styles.userEmail, { color: "#244231", fontSize: 16.5 }]}>{user.email}</Text>
           {user.isPremium && (
-            <View style={styles.premiumBadge}>
-              <Icon name="star" size={14} color={colors.accent} />
-              <Text style={[styles.premiumText, { color: colors.accent }]}>Premium</Text>
+            <View style={[styles.premiumBadge, { backgroundColor: "#FFF3D6", borderColor: "#FFE4A0", borderWidth: 1, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginTop: 6 }]}>
+              <Icon name="star" size={15} color="#F59E0B" />
+              <Text style={[styles.premiumText, { color: "#D97706", fontFamily: "Tajawal_700Bold" }]}>Premium</Text>
             </View>
           )}
-        </LinearGradient>
+        </View>
 
         <View style={styles.content}>
           {/* Usage Card */}
@@ -184,7 +198,7 @@ export default function ProfileScreen() {
             { icon: "star-outline" as const, label: "الباقات", route: "/pricing" },
             { icon: "time-outline" as const, label: "سجل التحليلات", route: "/(tabs)/history" },
             { icon: "shield-checkmark-outline" as const, label: "سياسة الخصوصية", route: "/privacy-policy" },
-            { icon: "information-circle-outline" as const, label: "عن التطبيق", route: null },
+            { icon: "information-circle-outline" as const, label: "عن التطبيق", route: "/about-system?mode=app" },
           ].map((item) => (
             <TouchableOpacity
               key={item.label}
@@ -228,7 +242,7 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: "Tajawal_700Bold",
   },
   profileHeader: {

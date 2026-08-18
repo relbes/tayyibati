@@ -19,6 +19,7 @@ import { useAnalysis } from "@/context/AnalysisContext";
 import { getHistory, deleteHistoryItem } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isRTL } from "@/lib/i18n";
+import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 export default function HistoryScreen() {
   const colors = useColors();
@@ -112,13 +113,24 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>سجل التحليلات</Text>
-        {user && (
-          <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
-            {items.length} تحليل
-          </Text>
-        )}
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
+        <View style={{ flexDirection: rtl ? "row-reverse" : "row", alignItems: "center", gap: 12, width: "100%" }}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1, alignItems: "center", justifyContent: "center" }}
+            activeOpacity={0.7}
+          >
+            <Icon name={rtl ? "arrow-forward" : "arrow-back"} size={20} color="#064E24" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>سجل التحليلات</Text>
+            {user && (
+              <Text style={[styles.subtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
+                {items.length} تحليل
+              </Text>
+            )}
+          </View>
+        </View>
       </View>
 
       {!user ? (
@@ -169,12 +181,12 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontFamily: "Tajawal_700Bold",
   },
   subtitle: {
-    fontSize: 14,
-    fontFamily: "Tajawal_400Regular",
+    fontSize: 15.5,
+    fontFamily: "Tajawal_500Medium",
   },
   item: {
     alignItems: "center",

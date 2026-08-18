@@ -374,6 +374,69 @@ export class UnifiedAnalysisEngine {
     // Stage 2.5: Search Outcome Single Source of Truth Routing
     const searchOutcome = (canonicalSearchRes as any)?.searchOutcome || (canonicalSearchRes ? "FOUND" : "NOT_FOUND");
 
+    // Stage 2.5.1: Semantic Search Resolution Confidence Gate for Invalid Queries
+    const hasExplicitIngredients = input.rawIngredientNames && input.rawIngredientNames.length > 0;
+    const isRecipeSyntax = /[+,\n]/.test(queryText) || queryText.includes("مكونات") || queryText.includes("طريقة عمل");
+
+    const hasConfidentFood = Boolean(
+      (structuredSearch.displayFoods && structuredSearch.displayFoods.length > 0 && (structuredSearch.displayFoods[0].confidence ?? 0) >= 70) ||
+      (structuredSearch.foods && structuredSearch.foods.length > 0 && (structuredSearch.foods[0].confidence ?? 0) >= 70)
+    );
+
+    const hasConfidentDish = Boolean(
+      (structuredSearch.displayDishes && structuredSearch.displayDishes.length > 0 && (structuredSearch.displayDishes[0].confidence ?? 0) >= 70) ||
+      (structuredSearch.dishes && structuredSearch.dishes.length > 0 && (structuredSearch.dishes[0].confidence ?? 0) >= 70)
+    );
+
+    const isConfidentMatch =
+      hasConfidentFood ||
+      hasConfidentDish ||
+      Boolean(
+        canonicalSearchRes && (
+          (Boolean(canonicalSearchRes.canonicalId || (canonicalSearchRes as any).canonical_id) && (canonicalSearchRes.canonicalId || (canonicalSearchRes as any).canonical_id) > 0) ||
+          (canonicalSearchRes.confidence ?? 0) >= 70 ||
+          (canonicalSearchRes.searchConfidence ?? 0) >= 70 ||
+          canonicalSearchRes.searchMethod === "exact_alias" ||
+          canonicalSearchRes.searchMethod === "exact_canonical" ||
+          canonicalSearchRes.searchMethod === "base_entity_resolution" ||
+          canonicalSearchRes.searchMethod === "dish_alias" ||
+          canonicalSearchRes.searchMethod === "food_alias"
+        )
+      ) ||
+      (structuredSearch.queryIntent !== "UNKNOWN" && ((structuredSearch.displayFoods?.length ?? 0) > 0 || (structuredSearch.displayDishes?.length ?? 0) > 0));
+
+    if (!isConfidentMatch && !hasExplicitIngredients && !isRecipeSyntax && (input.inputType === "text" || !input.inputType)) {
+      const notFoundReport: AnalysisReport = {
+        query: queryText,
+        displayQuery: input.displayQuery || queryText,
+        resultMode: "NOT_FOUND" as any,
+        primaryRuling: undefined,
+        allowed: [],
+        forbidden: [],
+        conditional: [],
+        unknown: [],
+        compatibilityScore: null,
+        scoreAvailable: false,
+        explanation: "لم نفهم ما تبحث عنه. يرجى كتابة اسم طعام أو طبق للحصول على النتيجة.",
+        suggestions: [],
+        analysisType: "text",
+        notFound: true,
+      };
+
+      const endTime = performance.now();
+      recordStage("unmatched_query_termination", performance.now() - startTime, { query: queryText });
+
+      return {
+        report: notFoundReport,
+        executionTrace: {
+          totalDurationMs: Math.round(endTime - startTime),
+          orchestrationOverheadMs: 1,
+          stagesExecuted: ["input_gateway", "canonical_search_gateway", "unmatched_query_termination"],
+          traces: [{ stage: "unmatched_query_termination", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }],
+        },
+      };
+    }
+
     // ROUTING RULE 1: AMBIGUOUS -> Return Candidate Dishes Immediately without calling AI or DecisionEngine
     if (searchOutcome === "AMBIGUOUS") {
       const candDishes = ((canonicalSearchRes as any)?.candidateDishes || []) as any[];
@@ -465,9 +528,6 @@ export class UnifiedAnalysisEngine {
     }
 
     // ROUTING RULE 2: NOT_FOUND -> Persistent AI Cache -> OpenAI Extractor (if required)
-    const hasExplicitIngredients = input.rawIngredientNames && input.rawIngredientNames.length > 0;
-    const isRecipeSyntax = /[+,\n]/.test(queryText) || queryText.includes("مكونات") || queryText.includes("طريقة عمل");
-
     if (searchOutcome === "NOT_FOUND" && !hasExplicitIngredients && !isRecipeSyntax) {
       // 1. BARCODE MODALITY POLICY: NEVER call AI for barcodes!
       if (input.inputType === "barcode") {
