@@ -31,7 +31,7 @@ export const EmptyAnalysisState = React.memo(function EmptyAnalysisState({
       </View>
 
       <Text style={[styles.title, { color: colors.foreground }]}>{title}</Text>
-      <Text style={[styles.description, { color: colors.mutedForeground }]}>{message}</Text>
+      <Text style={[styles.description, { color: colors.foreground }]}>{message}</Text>
 
       <TouchableOpacity
         style={[styles.retryBtn, { backgroundColor: colors.primary }]}
@@ -71,10 +71,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   description: {
-    fontSize: 14,
-    fontFamily: "Tajawal_400Regular",
+    fontSize: 16,
+    fontFamily: "Tajawal_500Medium",
     textAlign: "center",
-    lineHeight: 22,
+    lineHeight: 25,
   },
   retryBtn: {
     flexDirection: "row",

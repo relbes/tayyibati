@@ -220,8 +220,8 @@ export function AnalysisResultCard({
   if (!ingredientDecisions || ingredientDecisions.length === 0) {
     return (
       <EmptyAnalysisState
-        title="لم يكتمل التحليل"
-        message="لم نتمكن من اكتشاف مكونات في هذه الوجبة. يرجى التأكد من اسم الوجبة أو الصورة وإعادة المحاولة."
+        title="لم نتمكن من التعرف على الطعام"
+        message="عفواً، لم نتمكن من تحديد مكونات هذا الطعام أو الوجبة. يُرجى التأكد من كتابة الاسم بشكل دقيق أو استخدام صورة أوضح ثم إعادة المحاولة."
         retryLabel="إعادة المحاولة"
         onRetry={onRetry || (() => {})}
         iconName="search-outline"
