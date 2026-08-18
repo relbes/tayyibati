@@ -54,7 +54,7 @@ export interface ResolvedEntity {
     [key: string]: boolean | undefined;
   };
   foodId: number | null;
-  parentEntityId: number | null;
+  parentEntityId?: number | null;
   matchScore: number;
 }
 
@@ -75,7 +75,7 @@ export interface RefinementSuggestion {
   labelAr: string;
   labelEn: string;
   query: string;
-  source: "DB_VARIANT" | "AI_CULINARY";
+  source: "DB_VARIANT" | "AI_CULINARY" | "DB_CANDIDATE";
   confidence: "HIGH" | "MEDIUM" | "LOW";
 }
 
@@ -688,7 +688,7 @@ export function buildUnifiedSuggestions(
 
 export interface ResolvedFoodIdentity {
   food: any;
-  matchType: "EXACT" | "NORMALIZED" | "ALIAS" | "WORD_BOUNDARY" | "AI_INTERPRETED";
+  matchType: "EXACT" | "NORMALIZED" | "ALIAS" | "WORD_BOUNDARY" | "AI_INTERPRETED" | "BASE_ENTITY";
   confidence: "HIGH" | "MEDIUM" | "LOW";
   originalInput: string;
   matchedTerm?: string;

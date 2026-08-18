@@ -161,7 +161,7 @@ adminAiCacheRouter.post("/:id/delete", async (req, res) => {
       .returning();
 
     if (!updated) {
-      return res.status(404).json({ success: false, error: "AI cache item not found" });
+      return void res.status(404).json({ success: false, error: "AI cache item not found" });
     }
 
     aiCacheClearMemory(); // Evict memory cache

@@ -117,7 +117,8 @@ export class SearchOrchestrator {
     if (mode === SearchMode.BARCODE) {
       const productHit = await CanonicalSearchEngine.search({ ...context, mode: SearchMode.BARCODE });
       if (productHit && productHit.searchOutcome === "FOUND") {
-        const resolved = await KnowledgeResolver.resolveCanonicalObject(productHit.canonical_id, "product");
+        const canonicalId = productHit.canonicalId || productHit.canonical_id || 0;
+        const resolved = await KnowledgeResolver.resolveCanonicalObject(canonicalId, "product");
         return {
           triggerAction: "ANALYZE_IMMEDIATE",
           canonicalResult: productHit,
@@ -147,7 +148,7 @@ export class SearchOrchestrator {
     if (isPureProteinQuery(context.query)) {
       const resolution = await FoodResolutionEngine.resolve(
         context.query,
-        mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
+        (mode as any) === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
         1.0
       );
 
@@ -191,31 +192,21 @@ export class SearchOrchestrator {
           priority: proteinInfo.priority !== "none" ? proteinInfo.priority : undefined,
         };
 
-        const mealDecision: MealDecision = {
-          status: proteinInfo.status,
-          allowedCount: proteinInfo.status === "allowed" ? 1 : 0,
-          forbiddenCount: proteinInfo.status === "forbidden" ? 1 : 0,
-          conditionalCount: proteinInfo.status === "conditional" ? 1 : 0,
-          unknownCount: 0,
-          compatibilityScore: proteinInfo.status === "allowed" ? 100 : (proteinInfo.status === "forbidden" ? 0 : 50),
-        };
-
-        const explanationModel: ExplanationModel = {
-          summaryAr: proteinInfo.reason,
-          summaryEn: proteinInfo.reason,
-          detailedReasonAr: proteinInfo.reason,
-          detailedReasonEn: proteinInfo.reason,
-        };
-
         const mockCanonicalResult: CanonicalSearchResult = {
           canonicalId: 0,
           canonicalEntityType: "food",
           canonicalName: proteinInfo.canonicalFoodAr,
           searchOutcome: "NOT_FOUND",
           confidence: 95,
-          searchMethod: "protein_resolver",
+          searchConfidence: 95,
+          matchedReason: "Protein Resolver",
+          matchedAlias: null,
+          searchMethod: "protein_resolver" as any,
           matchType: "NOT_FOUND",
         };
+
+        const mealDecision = MealDecisionEngine.evaluateMeal([decision]);
+        const explanationModel = ExplanationFramework.generateExplanation(mealDecision, [decision], mockCanonicalResult);
 
         return {
           triggerAction: "NOT_FOUND",
@@ -236,10 +227,10 @@ export class SearchOrchestrator {
     const result = await CanonicalSearchEngine.search(context);
 
     // FOUND -> Check if it has protein variant ambiguity first (e.g. 'شاورما' alone)
-    if (result.searchOutcome === "FOUND") {
+    if (result && result.searchOutcome === "FOUND") {
       const resolution = await FoodResolutionEngine.resolve(
         context.query,
-        mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
+        (mode as any) === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
         1.0
       );
 
@@ -259,7 +250,9 @@ export class SearchOrchestrator {
         };
       }
 
-      const resolved = await KnowledgeResolver.resolveCanonicalObject(result.canonical_id, result.entity_type);
+      const canonicalId = result.canonicalId || result.canonical_id || 0;
+      const entityType = result.canonicalEntityType || result.entity_type || "food";
+      const resolved = await KnowledgeResolver.resolveCanonicalObject(canonicalId, entityType);
       return {
         triggerAction: "ANALYZE_IMMEDIATE",
         canonicalResult: result,
@@ -270,7 +263,7 @@ export class SearchOrchestrator {
     }
 
     // AMBIGUOUS -> Present candidate dishes selection screen (NEVER invoke AI)
-    if (result.searchOutcome === "AMBIGUOUS" && result.candidateDishes && result.candidateDishes.length > 1) {
+    if (result && result.searchOutcome === "AMBIGUOUS" && result.candidateDishes && result.candidateDishes.length > 1) {
       const session = this.createSession(context.query, result.candidateDishes);
       return {
         sessionId: session.id,
@@ -284,12 +277,12 @@ export class SearchOrchestrator {
     }
 
     // NOT_FOUND -> Invoke AiKnowledgeExtractor, resolve ingredients, evaluate Decisions
-    const aiKnowledge = await AiKnowledgeExtractor.extract(context.query, mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any));
+    const aiKnowledge = await AiKnowledgeExtractor.extract(context.query, (mode as any) === SearchMode.AUTOCOMPLETE ? "text" : (mode as any));
     const resolvedIngredients = await resolveAiIngredients(aiKnowledge.ingredients || []);
 
     const resolution = await FoodResolutionEngine.resolve(
       context.query,
-      mode === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
+      (mode as any) === SearchMode.AUTOCOMPLETE ? "text" : (mode as any),
       aiKnowledge.confidence,
       aiKnowledge.ingredients,
       aiKnowledge.canonicalName

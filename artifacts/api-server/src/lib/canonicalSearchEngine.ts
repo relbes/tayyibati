@@ -56,6 +56,9 @@ export type SearchMethod =
   | "exact_alias"
   | "exact_canonical"
   | "base_entity_resolution"
+  | "dish_alias"
+  | "food_alias"
+  | "protein_resolver"
   | "starts_with"
   | "contains"
   | "token_similarity"
@@ -88,19 +91,19 @@ export interface SearchDiagnostics {
   engineVersion: string;
 }
 
-export type MatchType = "EXACT" | "ALIAS" | "SYNONYM" | "PREFIX" | "BASE_ENTITY" | "FUZZY" | "AI";
+export type MatchType = "EXACT" | "ALIAS" | "SYNONYM" | "PREFIX" | "BASE_ENTITY" | "PARENT_ENTITY" | "FUZZY" | "AI" | "RECIPE_INFERRED" | "VARIANT" | "UNKNOWN" | "NOT_FOUND" | "AMBIGUOUS";
 
 export type SearchOutcome = "FOUND" | "AMBIGUOUS" | "NOT_FOUND";
 
 export interface SearchResult {
-  searchOutcome: SearchOutcome;
-  canonicalId: number | string;
-  canonicalEntityType: EntityType;
-  canonicalName: string;
-  searchConfidence: number; // 0 to 100 percentage
-  matchType: MatchType;
-  matchedReason: string;
-  matchedAlias: string | null;
+  searchOutcome?: SearchOutcome;
+  canonicalId?: number | string;
+  canonicalEntityType?: EntityType;
+  canonicalName?: string;
+  searchConfidence?: number; // 0 to 100 percentage
+  matchType?: MatchType;
+  matchedReason?: string;
+  matchedAlias?: string | null;
   modifiers?: string[]; // Preserved generic descriptors (e.g. ["بني"], ["أسمر"])
   didYouMean?: string[];
   isAmbiguous?: boolean;
@@ -114,6 +117,7 @@ export interface SearchResult {
   confidence?: number;
   matched_alias?: string | null;
   search_method?: SearchMethod;
+  searchMethod?: SearchMethod;
 }
 
 export type CanonicalSearchResult = SearchResult;
@@ -189,7 +193,7 @@ export function rankCandidates(
   };
 
   const scored = candidates.map((c) => {
-    const score = computeRankingScore(c.canonicalName, rawQuery, c.canonicalEntityType, c.matchedAlias);
+    const score = computeRankingScore(c.canonicalName || "", rawQuery, c.canonicalEntityType || "food", c.matchedAlias || null);
     return { candidate: c, score };
   });
 
@@ -200,17 +204,19 @@ export function rankCandidates(
       return b.score - a.score;
     }
     // 2. Secondary: Entity Priority (Dish > Food > Product)
-    const wA = typeWeight[a.candidate.canonicalEntityType] || 0;
-    const wB = typeWeight[b.candidate.canonicalEntityType] || 0;
+    const wA = typeWeight[a.candidate.canonicalEntityType || "food"] || 0;
+    const wB = typeWeight[b.candidate.canonicalEntityType || "food"] || 0;
     if (wB !== wA) {
       return wB - wA;
     }
     // 3. Tertiary: Shorter canonical name length
-    if (a.candidate.canonicalName.length !== b.candidate.canonicalName.length) {
-      return a.candidate.canonicalName.length - b.candidate.canonicalName.length;
+    const lenA = (a.candidate.canonicalName || "").length;
+    const lenB = (b.candidate.canonicalName || "").length;
+    if (lenA !== lenB) {
+      return lenA - lenB;
     }
     // 4. Quaternary: Arabic alphabetical order
-    return a.candidate.canonicalName.localeCompare(b.candidate.canonicalName, "ar");
+    return (a.candidate.canonicalName || "").localeCompare(b.candidate.canonicalName || "", "ar");
   });
 
   const ranked = scored.map((s) => {
@@ -292,7 +298,7 @@ export function invalidateSearchIndexes(): void {
   cachedIndexes = null;
 }
 
-export function printStructuredSearchDebugLog(res: CanonicalSearchResult): void {
+export function printStructuredSearchDebugLog(res: any): void {
   if (!res || !res.diagnostics) return;
   const d = res.diagnostics;
   console.log(`[SEARCH_DEBUG] Query: "${d.originalQuery}" | Method: ${d.searchMethod} | Entity: ${d.selectedEntity} | ID: ${d.canonicalId} | Time: ${d.executionTimeMs}ms`);
@@ -731,7 +737,7 @@ export class CanonicalSearchEngine {
       }
     }
 
-    foods.sort((a, b) => b.searchConfidence - a.searchConfidence);
+    foods.sort((a, b) => (b.searchConfidence ?? 0) - (a.searchConfidence ?? 0));
 
     // -------------------------------------------------------------------------
     // 2. DISH CHANNEL RESOLUTION
@@ -821,14 +827,14 @@ export class CanonicalSearchEngine {
       }
     }
 
-    dishes.sort((a, b) => b.searchConfidence - a.searchConfidence);
+    dishes.sort((a, b) => (b.searchConfidence ?? 0) - (a.searchConfidence ?? 0));
 
     // -------------------------------------------------------------------------
     // 3. GENERIC QUERY INTENT DETERMINATION
     // -------------------------------------------------------------------------
     let queryIntent: QueryIntent = "UNKNOWN";
-    const hasExactFood = foods.some((f) => f.matchType === "EXACT" || f.matchType === "ALIAS" || f.matchType === "BASE_ENTITY" || f.searchConfidence >= 85);
-    const hasExactDish = dishes.some((d) => d.matchType === "EXACT" || d.matchType === "ALIAS" || d.searchConfidence >= 85);
+    const hasExactFood = foods.some((f) => f.matchType === "EXACT" || f.matchType === "ALIAS" || f.matchType === "BASE_ENTITY" || (f.searchConfidence ?? 0) >= 85);
+    const hasExactDish = dishes.some((d) => d.matchType === "EXACT" || d.matchType === "ALIAS" || (d.searchConfidence ?? 0) >= 85);
     const hasConjunction = (/\s+و[\u0600-\u06FF]+/.test(" " + rawQuery.trim()) && !["ورق", "وجبة", "وز"].some(w => rawQuery.trim().startsWith(w))) || queryNorm.includes(" و ");
 
     if (hasConjunction) {
@@ -851,7 +857,7 @@ export class CanonicalSearchEngine {
     } else if (dishes.length > 0 && foods.length === 0) {
       queryIntent = "DISH";
     } else if (foods.length > 0 && dishes.length > 0) {
-      queryIntent = foods[0].searchConfidence >= dishes[0].searchConfidence ? "FOOD" : "DISH";
+      queryIntent = (foods[0].searchConfidence ?? 0) >= (dishes[0].searchConfidence ?? 0) ? "FOOD" : "DISH";
     } else {
       const isMultiWord = queryNorm.split(" ").length >= 3;
       queryIntent = isMultiWord ? "COMPOSITE" : "UNKNOWN";
@@ -1164,7 +1170,7 @@ export class CanonicalSearchEngine {
         addCandidate({
           canonicalId: prodMatches.productId || prodMatches.id,
           canonicalEntityType: "product",
-          canonicalName: prodMatches.productName || prodMatches.nameAr,
+          canonicalName: prodMatches.productName || prodMatches.nameAr || rawQuery,
           searchConfidence: 90,
           matchType: "EXACT",
           matchedReason: "Matched via Commercial Product Database",
@@ -1265,7 +1271,7 @@ export class CanonicalSearchEngine {
     // If the request explicitly specifies SearchMode.BARCODE or SearchMode.PRODUCT,
     // and no product match was found in Tier 1, terminate immediately with NOT_FOUND.
     // NEVER allow product/barcode queries to leak into Food or Dish domains!
-    if (mode === SearchMode.BARCODE || mode === SearchMode.PRODUCT) {
+    if ((mode as any) === SearchMode.BARCODE || mode === SearchMode.PRODUCT) {
       const unmappedProductResult: CanonicalSearchResult = {
         canonicalId: 0,
         canonicalEntityType: "product",
@@ -1796,7 +1802,7 @@ export class CanonicalSearchEngine {
   }
 
   private static formatResult(
-    res: SearchResult,
+    res: Partial<SearchResult>,
     tStart: number,
     isDebug: boolean,
     rawQuery: string,

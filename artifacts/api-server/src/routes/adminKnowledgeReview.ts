@@ -127,7 +127,7 @@ adminKnowledgeReviewRouter.post("/:id/merge", async (req, res) => {
 
     const updated = await mergeReviewItem(id, canonicalFoodId, notes);
     if (!updated) {
-      return res.status(404).json({ success: false, error: "Review item not found" });
+      return void res.status(404).json({ success: false, error: "Review item not found" });
     }
 
     res.json({ success: true, item: updated });

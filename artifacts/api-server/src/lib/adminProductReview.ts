@@ -17,7 +17,7 @@
 
 import { UnknownProductQueue, UnknownProductRecord } from "./unknownProductQueue";
 import { ProductDatabase, ProductDbRecord } from "./productDatabase";
-import { IngredientDecomposer, DecomposedIngredientResult } from "./ingredientDecomposer";
+import { IngredientDecomposer, DecompositionOutput } from "./ingredientDecomposer";
 import { DecisionEngine, DecisionEngineOutput } from "./decisionEngine";
 import { ExplanationEngine, ExplanationEngineOutput } from "./explanationEngine";
 
@@ -42,7 +42,7 @@ export interface ProductReview {
 
 export interface ReviewPreview {
   record: UnknownProductRecord;
-  decomposedIngredients: DecomposedIngredientResult;
+  decomposedIngredients: DecompositionOutput;
   decisionPreview: DecisionEngineOutput;
   explanationPreview: ExplanationEngineOutput;
 }

@@ -51,9 +51,9 @@ export async function resolveAiIngredients(ingredients: string[]): Promise<Resol
       resolvedList.push({
         input: query,
         searchOutcome: "FOUND",
-        canonicalId: res.canonical_id || res.canonicalId,
-        canonicalEntityType: res.entity_type || res.canonicalEntityType,
-        canonicalName: res.canonical_name || res.canonicalName,
+        canonicalId: res.canonical_id ?? res.canonicalId ?? 0,
+        canonicalEntityType: (res.entity_type ?? res.canonicalEntityType ?? "food") as "dish" | "food" | "product",
+        canonicalName: res.canonical_name ?? res.canonicalName ?? query,
         confidence: res.confidence || res.searchConfidence || 100,
         matchedAlias: res.matched_alias || res.matchedAlias || null,
         searchMethod: res.search_method || "exact_alias",

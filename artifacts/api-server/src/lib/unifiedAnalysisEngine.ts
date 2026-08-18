@@ -39,6 +39,8 @@ export interface UnifiedAnalysisInput {
   query?: string;
   displayQuery?: string;
   userId?: string;
+  context?: AnalysisContext;
+  language?: string;
   dishId?: number;
   foodId?: number | string;
   entityType?: "food" | "dish" | "product";
@@ -84,7 +86,7 @@ export class UnifiedAnalysisEngine {
 
     // Universal Analysis Context (Phase 7.1.5 Mandate)
     const context = input.context || AnalysisContextFactory.create({
-      language: input.language || "ar",
+      language: input.language === "en" ? "en" : "ar",
       userId: input.userId || null,
       inputType: (input.inputType || "TEXT").toUpperCase() as any,
       requestSource: "api",
@@ -209,7 +211,7 @@ export class UnifiedAnalysisEngine {
               needsClarification: true,
               clarificationType: clar.clarificationType,
               questionAr: clar.questionAr,
-              suggestions: clar.suggestions,
+              suggestions: (clar.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || s.query || ""),
               allowed: [],
               forbidden: [],
               conditional: [],
@@ -278,7 +280,7 @@ export class UnifiedAnalysisEngine {
           conditional,
           unknown,
           compatibilityScore: proteinInfo.status === "allowed" ? 100 : (proteinInfo.status === "forbidden" ? 0 : 50),
-          ingredientConfidence: "HIGH",
+          ingredientConfidence: 95,
           scoreAvailable: true,
           explanation: proteinInfo.reason,
           suggestions: [],
@@ -369,6 +371,9 @@ export class UnifiedAnalysisEngine {
       canonicalName: canonicalSearchRes?.canonicalName || canonicalSearchRes?.canonical_name || queryText,
       confidence: canonicalSearchRes?.searchConfidence || canonicalSearchRes?.confidence || 0,
       searchMethod: canonicalSearchRes?.search_method || "exact_canonical",
+      expandedVariants: [],
+      searchedIndexes: [],
+      engineVersion: "1.0",
       executionTimeMs: 0,
     };
 
@@ -1101,14 +1106,14 @@ async function checkAndApplyClarification(
       needsClarification: true,
       clarificationType: resolution.clarificationType,
       questionAr: resolution.questionAr,
-      suggestions: resolution.suggestions,
+      suggestions: (resolution.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || s.query || ""),
       allowed: [],
       forbidden: [],
       conditional: [],
       unknown: [],
       compatibilityScore: null,
       scoreAvailable: false,
-      explanation: resolution.questionAr,
+      explanation: resolution.questionAr || report.explanation || "",
       suggestions_legacy: [],
       notFound: true,
     };

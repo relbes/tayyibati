@@ -26,7 +26,7 @@ import { AI_CONFIG } from "../config";
 import { norm } from "../arabicNormalization";
 
 function normalizeAndDeduplicateIngredients(
-  items: Array<{ name: string; certainty: number; isOptional: boolean; preparation?: string; ingredientRole?: "primary" | "secondary" | "spice" | "sauce" }>
+  items: Array<{ name: string; certainty: number; isOptional: boolean; preparation?: string; ingredientRole?: any }>
 ): FoodKnowledgeIngredient[] {
   const result: FoodKnowledgeIngredient[] = [];
   const seenNames = new Set<string>();

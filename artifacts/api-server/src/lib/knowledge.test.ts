@@ -13,7 +13,7 @@ import {
   type DishCandidate
 } from "./knowledgeCache";
 import { buildReportFromHypotheses } from "../routes/analysis";
-import type { AnalysisReport } from "../context/AnalysisContext";
+import type { AnalysisReport } from "../routes/analysis";
 
 // Mock Database Cache Store for self-contained, in-memory testing
 const mockKnowledgeCache = {
@@ -702,7 +702,7 @@ runTest("35. Explainability: dbReason and dbNotes are propagated correctly from 
     ]
   });
 
-  const breadItem = report.allowed.find(i => i.nameAr === "خبز");
+  const breadItem = report.allowed.find((i: any) => i.nameAr === "خبز");
   if (!breadItem) {
     throw new Error("Expected Bread to be present in allowed items");
   }
@@ -722,7 +722,7 @@ runTest("36. Explainability: matchType is mapped correctly for exact, alias and 
     isAmbiguous: false,
     rawItems: [{ nameAr: "خبز", nameEn: "Bread" }]
   });
-  const breadExact = reportExact.allowed.find(i => i.nameAr === "خبز");
+  const breadExact = reportExact.allowed.find((i: any) => i.nameAr === "خبز");
   if (breadExact?.matchType !== "EXACT") {
     throw new Error(`Expected EXACT matchType, got: ${breadExact?.matchType}`);
   }
@@ -734,7 +734,7 @@ runTest("36. Explainability: matchType is mapped correctly for exact, alias and 
     isAmbiguous: false,
     rawItems: [{ nameAr: "المنسف", nameEn: "Mansaf" }]
   });
-  const mansafAlias = reportAlias.allowed.find(i => i.nameAr === "منسف");
+  const mansafAlias = reportAlias.allowed.find((i: any) => i.nameAr === "منسف");
   if (mansafAlias?.matchType !== "ALIAS") {
     throw new Error(`Expected ALIAS matchType, got: ${mansafAlias?.matchType}`);
   }
@@ -748,7 +748,7 @@ runTest("36. Explainability: matchType is mapped correctly for exact, alias and 
       { nameAr: "Ice Cream", nameEn: "Ice Cream", confidence: "HIGH" }
     ]
   });
-  const inferredItem = reportInferred.allowed.find(i => i.nameAr === "صلصة الطحينة");
+  const inferredItem = reportInferred.allowed.find((i: any) => i.nameAr === "صلصة الطحينة");
   if (!inferredItem) {
     throw new Error("Expected Tahini Sauce to be inferred inside Kofta");
   }
@@ -784,7 +784,7 @@ runTest("38. Explainability: null Reason and Notes handled safely", () => {
     ]
   });
 
-  const riceItem = report.allowed.find(i => i.nameAr === "أرز");
+  const riceItem = report.allowed.find((i: any) => i.nameAr === "أرز");
   if (!riceItem) {
     throw new Error("Expected Rice to be analyzed");
   }
@@ -803,7 +803,7 @@ runTest("39. Explainability: fuzzy/parent resolution (like خبز أسمر) reso
     ]
   });
 
-  const breadItem = report.allowed.find(i => i.nameAr === "خبز");
+  const breadItem = report.allowed.find((i: any) => i.nameAr === "خبز");
   if (!breadItem) {
     throw new Error("Expected Bread to be resolved");
   }

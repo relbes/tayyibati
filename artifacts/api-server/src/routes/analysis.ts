@@ -15,7 +15,7 @@ import { requireAuth } from "../middleware/requireAuth";
 import { getFreeMonthlyLimit } from "../lib/config";
 import { UnifiedAnalysisEngine } from "../lib/unifiedAnalysisEngine";
 import { analyzeDishCompatibility } from "../lib/dishCompatibilityEngine";
-import { CanonicalSearchEngine } from "../lib/canonicalSearchEngine";
+import { CanonicalSearchEngine, MatchType } from "../lib/canonicalSearchEngine";
 
 const router = Router();
 
@@ -84,7 +84,7 @@ export async function getUserPlanLimits(userId: string): Promise<{ textLimit: nu
 async function checkAndIncrementUsage(
   userId: string,
   type: "text" | "image"
-): Promise<{ allowed: boolean; monthlyCount: number; textCount: number; imageCount: number }> {
+): Promise<{ allowed: boolean; monthlyCount: number; textCount: number; imageCount: number; count: number; limit: number; remaining: number }> {
   // Premium users always get unlimited access — no quota check needed
   const premium = await isUserPremium(userId);
   if (premium) {
@@ -102,7 +102,7 @@ async function checkAndIncrementUsage(
     } else {
       await db.update(userUsageTable).set({ count: newCount, textCount: newTextCount, imageCount: newImageCount }).where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
     }
-    return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount };
+    return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount, count: newCount, limit: -1, remaining: 9999 };
   }
 
   const currentMonth = new Date().toISOString().slice(0, 7); // "YYYY-MM"
@@ -117,7 +117,7 @@ async function checkAndIncrementUsage(
   if (existing.length === 0) {
     // Check limit before first insert (handles limit=0 edge case)
     if (typeLimit >= 0 && 0 >= typeLimit) {
-      return { allowed: false, monthlyCount: 0, textCount: 0, imageCount: 0 };
+      return { allowed: false, monthlyCount: 0, textCount: 0, imageCount: 0, count: 0, limit: typeLimit, remaining: 0 };
     }
     const newTextCount = type === "text" ? 1 : 0;
     const newImageCount = type === "image" ? 1 : 0;
@@ -130,7 +130,8 @@ async function checkAndIncrementUsage(
       imageCount: newImageCount,
       isPremium: premium ? "true" : "false",
     });
-    return { allowed: true, monthlyCount: 1, textCount: newTextCount, imageCount: newImageCount };
+    const rem = typeLimit >= 0 ? Math.max(0, typeLimit - 1) : 9999;
+    return { allowed: true, monthlyCount: 1, textCount: newTextCount, imageCount: newImageCount, count: 1, limit: typeLimit, remaining: rem };
   }
 
   const row = existing[0];
@@ -138,18 +139,21 @@ async function checkAndIncrementUsage(
 
   // Enforce limit for ALL users — -1 means unlimited
   if (typeLimit >= 0 && typeCount >= typeLimit) {
-    return { allowed: false, monthlyCount: row.count, textCount: row.textCount, imageCount: row.imageCount };
+    const rem = Math.max(0, typeLimit - typeCount);
+    return { allowed: false, monthlyCount: row.count, textCount: row.textCount, imageCount: row.imageCount, count: row.count, limit: typeLimit, remaining: rem };
   }
 
   const newTextCount = row.textCount + (type === "text" ? 1 : 0);
   const newImageCount = row.imageCount + (type === "image" ? 1 : 0);
   const newCount = row.count + 1;
+  const newTypeCount = typeCount + 1;
+  const rem = typeLimit >= 0 ? Math.max(0, typeLimit - newTypeCount) : 9999;
 
   await db
     .update(userUsageTable)
     .set({ count: newCount, textCount: newTextCount, imageCount: newImageCount })
     .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
-  return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount };
+  return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount, count: newCount, limit: typeLimit, remaining: rem };
 }
 
 export type IngredientStatus = "allowed" | "forbidden" | "conditional" | "unknown";
@@ -170,6 +174,8 @@ export interface IngredientResult {
 
 export interface AnalysisReport {
   query: string;
+  displayQuery?: string;
+  canonicalResult?: any;
   dish?: string;
   proteinCategory?: string;
   proteinSpecificity?: string;
@@ -215,6 +221,7 @@ export interface AnalysisReport {
   unknown: IngredientResult[];
   explanation: string;
   suggestions: string[];
+  suggestions_legacy?: string[];
   analysisType: "text" | "image" | "label";
   notFound?: boolean;
   imageRecognition?: {
@@ -693,7 +700,7 @@ export function buildReportFromHypotheses(
     const dbReason = foodRow?.reason ?? null;
     const dbNotes = foodRow?.notes ?? null;
 
-    let matchType: "EXACT" | "ALIAS" | "VARIANT" | "PARENT_ENTITY" | "RECIPE_INFERRED" | "FUZZY" | "UNKNOWN" = "EXACT";
+    let matchType: MatchType = "EXACT";
     if (!foodRow && !h.inferredEntity) {
       matchType = "UNKNOWN";
     } else if (h.observedEntity && h.inferredEntity && h.observedEntity.id !== h.inferredEntity.id) {
@@ -720,9 +727,10 @@ export function buildReportFromHypotheses(
     } : null;
 
     let confidence: "HIGH" | "MEDIUM" | "LOW" = "HIGH";
-    if (matchType === "EXACT" || matchType === "ALIAS" || matchType === "VARIANT") {
+    const mt = matchType as string;
+    if (mt === "EXACT" || mt === "ALIAS" || mt === "VARIANT") {
       confidence = "HIGH";
-    } else if (matchType === "PARENT_ENTITY" || matchType === "FUZZY") {
+    } else if (mt === "PARENT_ENTITY" || mt === "FUZZY") {
       confidence = "MEDIUM";
     } else {
       confidence = "LOW";

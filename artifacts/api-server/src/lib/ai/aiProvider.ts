@@ -30,7 +30,8 @@ export type IngredientRole =
   | "beverage"
   | "sweetener"
   | "oil"
-  | "additive";
+  | "additive"
+  | "spice";
 
 export interface FoodKnowledgeRequest {
   query: string;

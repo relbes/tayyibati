@@ -288,12 +288,14 @@ router.get("/foods/autocomplete", async (req, res) => {
 
     if (structuredRes.displayFoods && structuredRes.displayFoods.length > 0) {
       structuredRes.displayFoods.forEach((f, idx) => {
+        const name = f.canonicalName || f.canonical_name || "";
+        const id = f.canonicalId ?? f.canonical_id ?? 0;
         suggestions.push({
-          labelAr: f.canonicalName,
-          labelEn: f.canonicalName,
-          query: f.canonicalName,
+          labelAr: name,
+          labelEn: name,
+          query: name,
           entityType: "food",
-          canonicalId: f.canonicalId,
+          canonicalId: id,
           sectionHeader: idx === 0 ? "الأطعمة" : undefined,
         });
       });
@@ -301,12 +303,14 @@ router.get("/foods/autocomplete", async (req, res) => {
 
     if (structuredRes.displayDishes && structuredRes.displayDishes.length > 0) {
       structuredRes.displayDishes.forEach((d, idx) => {
+        const name = d.canonicalName || d.canonical_name || "";
+        const id = d.canonicalId ?? d.canonical_id ?? 0;
         suggestions.push({
-          labelAr: d.canonicalName,
-          labelEn: d.canonicalName,
-          query: d.canonicalName,
+          labelAr: name,
+          labelEn: name,
+          query: name,
           entityType: "dish",
-          canonicalId: d.canonicalId,
+          canonicalId: id,
           sectionHeader: idx === 0 ? "الأطباق" : undefined,
         });
       });

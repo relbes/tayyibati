@@ -44,6 +44,8 @@ export interface DecomposedIngredientRaw extends ExtractedIngredient {
   normalizedName: string;
 }
 
+export type DecomposedIngredientResult = DecomposedIngredientRaw;
+
 export interface RefinedResolvedIngredient extends IngredientAnalysisItem {
   detectionSource: DetectionSource;
   detectionConfidence: number;

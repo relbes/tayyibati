@@ -28,6 +28,7 @@ export type EntityType =
   | "RECIPE"
   | "INGREDIENT_LIST"
   | "PACKAGED_PRODUCT"
+  | "COMMERCIAL_PRODUCT"
   | "DRINK"
   | "DESSERT"
   | "BARCODE_PRODUCT"
@@ -49,6 +50,7 @@ export type IntentType =
 export type AnalysisMode =
   | "DIRECT_FOOD"
   | "INGREDIENT_BASED"
+  | "PRODUCT_BASED"
   | "PRODUCT_LABEL"
   | "BARCODE_LOOKUP"
   | "OCR_LABEL"
@@ -192,7 +194,7 @@ export class IntentClassificationEngine {
           entityType: "DISH",
           intent: "CHECK_COMPATIBILITY",
           analysisMode: "INGREDIENT_BASED",
-          confidence: searchMatch.confidence,
+          confidence: searchMatch.confidence ?? searchMatch.searchConfidence ?? 90,
           pipeline: "DISH_ENGINE",
           classificationReason: `Matched canonical dish identity (${searchMatch.canonical_name}) via ${searchMatch.search_method}`,
         };
@@ -203,7 +205,7 @@ export class IntentClassificationEngine {
           entityType: "COMMERCIAL_PRODUCT",
           intent: "CHECK_COMPATIBILITY",
           analysisMode: "PRODUCT_BASED",
-          confidence: searchMatch.confidence,
+          confidence: searchMatch.confidence ?? searchMatch.searchConfidence ?? 90,
           pipeline: "PRODUCT_ENGINE",
           classificationReason: `Matched canonical commercial product identity (${searchMatch.canonical_name}) via ${searchMatch.search_method}`,
         };
@@ -214,7 +216,7 @@ export class IntentClassificationEngine {
           entityType: "SINGLE_FOOD",
           intent: "CHECK_COMPATIBILITY",
           analysisMode: "DIRECT_FOOD",
-          confidence: searchMatch.confidence,
+          confidence: searchMatch.confidence ?? searchMatch.searchConfidence ?? 90,
           pipeline: "FOOD_ENGINE",
           classificationReason: `Matched canonical food identity (${searchMatch.canonical_name}) via ${searchMatch.search_method}`,
         };

@@ -16,7 +16,9 @@
     "src/trace_*.ts",
     "src/check_*.ts",
     "src/inspect_*.ts",
-    "src/seed_*.ts"
+    "src/seed_*.ts",
+    "src/auditMilk.ts",
+    "src/fix_bandoora_alias.ts"
   ],
   "references": [
     {

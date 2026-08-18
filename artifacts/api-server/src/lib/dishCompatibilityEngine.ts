@@ -624,9 +624,9 @@ export function resolveSingleIngredient(
  */
 function findSuggestedCanonical(rawName: string, cache: DishEngineCache): string | null {
   const n = norm(rawName);
-  for (const [foodNorm, f] of cache.foodsByNormAr.entries()) {
+  for (const [foodNorm, fList] of cache.foodsByNormAr.entries()) {
     if (foodNorm.length >= 3 && n.slice(0, 3) === foodNorm.slice(0, 3)) {
-      return f.nameAr;
+      return fList[0]?.nameAr || null;
     }
   }
   return null;
@@ -679,7 +679,7 @@ export async function analyzeDishCompatibility(
         targetDish = cache.dishesByNormAr.get(nQ) || cache.dishesByNormAr.get(bQ);
       } else if (cache.dishAliasesByNormAr.has(nQ) || cache.dishAliasesByNormAr.has(bQ)) {
         const aliasObj = cache.dishAliasesByNormAr.get(nQ) || cache.dishAliasesByNormAr.get(bQ);
-        targetDish = aliasObj.canonicalDish;
+        targetDish = aliasObj ? ((aliasObj as any).canonicalDish || (aliasObj as any)[0]?.canonicalDish || null) : null;
       }
     }
   }
@@ -1268,7 +1268,7 @@ export function detectDishProteinInfo(
       if (specificIng) {
         return {
           proteinCategory: queryProtein.proteinCategory,
-          proteinSpecificity: specificIng.proteinSpecificity,
+          proteinSpecificity: specificIng.proteinSpecificity || "UNSPECIFIED",
         };
       }
     }
