@@ -225,12 +225,13 @@ const refreshUser = useCallback(async () => {
               setUser(storedUser);
             }
 
+            if (storedUser?.id) {
+              loginRevenueCat(storedUser.id);
+            }
+
             /**
              * Immediately verify the cached user
              * against the server.
-             *
-             * This handles changes made while
-             * the application was closed.
              */
             await refreshUser();
           } catch {

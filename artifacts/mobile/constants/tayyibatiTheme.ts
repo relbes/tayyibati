@@ -3,7 +3,7 @@ export const TayyibatiTheme = {
     // ─────────────────────────────────────────────
     // Base & Card Colors (Warm Organic Palette)
     // ─────────────────────────────────────────────
-    background: "#FAFAF7",
+    background: "#FAFAF8",
     surface: "#FFFFFF",
     surfaceWarm: "#FFFDF7",
 
@@ -12,8 +12,8 @@ export const TayyibatiTheme = {
     // ─────────────────────────────────────────────
     primary: "#16A34A",
     primaryDark: "#15803D",
-    primaryDarker: "#075C38",
-    primarySoft: "#EAF7EF",
+    primaryDarker: "#166534",
+    primarySoft: "#E8F7EE",
     primaryMuted: "#D4F0DF",
 
     // ─────────────────────────────────────────────
@@ -21,64 +21,64 @@ export const TayyibatiTheme = {
     // ─────────────────────────────────────────────
     headerBackground: "#FFF9EC",
     headerBorder: "#F1EBD9",
-    headerBgIvory: "#C9E4D4",
-    headerBorderSubtle: "#A3CDB3",
-    profileBtnBorder: "#A3CDB3",
-    subtitleMuted: "#244231",
+    headerBgIvory: "#11674e",
+    headerBorderSubtle: "#0D523E",
+    profileBtnBorder: "#1B8A6B",
+    subtitleMuted: "#f3f6f4",
 
-    mintHeroCard: "#E8F7EE",
-    mintHeroBorder: "#CDEBD8",
-    mintHeroBody: "#5F756A",
+    mintHeroCard: "#DCFCE7",
+    mintHeroBorder: "#86EFAC",
+    mintHeroBody: "#374151",
 
-    heroCardBg: "#FFF7F2",
-    heroCardBorder: "#FFE8DC",
+    heroCardBg: "#DCFCE7",
+    heroCardBorder: "#86EFAC",
 
     // ─────────────────────────────────────────────
     // Pastel Card Module Colors & Accents
     // ─────────────────────────────────────────────
-    greenCard: "#EAF7EF",
+    greenCard: "#DCFCE7",
 
-    orangeCard: "#FFF3D6",
+    orangeCard: "#FEF08A",
     orange: "#F59E0B",
     orangeDark: "#D97706",
     orangeSoft: "#FFF7E6",
 
-    pinkCard: "#FFF0F2",
-    pink: "#EF476F",
-    pinkDark: "#D9365A",
-    pinkSoft: "#FFF0F3",
+    pinkCard: "#FECDD3",
+    pink: "#E11D48",
+    pinkDark: "#9F1239",
+    pinkSoft: "#FECDD3",
 
-    purpleCard: "#F4F0FF",
+    purpleCard: "#E9D5FF",
     purple: "#8B5CF6",
     purpleDark: "#7C3AED",
     purpleSoft: "#F5F0FF",
 
-    blueCard: "#EEF6FF",
-    blue: "#3B82F6",
-    blueDark: "#2563EB",
-    blueSoft: "#EEF8FF",
+    blueCard: "#BAE6FD",
+    blue: "#2563EB",
+    blueDark: "#1D4ED8",
+    blueSoft: "#EEF6FF",
 
-    tealCard: "#EAF9F5",
-    teal: "#0F9F7A",
-    tealSoft: "#EAF9F5",
+    tealCard: "#CCFBF1",
+    teal: "#0D9488",
+    tealSoft: "#5EEAD4",
 
-    danger: "#EF476F",
-    dangerDark: "#D9365A",
-    dangerSoft: "#FFF0F3",
+    danger: "#EF4444",
+    dangerDark: "#DC2626",
+    dangerSoft: "#FEE2E2",
 
     // ─────────────────────────────────────────────
     // Typography
     // ─────────────────────────────────────────────
     text: "#111827",
-    textSecondary: "#6B7280",
-    textTertiary: "#9CA3AF",
+    textSecondary: "#4B5563",
+    textTertiary: "#6B7280",
     textOnPrimary: "#FFFFFF",
 
     // ─────────────────────────────────────────────
     // Borders
     // ─────────────────────────────────────────────
-    border: "#E5E7EB",
-    borderSoft: "#EEF2ED",
+    border: "#D1D5DB",
+    borderSoft: "#E5E7EB",
 
     // ─────────────────────────────────────────────
     // Utility

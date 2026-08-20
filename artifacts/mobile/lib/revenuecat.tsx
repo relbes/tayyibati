@@ -1,6 +1,6 @@
 import React, { createContext, useContext } from "react";
 import { Platform } from "react-native";
-import Purchases from "react-native-purchases";
+import Purchases, { CustomerInfo } from "react-native-purchases";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 
@@ -10,27 +10,44 @@ const REVENUECAT_ANDROID_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_AP
 
 export const REVENUECAT_ENTITLEMENT_IDENTIFIER = "premium";
 
-function getRevenueCatApiKey() {
-  if (!REVENUECAT_TEST_API_KEY || !REVENUECAT_IOS_API_KEY || !REVENUECAT_ANDROID_API_KEY) {
-    throw new Error("RevenueCat Public API Keys not found");
+function getRevenueCatApiKey(): string {
+  // 1. Production / Internal Testing Android Mode -> Priority: Google Play Key
+  if (Platform.OS === "android" && REVENUECAT_ANDROID_API_KEY) {
+    console.log("[RevenueCat SDK] Platform: Android. Configured Key: EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY (Google Play Store)");
+    return REVENUECAT_ANDROID_API_KEY;
   }
-  if (__DEV__ || Platform.OS === "web" || Constants.executionEnvironment === "storeClient") {
+
+  // 2. iOS Mode
+  if (Platform.OS === "ios" && REVENUECAT_IOS_API_KEY) {
+    console.log("[RevenueCat SDK] Platform: iOS. Configured Key: EXPO_PUBLIC_REVENUECAT_IOS_API_KEY");
+    return REVENUECAT_IOS_API_KEY;
+  }
+
+  // 3. Web or Fallback Mode -> Test Store Key
+  if (REVENUECAT_TEST_API_KEY) {
+    console.log("[RevenueCat SDK] Configured Key: EXPO_PUBLIC_REVENUECAT_TEST_API_KEY (RevenueCat Test Store)");
     return REVENUECAT_TEST_API_KEY;
   }
-  if (Platform.OS === "ios") return REVENUECAT_IOS_API_KEY;
-  if (Platform.OS === "android") return REVENUECAT_ANDROID_API_KEY;
-  return REVENUECAT_TEST_API_KEY;
+
+  const fallback = REVENUECAT_ANDROID_API_KEY || REVENUECAT_IOS_API_KEY || "";
+  if (!fallback) {
+    console.warn("[RevenueCat SDK] Warning: No RevenueCat Public API Keys configured!");
+  }
+  return fallback;
 }
 
 export function initializeRevenueCat() {
   const apiKey = getRevenueCatApiKey();
+  if (!apiKey) return;
+
   Purchases.setLogLevel(
     __DEV__ ? Purchases.LOG_LEVEL.DEBUG : Purchases.LOG_LEVEL.ERROR
   );
   try {
     Purchases.configure({ apiKey });
+    console.log("[RevenueCat SDK] Successfully configured RevenueCat SDK.");
   } catch (err: any) {
-    console.warn("RevenueCat configure failed:", err?.message);
+    console.warn("[RevenueCat SDK] RevenueCat configure failed:", err?.message);
   }
 }
 
@@ -38,11 +55,16 @@ export function initializeRevenueCat() {
  * Call after login/register to tie RevenueCat purchases to the user's DB id.
  * Without this, purchases are anonymous and the server can't verify entitlements.
  */
-export async function loginRevenueCat(userId: string): Promise<void> {
+export async function loginRevenueCat(userId: string): Promise<CustomerInfo | null> {
   try {
-    await Purchases.logIn(userId);
+    const currentId = await Purchases.getAppUserID();
+    console.log(`[RevenueCat SDK] Binding User ID. Current RC AppUserID: '${currentId}' -> Tayyibati User ID: '${userId}'`);
+    const result = await Purchases.logIn(userId);
+    console.log(`[RevenueCat SDK] Logged into RevenueCat successfully. Customer originalAppUserId: '${result.customerInfo.originalAppUserId}'`);
+    return result.customerInfo;
   } catch (err: any) {
-    console.warn("RevenueCat logIn failed:", err?.message);
+    console.warn("[RevenueCat SDK] RevenueCat logIn failed:", err?.message);
+    return null;
   }
 }
 

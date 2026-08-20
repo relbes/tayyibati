@@ -7,7 +7,7 @@ export const ar = {
     quickActions: "طرق سريعة للتحقق",
     searchFood: "ابحث عن طعام",
     searchFoodDesc: "اكتب اسم الطعام أو المنتج واعرف حكمه وتفاصيله.",
-    analyzeImage: "حلّل صورة",
+    analyzeImage: "تحليل بالصورة",
     analyzeImageDesc: "صوّر وجبة أو منتجاً وسنحاول التعرف على الطعام ومكوناته.",
     scanIngredients: "افحص المكونات",
     scanIngredientsDesc: "صوّر ملصق المكونات للحصول على تحليل أدق للمنتجات المعبأة.",

@@ -21,6 +21,7 @@ import { useFoodSearch } from "@/hooks/useFoodSearch";
 import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 import { RefinementSuggestions } from "@/components/RefinementSuggestions";
 import { LocalizedText } from "@/components/LocalizedText";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { t, isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
@@ -121,28 +122,26 @@ export default function HomeScreen() {
           styles.lightHeader,
           {
             paddingTop: topPadding + 10,
-            backgroundColor: TayyibatiTheme.colors.headerBgIvory,
-            borderBottomColor: TayyibatiTheme.colors.headerBorderSubtle,
+            backgroundColor: "#11674e",
+            borderBottomColor: "#0D523E",
           },
         ]}
       >
-        {/* Subtle translucent background organic shapes */}
-        <View style={styles.headerDecorCircleRight} />
-        <View style={styles.headerDecorCircleLeft} />
+        <HeaderNatureBackground />
 
         <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.headerTop]}>
           <TouchableOpacity
             style={[
               styles.profileBtn,
               {
-                backgroundColor: TayyibatiTheme.colors.surface,
-                borderColor: TayyibatiTheme.colors.profileBtnBorder,
+                backgroundColor: "rgba(255, 255, 255, 0.15)",
+                borderColor: "rgba(243, 246, 244, 0.3)",
               },
             ]}
             onPress={() => router.push("/(tabs)/profile")}
             activeOpacity={0.8}
           >
-            <Icon name={user ? "person" : "person-outline"} size={20} color="#0A4D24" />
+            <Icon name={user ? "person" : "person-outline"} size={20} color="#f3f6f4" />
           </TouchableOpacity>
 
           <View style={styles.brandContainer}>
@@ -151,7 +150,7 @@ export default function HomeScreen() {
                 {t("home.appName")}
               </LocalizedText>
               <View style={styles.leafDot}>
-                <Icon name="leaf" size={14} color="#0A4D24" />
+                <Icon name="leaf" size={14} color="#f3f6f4" />
               </View>
             </View>
 
@@ -356,13 +355,13 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 32,
     fontFamily: TayyibatiTheme.typography.fontFamily.bold,
-    color: "#064E24",
+    color: "#f3f6f4",
     textAlign: "center",
   },
   appSub: {
     fontSize: 15.5,
     fontFamily: TayyibatiTheme.typography.fontFamily.medium,
-    color: "#1E3A2B",
+    color: "#E2E8F0",
     textAlign: "center",
     width: "100%",
     marginTop: 2,
@@ -429,12 +428,12 @@ const styles = StyleSheet.create({
   heroTitle: {
     fontSize: TayyibatiTheme.typography.size.md,
     fontFamily: TayyibatiTheme.typography.fontFamily.bold,
-    color: TayyibatiTheme.colors.primaryDark,
+    color: "#15803D",
   },
   heroSubtitle: {
     fontSize: TayyibatiTheme.typography.size.sm - 1,
     fontFamily: TayyibatiTheme.typography.fontFamily.regular,
-    color: "#5F756A",
+    color: "#4B5563",
     marginTop: 5,
   },
   resultHeader: {

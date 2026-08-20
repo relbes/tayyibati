@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -114,13 +115,14 @@ export default function HistoryScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
+        <HeaderNatureBackground />
         <View style={{ flexDirection: rtl ? "row-reverse" : "row", alignItems: "center", gap: 12, width: "100%" }}>
-          <BackButton />
+          <BackButton onPress={() => router.push("/(tabs)/profile")} />
           <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>سجل التحليلات</Text>
+            <Text style={[styles.title, { color: "#f3f6f4", textAlign: rtl ? "right" : "left" }]}>سجل التحليلات</Text>
             {user && (
-              <Text style={[styles.subtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
+              <Text style={[styles.subtitle, { color: "#E2E8F0", textAlign: rtl ? "right" : "left" }]}>
                 {items.length} تحليل
               </Text>
             )}

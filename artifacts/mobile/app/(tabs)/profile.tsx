@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColors } from "@/hooks/useColors";
@@ -74,13 +75,14 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
-          <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left", width: "100%" }]}>الملف الشخصي</Text>
+        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
+          <HeaderNatureBackground />
+          <Text style={[styles.title, { color: "#f3f6f4", textAlign: rtl ? "right" : "left", width: "100%" }]}>الملف الشخصي</Text>
         </View>
         <View style={styles.guestCenter}>
           <View style={{ position: "relative" }}>
-            <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1.5 }]}>
-              <Icon name="person-outline" size={40} color="#064E24" />
+            <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#1B8A6B", borderWidth: 1.5 }]}>
+              <Icon name="person-outline" size={40} color="#11674e" />
             </View>
             <View style={{ position: "absolute", bottom: -2, right: -2, backgroundColor: "#16A34A", borderRadius: 10, width: 22, height: 22, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#FFFFFF" }}>
               <Icon name="leaf" size={12} color="#FFFFFF" />
@@ -109,24 +111,25 @@ export default function ProfileScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
         {/* Header */}
         <View
-          style={[styles.profileHeader, { paddingTop: topPadding + 14, paddingBottom: 24, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3", borderBottomWidth: 1, position: "relative", overflow: "hidden" }]}
+          style={[styles.profileHeader, { paddingTop: topPadding + 14, paddingBottom: 24, backgroundColor: "#11674e", borderBottomColor: "#0D523E", borderBottomWidth: 1, position: "relative", overflow: "hidden" }]}
         >
+          <HeaderNatureBackground />
           {/* Decorative background shapes for richness */}
-          <View style={{ position: "absolute", top: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: "#0A4D2412" }} />
+          <View style={{ position: "absolute", top: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: "#FFFFFF12" }} />
           <View style={{ position: "absolute", bottom: -30, right: -15, width: 130, height: 130, borderRadius: 65, backgroundColor: "#F59E0B12" }} />
 
           <View style={styles.avatarRow}>
             <View style={{ position: "relative" }}>
-              <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#A3CDB3", borderWidth: 1.5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }]}>
-                <Text style={[styles.avatarInitial, { color: "#064E24", fontSize: 36 }]}>{user.name.charAt(0)}</Text>
+              <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#1B8A6B", borderWidth: 1.5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }]}>
+                <Text style={[styles.avatarInitial, { color: "#11674e", fontSize: 36 }]}>{user.name.charAt(0)}</Text>
               </View>
               <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: "#16A34A", borderRadius: 11, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" }}>
                 <Icon name="leaf" size={13} color="#FFFFFF" />
               </View>
             </View>
           </View>
-          <Text style={[styles.userName, { color: "#064E24", fontSize: 28 }]}>{user.name}</Text>
-          <Text style={[styles.userEmail, { color: "#244231", fontSize: 16.5 }]}>{user.email}</Text>
+          <Text style={[styles.userName, { color: "#f3f6f4", fontSize: 28 }]}>{user.name}</Text>
+          <Text style={[styles.userEmail, { color: "#E2E8F0", fontSize: 16.5 }]}>{user.email}</Text>
           {user.isPremium && (
             <View style={[styles.premiumBadge, { backgroundColor: "#FFF3D6", borderColor: "#FFE4A0", borderWidth: 1, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginTop: 6 }]}>
               <Icon name="star" size={15} color="#F59E0B" />

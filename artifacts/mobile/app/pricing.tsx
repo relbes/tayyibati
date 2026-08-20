@@ -14,11 +14,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { useSubscription } from "@/lib/revenuecat";
+import Purchases from "react-native-purchases";
+import { useSubscription, loginRevenueCat, REVENUECAT_ENTITLEMENT_IDENTIFIER } from "@/lib/revenuecat";
 import { syncPremium, getPlans } from "@/lib/api";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
@@ -102,26 +104,126 @@ export default function PricingScreen() {
     if (!selectedPkg) return;
     setConfirmVisible(false);
     try {
-      await purchase(selectedPkg);
-      await syncPremium();
-      await refreshUser();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setStatusMsg("تم الاشتراك بنجاح! 🎉 أصبحت الآن مشتركاً في الباقة المميزة.");
+      // 0. Ensure Customer ID Binding
+      let loggedInCustomerInfo = null;
+      if (user?.id) {
+        loggedInCustomerInfo = await loginRevenueCat(user.id);
+      }
+
+      // 1. Execute RevenueCat Purchase
+      const purchasedCustomerInfo = await purchase(selectedPkg);
+
+      // 2. Synchronize with Tayyibati Backend passing diagnostics
+      const activeSubs = purchasedCustomerInfo?.activeSubscriptions || [];
+      const activeEnts = Object.keys(purchasedCustomerInfo?.entitlements?.active || {});
+      const origAppUserId = purchasedCustomerInfo?.originalAppUserId;
+
+      let syncResult = null;
+      try {
+        syncResult = await syncPremium({
+          appUserId: user?.id,
+          originalAppUserId: origAppUserId,
+          activeSubscriptions: activeSubs,
+          activeEntitlements: activeEnts,
+        });
+        await refreshUser();
+      } catch (syncErr) {
+        console.warn("[Pricing] Sync after purchase failed:", syncErr);
+        setStatusMsg("تم الشراء بنجاح عبر المتجر، ولكن تعذر تحديث الحساب. اضغط 'استعادة المشتريات السابقة' للتفعيل.");
+        return;
+      }
+
+      // 3. Confirm isPremium was granted server-side
+      if (syncResult?.isPremium || user?.isPremium) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setStatusMsg("تم الاشتراك بنجاح! 🎉 أصبحت الآن مشتركاً في الباقة المميزة.");
+      } else {
+        const reasonMsg = syncResult?.diagnostic?.reason || "الاشتراك في انتظار المزامنة.";
+        setStatusMsg(`تم الشراء بنجاح، ولكن تعذر الربط: ${reasonMsg}`);
+      }
     } catch (err: any) {
+      // 1. Check if error indicates subscription is already owned on Google Play
+      const isAlreadyPurchased =
+        err?.code === 6 ||
+        err?.code === "PRODUCT_ALREADY_PURCHASED" ||
+        String(err?.message || "").toLowerCase().includes("already") ||
+        String(err?.message || "").toLowerCase().includes("subscribed") ||
+        String(err?.name || "").includes("ProductAlreadyPurchased");
+
+      if (isAlreadyPurchased) {
+        console.log("[Pricing] Subscription is already owned on Google Play. Auto-triggering handleRestore()...");
+        setStatusMsg("ملاحظة: هذا الحساب يملك اشتراكاً فعالاً على المتجر. جاري استعادة الاشتراك وتفعيله بحسابك تلقائياً...");
+        await handleRestore();
+        return;
+      }
+
+      // 2. Only ignore pure user cancellation (e.g. user manually cancelled credit card dialog)
       if (err?.userCancelled) return;
-      setStatusMsg("حدث خطأ أثناء الاشتراك. حاول مرة أخرى.");
+
+      setStatusMsg(`حدث خطأ أثناء الاشتراك: ${err?.message || "حاول مرة أخرى."}`);
     }
   };
 
   const handleRestore = async () => {
     try {
-      await restore();
-      await syncPremium();
-      await refreshUser();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setStatusMsg("تم استعادة مشترياتك السابقة ✓");
-    } catch {
-      setStatusMsg("لم يتم العثور على مشتريات سابقة.");
+      if (user?.id) {
+        console.log(`[Pricing Restore] Step 1: Binding RevenueCat user ID: '${user.id}'`);
+        await loginRevenueCat(user.id);
+      }
+
+      const currentRcAppUserId = await Purchases.getAppUserID();
+      console.log(`[Pricing Restore] Step 2: Executing Purchases.restorePurchases(). AppUserID: '${currentRcAppUserId}'`);
+      const customerInfo = await restore();
+
+      const activeSubs = customerInfo?.activeSubscriptions || [];
+      const activeEnts = Object.keys(customerInfo?.entitlements?.active || {});
+      const origAppUserId = customerInfo?.originalAppUserId;
+      const entitlementObj = customerInfo?.entitlements?.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] || null;
+      const productIdentifier = entitlementObj?.productIdentifier || activeSubs[0] || null;
+
+      console.log(`[Pricing Restore] Step 3: Diagnostic Data Logged:`);
+      console.log(`  - Tayyibati User ID: '${user?.id}'`);
+      console.log(`  - RevenueCat Current App User ID: '${currentRcAppUserId}'`);
+      console.log(`  - RevenueCat Original App User ID: '${origAppUserId}'`);
+      console.log(`  - Active Subscriptions: ${JSON.stringify(activeSubs)}`);
+      console.log(`  - Active Entitlements: ${JSON.stringify(activeEnts)}`);
+      console.log(`  - Active Entitlement Identifier: '${REVENUECAT_ENTITLEMENT_IDENTIFIER}'`);
+      console.log(`  - Product Identifier: '${productIdentifier}'`);
+
+      // Step 4: Trigger Backend Sync
+      console.log("[Pricing Restore] Step 4: Calling /api/users/me/sync-premium...");
+      let syncResult = null;
+      try {
+        syncResult = await syncPremium({
+          appUserId: currentRcAppUserId,
+          originalAppUserId: origAppUserId,
+          activeSubscriptions: activeSubs,
+          activeEntitlements: activeEnts,
+        });
+        console.log(`[Pricing Restore] Step 5: sync-premium API response: ${JSON.stringify(syncResult)}`);
+        await refreshUser();
+      } catch (syncErr: any) {
+        console.warn("[Pricing Restore] Backend sync after restore failed:", syncErr);
+      }
+
+      console.log(`[Pricing Restore] Step 6: Final User Premium State -> user.isPremium: ${user?.isPremium}, user.planId: ${user?.planId}, syncIsPremium: ${syncResult?.isPremium}`);
+
+      if (syncResult?.isPremium || user?.isPremium) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setStatusMsg("تم استعادة وتأكيد اشتراكك بنجاح ✓");
+      } else {
+        const diag = syncResult?.diagnostic;
+        if (diag?.reason) {
+          setStatusMsg(`نتائج الاستعادة: ${diag.reason}`);
+        } else if (activeSubs.length > 0 || activeEnts.length > 0) {
+          setStatusMsg(`تم العثور على اشتراك (${activeSubs.join(", ")}), ولكن تعذر ربطه بالمستخدم (${user?.id}). (Original User: ${origAppUserId})`);
+        } else {
+          setStatusMsg(`لم يرجع المتجر أي اشتراك فعّال للمستخدم (${user?.id}). (Original AppUserID: ${origAppUserId})`);
+        }
+      }
+    } catch (err: any) {
+      console.error("[Pricing Restore] Restore purchases exception:", err);
+      setStatusMsg(`خطأ أثناء استعادة المشتريات: ${err?.message || "تعذر الاتصال بالمتجر"}`);
     }
   };
 
@@ -247,14 +349,15 @@ export default function PricingScreen() {
           styles.header,
           {
             paddingTop: topPadding + 12,
-            backgroundColor: "#C9E4D4",
-            borderBottomColor: "#A3CDB3",
+            backgroundColor: "#11674e",
+            borderBottomColor: "#0D523E",
             flexDirection: rtl ? "row-reverse" : "row",
           },
         ]}
       >
+        <HeaderNatureBackground />
         <BackButton />
-        <Text style={[styles.title, { color: "#064E24", textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
+        <Text style={[styles.title, { color: "#f3f6f4", textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
         <View style={{ width: 44 }} />
       </View>
 

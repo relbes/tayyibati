@@ -29,7 +29,8 @@
         "buildType": "app-bundle"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz"
+        "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_AjmoqrxMPuVQqIhwzNZDPrbuFNy"
       }
     }
   },

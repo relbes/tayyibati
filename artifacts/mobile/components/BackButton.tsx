@@ -18,7 +18,7 @@ export interface BackButtonProps {
 export const BackButton = React.memo(function BackButton({
   onPress,
   style,
-  color = "#064E24",
+  color = "#f3f6f4",
   size = 20,
 }: BackButtonProps) {
   const router = useRouter();
@@ -58,8 +58,8 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#FFFFFF",
-    borderColor: "#A3CDB3",
+    backgroundColor: "rgba(255, 255, 255, 0.15)",
+    borderColor: "rgba(243, 246, 244, 0.3)",
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",

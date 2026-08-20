@@ -68,6 +68,10 @@ catalog:
 
 autoInstallPeers: false
 
+publicHoistPattern:
+  - '*'
+
+
 onlyBuiltDependencies:
   - '@swc/core'
   - esbuild

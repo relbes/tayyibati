@@ -96,17 +96,109 @@ async function syncTodayUsagePremium(userId: string, isPremium: boolean): Promis
 // ---------------------------------------------------------------------------
 
 /**
+ * Helper to parse active entitlements from RevenueCat API response (supports both v1 and v2 API schemas).
+ */
+interface RCActiveEntitlement {
+  entitlementId: string;
+  productId?: string;
+}
+
+function parseRevenueCatEntitlements(data: any): RCActiveEntitlement[] {
+  const items: RCActiveEntitlement[] = [];
+  if (!data || typeof data !== "object") return items;
+
+  // Format 1: RevenueCat v2 API schema (`{ object: "list", items: [...] }`)
+  if (Array.isArray(data.items)) {
+    for (const item of data.items) {
+      if (!item || typeof item !== "object") continue;
+      const entId = item.entitlement_id || item.lookup_key || item.identifier || item.id;
+      const prodId = item.product_identifier || item.product_id;
+      const status = item.status;
+
+      // If status exists (v2 subscription object), verify subscription is active
+      if (status && status !== "active" && status !== "in_grace_period") {
+        continue;
+      }
+
+      if (entId || prodId) {
+        items.push({
+          entitlementId: entId ? String(entId) : "premium",
+          productId: prodId ? String(prodId) : undefined,
+        });
+      }
+    }
+  }
+
+  // Format 2: RevenueCat v1 API schema (`{ subscriber: { entitlements: { [entId]: { ... } } } }`)
+  const entitlementsMap = data.subscriber?.entitlements || data.entitlements;
+  if (entitlementsMap && typeof entitlementsMap === "object" && !Array.isArray(entitlementsMap)) {
+    const now = new Date().getTime();
+    for (const [entId, entData] of Object.entries(entitlementsMap)) {
+      if (!entData || typeof entData !== "object") continue;
+      const ent = entData as any;
+      const expiresDate = ent.expires_date;
+
+      let isActive = true;
+      if (expiresDate) {
+        const expTime = new Date(expiresDate).getTime();
+        if (!isNaN(expTime) && expTime <= now) {
+          isActive = false;
+        }
+      }
+
+      if (isActive) {
+        items.push({
+          entitlementId: String(entId),
+          productId: ent.product_identifier ? String(ent.product_identifier) : undefined,
+        });
+      }
+    }
+  }
+
+  // Format 3: RevenueCat v1 Subscriptions schema (`{ subscriber: { subscriptions: { [productId]: { ... } } } }`)
+  const subscriptionsMap = data.subscriber?.subscriptions || data.subscriptions;
+  if (subscriptionsMap && typeof subscriptionsMap === "object" && !Array.isArray(subscriptionsMap)) {
+    const now = new Date().getTime();
+    for (const [prodId, subData] of Object.entries(subscriptionsMap)) {
+      if (!subData || typeof subData !== "object") continue;
+      const sub = subData as any;
+      const expiresDate = sub.expires_date;
+
+      let isActive = true;
+      if (expiresDate) {
+        const expTime = new Date(expiresDate).getTime();
+        if (!isNaN(expTime) && expTime <= now) {
+          isActive = false;
+        }
+      }
+
+      if (isActive) {
+        // Only push if not already present
+        const exists = items.some((i) => i.productId === String(prodId));
+        if (!exists) {
+          items.push({
+            entitlementId: "premium",
+            productId: String(prodId),
+          });
+        }
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
  * POST /api/users/me/sync-premium
  * Verifies the caller's RevenueCat entitlement server-side and updates isPremium in the DB.
  * This is the ONLY way the mobile app should grant premium — never trust client-side flags alone.
  */
 router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
   const userId = req.userId!;
+  const { appUserId, originalAppUserId, activeSubscriptions, activeEntitlements } = req.body ?? {};
+
   try {
-    if (!REVENUECAT_PROJECT_ID) {
-      req.log.error("REVENUECAT_PROJECT_ID not configured");
-      return void res.status(503).json({ error: "Payment service not configured" });
-    }
+    const secretKey = process.env.REVENUECAT_SECRET_KEY || process.env.REVENUECAT_API_KEY;
 
     // 1. Load user, current plan, and active database plans
     const [currentUser] = await db
@@ -134,71 +226,210 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
       }
     }
 
-    // 2. Call RevenueCat proxy and match entitlements dynamically
-    const connectors = new ReplitConnectors();
+    // 2. Call RevenueCat for primary userId
     let rcPremium = false;
     let matchedPlanFromRc: typeof activePlans[0] | null = null;
     let rcSuccess = false;
+    let extractedEntitlements: RCActiveEntitlement[] = [];
 
-    try {
-      const rcRes = await connectors.proxy(
-        "revenuecat",
-        `/v2/projects/${REVENUECAT_PROJECT_ID}/customers/${userId}/active-entitlements`,
-        { method: "GET" }
-      );
-      if (rcRes.ok) {
-        const data = await rcRes.json() as {
-          items?: Array<{
-            lookup_key?: string;
-            identifier?: string;
-            product_identifier?: string;
-          }>;
-        };
-        const activeItems = data.items || [];
+    const connectors = new ReplitConnectors();
+    let cachedV2ProjectId: string | null = process.env.REVENUECAT_PROJECT_ID || null;
 
-        for (const item of activeItems) {
-          const entKey = item.lookup_key || item.identifier;
-          const prodId = item.product_identifier;
-
-          // Match by RevenueCat Product ID
-          if (prodId) {
-            const planByProd = activePlans.find((p) => p.revenueCatProductId === prodId);
-            if (planByProd) {
-              rcPremium = true;
-              matchedPlanFromRc = planByProd;
-              break;
-            }
-          }
-
-          // Match by RevenueCat Entitlement ID
-          if (entKey) {
-            const planByEnt = activePlans.find((p) => p.revenueCatEntitlementId === entKey);
-            if (planByEnt) {
-              rcPremium = true;
-              matchedPlanFromRc = planByEnt;
-              break;
-            }
-          }
-
-          // Fallback match for "premium" entitlement identifier
-          if (entKey === "premium") {
-            rcPremium = true;
-          }
-        }
-        rcSuccess = true;
-      } else {
-        req.log.warn({ status: rcRes.status, userId }, "RevenueCat returned non-ok for entitlement check");
+    const resolveV2ProjectId = async (key: string): Promise<string | null> => {
+      if (cachedV2ProjectId) return cachedV2ProjectId;
+      if (process.env.REVENUECAT_PROJECT_ID) {
+        cachedV2ProjectId = process.env.REVENUECAT_PROJECT_ID;
+        return cachedV2ProjectId;
       }
-    } catch (err) {
-      req.log.error({ err }, "RevenueCat API request failed");
+      try {
+        const projRes = await fetch("https://api.revenuecat.com/v2/projects", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${key}`,
+            "Content-Type": "application/json",
+          },
+        });
+        if (projRes.ok) {
+          const data = await projRes.json();
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            cachedV2ProjectId = String(data.items[0].id);
+            req.log.info({ projectId: cachedV2ProjectId }, "[SyncPremium] Automatically resolved RevenueCat v2 Project ID");
+            return cachedV2ProjectId;
+          }
+        } else {
+          req.log.warn({ status: projRes.status }, "[SyncPremium] Failed to query RevenueCat v2 projects list");
+        }
+      } catch (err) {
+        req.log.warn({ err }, "[SyncPremium] Error querying RevenueCat v2 projects list");
+      }
+      return null;
+    };
+
+    const fetchRcEntitlements = async (targetId: string): Promise<{ success: boolean; items: RCActiveEntitlement[] }> => {
+      let items: RCActiveEntitlement[] = [];
+      let success = false;
+
+      if (!secretKey) {
+        req.log.warn({ targetId }, "[SyncPremium] REVENUECAT_SECRET_KEY is missing in server environment");
+        return { success: false, items };
+      }
+
+      // 1. Resolve V2 Project ID
+      const projectId = await resolveV2ProjectId(secretKey);
+
+      // Attempt 1: Direct RevenueCat REST API v2 Active Entitlements
+      if (projectId) {
+        try {
+          const v2EntRes = await fetch(
+            `https://api.revenuecat.com/v2/projects/${encodeURIComponent(projectId)}/customers/${encodeURIComponent(targetId)}/active_entitlements`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${secretKey}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          if (v2EntRes.ok) {
+            const data = await v2EntRes.json();
+            items = parseRevenueCatEntitlements(data);
+            success = true;
+            req.log.info({ targetId, itemCount: items.length }, "[SyncPremium] RevenueCat v2 Active Entitlements API query successful");
+          } else {
+            req.log.warn({ status: v2EntRes.status, targetId }, "[SyncPremium] RevenueCat v2 Active Entitlements API returned non-OK status");
+          }
+        } catch (err) {
+          req.log.warn({ err, targetId }, "[SyncPremium] RevenueCat v2 Active Entitlements API fetch error");
+        }
+      }
+
+      // Attempt 2: Direct RevenueCat REST API v2 Subscriptions (if attempt 1 returned no active items)
+      if (projectId && (!success || items.length === 0)) {
+        try {
+          const v2SubRes = await fetch(
+            `https://api.revenuecat.com/v2/projects/${encodeURIComponent(projectId)}/customers/${encodeURIComponent(targetId)}/subscriptions`,
+            {
+              method: "GET",
+              headers: {
+                Authorization: `Bearer ${secretKey}`,
+                "Content-Type": "application/json",
+              },
+            }
+          );
+          if (v2SubRes.ok) {
+            const data = await v2SubRes.json();
+            const subItems = parseRevenueCatEntitlements(data);
+            if (subItems.length > 0) {
+              items = [...items, ...subItems];
+              success = true;
+              req.log.info({ targetId, subItemCount: subItems.length }, "[SyncPremium] RevenueCat v2 Subscriptions API query successful");
+            }
+          } else {
+            req.log.warn({ status: v2SubRes.status, targetId }, "[SyncPremium] RevenueCat v2 Subscriptions API returned non-OK status");
+          }
+        } catch (err) {
+          req.log.warn({ err, targetId }, "[SyncPremium] RevenueCat v2 Subscriptions API fetch error");
+        }
+      }
+
+      // Attempt 3: Legacy RevenueCat REST API v1 (Fallback for v1 compatible secret keys)
+      if (!success && !secretKey.startsWith("sk_")) {
+        try {
+          const directResV1 = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(targetId)}`, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${secretKey}`,
+              "Content-Type": "application/json",
+              "X-Platform": "android",
+            },
+          });
+          if (directResV1.ok) {
+            const data = await directResV1.json();
+            items = parseRevenueCatEntitlements(data);
+            success = true;
+          } else {
+            req.log.warn({ status: directResV1.status, targetId }, "[SyncPremium] RevenueCat v1 REST API returned non-OK status");
+          }
+        } catch (err) {
+          req.log.warn({ err, targetId }, "[SyncPremium] RevenueCat v1 REST API fetch error");
+        }
+      }
+
+      return { success, items };
+    };
+
+    // Primary check for authenticated Tayyibati User ID
+    const primaryResult = await fetchRcEntitlements(userId);
+    rcSuccess = primaryResult.success;
+    extractedEntitlements = primaryResult.items;
+
+    const matchPlan = (items: RCActiveEntitlement[]) => {
+      for (const ent of items) {
+        if (ent.entitlementId) {
+          const planByEnt = activePlans.find((p) => p.revenueCatEntitlementId === ent.entitlementId);
+          if (planByEnt) return planByEnt;
+        }
+        if (ent.productId) {
+          const rawId = ent.productId.split(":")[0];
+          const planByProd = activePlans.find((p) => p.revenueCatProductId === ent.productId || p.revenueCatProductId === rawId);
+          if (planByProd) return planByProd;
+        }
+      }
+      return null;
+    };
+
+    // 3. Match primary entitlements against database plans
+    if (rcSuccess && extractedEntitlements.length > 0) {
+      rcPremium = true;
+      matchedPlanFromRc = matchPlan(extractedEntitlements);
     }
 
-    // 3. Keep current database state if the RevenueCat API request failed
+    // 4. Secondary check for originalAppUserId if primary has no entitlement
+    let rcOriginalUserIdHasEntitlement = false;
+    let originalUserIdType: "anonymous" | "identified" | "same" | "none" = "none";
+
+    const targetOriginalId = typeof originalAppUserId === "string" && originalAppUserId.trim() ? originalAppUserId.trim() : null;
+
+    if (!rcPremium && targetOriginalId && targetOriginalId !== userId) {
+      const origResult = await fetchRcEntitlements(targetOriginalId);
+      if (origResult.success && origResult.items.length > 0) {
+        rcOriginalUserIdHasEntitlement = true;
+        const isAnon = targetOriginalId.startsWith("$RCAnonymousID") || targetOriginalId.includes("Anonymous");
+        originalUserIdType = isAnon ? "anonymous" : "identified";
+
+        // Sever-side verification confirmed active subscription on originalAppUserId!
+        // Grant Premium to the authenticated user ID.
+        rcPremium = true;
+        for (const ent of origResult.items) {
+          if (ent.entitlementId) {
+            const planByEnt = activePlans.find((p) => p.revenueCatEntitlementId === ent.entitlementId);
+            if (planByEnt) { matchedPlanFromRc = planByEnt; break; }
+          }
+          if (ent.productId) {
+            const planByProd = activePlans.find((p) => p.revenueCatProductId === ent.productId);
+            if (planByProd) { matchedPlanFromRc = planByProd; break; }
+          }
+        }
+        req.log.info({ userId, targetOriginalId }, "[SyncPremium] Server-side RevenueCat API confirmed active subscription on originalAppUserId. Granting Premium.");
+      }
+    } else if (targetOriginalId === userId) {
+      originalUserIdType = "same";
+    }
+
+    // 5. Preserve database state if RevenueCat API was unreachable
     if (!rcSuccess) {
-      req.log.info({ userId }, "Preserving database plan state due to RevenueCat API failure");
+      req.log.info({ userId }, "[SyncPremium] Preserving DB state due to RevenueCat API unavailability");
       return void res.json({
         isPremium: currentUser.isPremium === "true",
-        planId: currentUser.planId
+        planId: currentUser.planId,
+        diagnostic: {
+          tayyibatiUserId: userId,
+          rcUserIdHasEntitlement: false,
+          rcOriginalUserIdHasEntitlement: false,
+          originalUserIdType: "none",
+          syncSuccess: false,
+          reason: "RevenueCat API is temporarily unreachable.",
+        },
       });
     }
 
@@ -209,12 +440,10 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
     let finalPlanId = currentUser.planId;
 
     if (currentPlan && isCurrentPlanAdminAssigned) {
-      // Admin-assigned, so preserve it
       finalPlanId = currentPlan.id;
       finalPremium = true;
-      req.log.info({ userId }, "Preserving Admin-assigned plan in sync-premium");
+      req.log.info({ userId }, "[SyncPremium] Preserving Admin-assigned plan");
     } else if (rcPremium) {
-      // Entitlement is active in RevenueCat
       finalPremium = true;
       if (matchedPlanFromRc) {
         finalPlanId = matchedPlanFromRc.id;
@@ -224,19 +453,23 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
           finalPlanId = fallbackPlan.id;
         }
       }
+    } else if (currentUser.isPremium === "true" && !rcOriginalUserIdHasEntitlement) {
+      // PREVENT FALSE DOWNGRADES: If user is currently Premium in DB and transfer/indexing may be pending, preserve DB state
+      finalPremium = true;
+      finalPlanId = currentUser.planId;
+      req.log.info({ userId }, "[SyncPremium] Preserving existing Premium status during pending verification");
     } else {
-      // RevenueCat reports no active entitlement -> Downgrade to Free
       const freePlan = activePlans.find((p) => p.billingCycle === "free") || (await db.select().from(subscriptionPlansTable).where(eq(subscriptionPlansTable.billingCycle, "free")).limit(1))[0];
       finalPlanId = freePlan ? freePlan.id : null;
       finalPremium = false;
     }
 
-    // 4. Save updates to DB
+    // 6. Save updates to DB
     const [user] = await db
       .update(usersTable)
       .set({
         isPremium: finalPremium ? "true" : "false",
-        planId: finalPlanId
+        planId: finalPlanId,
       })
       .where(eq(usersTable.id, userId))
       .returning();
@@ -244,10 +477,54 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
     if (!user) return void res.status(404).json({ error: "User not found" });
     await syncTodayUsagePremium(userId, finalPremium);
 
-    req.log.info({ userId, finalPremium, finalPlanId }, "Premium sync execution completed");
-    res.json({ isPremium: finalPremium, planId: finalPlanId });
+    let diagnosticReason = "";
+    if (finalPremium) {
+      diagnosticReason = "تم التحقق من استحقاق الاشتراك بنجاح وتحديث الحساب إلى ممتاز.";
+    } else if (rcOriginalUserIdHasEntitlement) {
+      if (originalUserIdType === "anonymous") {
+        diagnosticReason = `تم العثور على اشتراك فعّال على الحساب المجهول (${targetOriginalId})، ولكن لم ينقل RevenueCat الاستحقاق إلى المستخدم (${userId}). يرجى التحقق من إعدادات Restore Behavior في لوحة التحكم (Transfer to new App User ID).`;
+      } else {
+        diagnosticReason = `تم العثور على اشتراك فعّال مرتبطة بالحساب الاصلي (${targetOriginalId}). يتطلب نقل الاشتراكات تفعيل خيار Transfer to new App User ID في RevenueCat.`;
+      }
+    } else if (Array.isArray(activeSubscriptions) && activeSubscriptions.length > 0) {
+      diagnosticReason = `تم رصد شراء عبر متجر التطبيقات (${activeSubscriptions.join(", ")}), لكن خادم RevenueCat لم يرجع استحقاقاً فعّالاً لرمز المستخدم (${userId}).`;
+    } else {
+      diagnosticReason = `لم يتم العثور على أي استحقاق اشتراك فعّال لرمز المستخدم (${userId}).`;
+    }
+
+    req.log.info(
+      {
+        userId,
+        rcSuccess,
+        extractedEntitlementsCount: extractedEntitlements.length,
+        rcUserIdHasEntitlement: rcPremium,
+        rcOriginalUserIdHasEntitlement,
+        originalUserIdType,
+        matchedPlanId: matchedPlanFromRc?.id ?? null,
+        finalPremium,
+        finalPlanId,
+      },
+      "[SyncPremium] Premium sync completed with diagnostic result"
+    );
+
+    res.json({
+      isPremium: finalPremium,
+      planId: finalPlanId,
+      diagnostic: {
+        tayyibatiUserId: userId,
+        rcAppUserIdOnDevice: typeof appUserId === "string" ? appUserId : undefined,
+        rcOriginalAppUserIdOnDevice: targetOriginalId || undefined,
+        rcUserIdHasEntitlement: rcPremium,
+        rcOriginalUserIdHasEntitlement,
+        originalUserIdType,
+        entitlementIdMatched: matchedPlanFromRc?.revenueCatEntitlementId || null,
+        productIdMatched: matchedPlanFromRc?.revenueCatProductId || null,
+        syncSuccess: finalPremium,
+        reason: diagnosticReason,
+      },
+    });
   } catch (err) {
-    req.log.error({ err }, "Failed to sync premium from RevenueCat");
+    req.log.error({ err }, "[SyncPremium] Failed to sync premium from RevenueCat");
     res.status(500).json({ error: "Internal server error" });
   }
 });

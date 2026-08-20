@@ -19,6 +19,7 @@ import { fetchCatalog, NetworkError } from "@/lib/api";
 import { getCachedCatalog, setCachedCatalog, CatalogFoodItem } from "@/lib/catalogCache";
 import { useAuth } from "@/context/AuthContext";
 import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
@@ -272,14 +273,15 @@ export default function BrowseScreen() {
 
   const renderListHeader = useMemo(() => {
     return (
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
+        <HeaderNatureBackground />
         <View style={[styles.titleRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
           <BackButton />
           <View style={{ flex: 1, alignItems: rtl ? "flex-end" : "flex-start" }}>
-            <Text style={[styles.pageTitle, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
+            <Text style={[styles.pageTitle, { color: "#f3f6f4", textAlign: rtl ? "right" : "left" }]}>
               {rtl ? "قائمة المسموح والممنوع" : "Allowed & Forbidden List"}
             </Text>
-            <Text style={[styles.pageSubtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
+            <Text style={[styles.pageSubtitle, { color: "#E2E8F0", textAlign: rtl ? "right" : "left" }]}>
               {rtl
                 ? "تصفح قائمة الأغذية المسموحة والممنوعة والمشروطة في نظام الطيبات"
                 : "Browse allowed, forbidden, and conditional foods in Tayyibati system"}

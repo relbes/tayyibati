@@ -21,19 +21,19 @@ export function HomeQuickActions({
       icon: "search",
       title: t("home.searchFood"),
       desc: t("home.searchFoodDesc"),
-      onPress: focusSearch,
-      color: TayyibatiTheme.colors.primary,
-      background: TayyibatiTheme.colors.greenCard,
-      borderColor: "#C6EFD9",
+      onPress: () => router.push("/(tabs)/search"),
+      color: "#15803D",
+      background: "#DCFCE7",
+      borderColor: "#86EFAC",
     },
     {
       icon: "camera",
       title: t("home.analyzeImage"),
       desc: t("home.analyzeImageDesc"),
-      onPress: () => router.push("/(tabs)/camera?action=camera"),
-      color: TayyibatiTheme.colors.orange,
-      background: TayyibatiTheme.colors.orangeCard,
-      borderColor: "#FFE4A0",
+      onPress: () => router.push("/(tabs)/camera"),
+      color: "#0D9488",
+      background: "#CCFBF1",
+      borderColor: "#5EEAD4",
     },
     {
       icon: "scan",
@@ -42,30 +42,30 @@ export function HomeQuickActions({
       onPress: () => {
         Alert.alert(
           "هذه الخاصية غير متاحة حاليا",
-          "قريباً سيتم تفعيل هذه الخاصية للاشتراك البريميوم"
+          "قريباً سيتم تفعيل هذه الخاصية للااشتراك البريميوم"
         );
       },
-      color: TayyibatiTheme.colors.pink,
-      background: TayyibatiTheme.colors.pinkCard,
-      borderColor: "#FFD6DC",
+      color: "#E11D48",
+      background: "#FECDD3",
+      borderColor: "#FCA5A5",
     },
     {
       icon: "book",
       title: t("home.exploreDatabase"),
       desc: t("home.exploreDatabaseDesc"),
       onPress: () => router.push("/(tabs)/browse"),
-      color: TayyibatiTheme.colors.blue,
-      background: TayyibatiTheme.colors.blueCard,
-      borderColor: "#C7E2FE",
+      color: "#0284C7",
+      background: "#BAE6FD",
+      borderColor: "#7DD3FC",
     },
     {
       icon: "information-circle",
       title: t("home.aboutSystem"),
       desc: t("home.aboutSystemDesc"),
       onPress: () => router.push("/about-system"),
-      color: TayyibatiTheme.colors.purple,
-      background: TayyibatiTheme.colors.purpleCard,
-      borderColor: "#DDD0FF",
+      color: "#7C3AED",
+      background: "#E9D5FF",
+      borderColor: "#C4B5FD",
       isFullWidth: true,
     },
   ];
@@ -76,7 +76,7 @@ export function HomeQuickActions({
         style={[
           styles.sectionTitle,
           {
-            color: colors.foreground,
+            color: "#111827",
             textAlign: rtl ? "right" : "left",
           },
         ]}
@@ -109,13 +109,13 @@ export function HomeQuickActions({
                 </View>
                 <View style={{ flex: 1, marginHorizontal: 12 }}>
                   <LocalizedText
-                    style={[styles.cardTitle, { color: TayyibatiTheme.colors.text, textAlign: rtl ? "right" : "left" }]}
+                    style={[styles.cardTitle, { color: "#111827", textAlign: rtl ? "right" : "left" }]}
                     numberOfLines={1}
                   >
                     {card.title}
                   </LocalizedText>
                   <LocalizedParagraph
-                    style={[styles.cardDesc, { color: TayyibatiTheme.colors.textSecondary, textAlign: rtl ? "right" : "left" }]}
+                    style={[styles.cardDesc, { color: "#4B5563", textAlign: rtl ? "right" : "left" }]}
                     numberOfLines={1}
                   >
                     {card.desc}
@@ -157,7 +157,7 @@ export function HomeQuickActions({
                 style={[
                   styles.cardTitle,
                   {
-                    color: TayyibatiTheme.colors.text,
+                    color: "#111827",
                     textAlign: rtl ? "right" : "left",
                   },
                 ]}
@@ -170,7 +170,7 @@ export function HomeQuickActions({
                 style={[
                   styles.cardDesc,
                   {
-                    color: TayyibatiTheme.colors.textSecondary,
+                    color: "#4B5563",
                     textAlign: rtl ? "right" : "left",
                   },
                 ]}
@@ -200,10 +200,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     justifyContent: "space-between",
-    gap: 12,
+    rowGap: 12,
   },
   card: {
-    width: "48.2%",
+    width: "48%",
     padding: 14,
     borderRadius: TayyibatiTheme.radius.large,
     borderWidth: 1,

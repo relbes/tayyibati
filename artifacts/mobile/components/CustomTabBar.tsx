@@ -31,7 +31,7 @@ const TABS: TabConfig[] = [
   { name: "profile", label: "حسابي",    icon: "person-outline",  iconFocused: "person" },
 ];
 
-const PRIMARY = "#1B7A5E";
+const PRIMARY = "#15803D";
 const PRIMARY_DARK = "#4DC49A";
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
@@ -43,7 +43,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const barBg = isDark ? "#1A2622" : "#FFFFFF";
   const borderColor = isDark ? "#2A3D35" : "#E5EFE9";
   const activeColor = isDark ? PRIMARY_DARK : PRIMARY;
-  const inactiveColor = isDark ? "#5A7870" : "#8A9B95";
+  const inactiveColor = isDark ? "#7A8C85" : "#6B7280";
   const bottomPad = Math.max(insets.bottom + 8, 14);
 
   return (

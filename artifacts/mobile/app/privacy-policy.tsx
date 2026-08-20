@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { useColors } from "@/hooks/useColors";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
@@ -90,13 +91,15 @@ export default function PrivacyPolicyScreen() {
           styles.header,
           {
             paddingTop: topPadding + 12,
-            backgroundColor: "#C9E4D4",
-            borderBottomColor: "#A3CDB3",
+            backgroundColor: "#11674e",
+            borderBottomColor: "#0D523E",
+            flexDirection: "row-reverse",
           },
         ]}
       >
+        <HeaderNatureBackground />
         <BackButton />
-        <Text style={[styles.title, { color: "#064E24" }]}>
+        <Text style={[styles.title, { color: "#f3f6f4" }]}>
           سياسة الخصوصية
         </Text>
         <View style={{ width: 36 }} />

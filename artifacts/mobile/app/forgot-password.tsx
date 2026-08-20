@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -88,10 +89,11 @@ export default function ForgotPasswordScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View
-        style={[styles.topBar, { paddingTop: topPadding + 10, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3", borderBottomWidth: 1 }]}
+        style={[styles.topBar, { paddingTop: topPadding + 10, backgroundColor: "#11674e", borderBottomColor: "#0D523E", borderBottomWidth: 1 }]}
       >
+        <HeaderNatureBackground />
         <View style={{ width: 40 }} />
-        <Text style={[styles.topTitle, { color: "#064E24" }]}>استعادة كلمة المرور</Text>
+        <Text style={[styles.topTitle, { color: "#f3f6f4" }]}>استعادة كلمة المرور</Text>
         <BackButton />
       </View>
 

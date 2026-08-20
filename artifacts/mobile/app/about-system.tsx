@@ -11,6 +11,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { useColors } from "@/hooks/useColors";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
@@ -58,16 +59,17 @@ export default function AboutSystemScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
+        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
+          <HeaderNatureBackground />
           <View style={[styles.titleRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
             <BackButton />
             <View style={{ flex: 1, alignItems: rtl ? "flex-end" : "flex-start" }}>
-              <Text style={[styles.pageTitle, { color: "#064E24", textAlign: rtl ? "right" : "left" }]}>
+              <Text style={[styles.pageTitle, { color: "#f3f6f4", textAlign: rtl ? "right" : "left" }]}>
                 {isAppOnly
                   ? (rtl ? "عن تطبيق طيباتي" : "About Tayyibati App")
                   : (rtl ? "عن نظام الطيبات" : "About Tayyibati System")}
               </Text>
-              <Text style={[styles.pageSubtitle, { color: "#244231", textAlign: rtl ? "right" : "left" }]}>
+              <Text style={[styles.pageSubtitle, { color: "#E2E8F0", textAlign: rtl ? "right" : "left" }]}>
                 {isAppOnly
                   ? (rtl ? "تعرف على تطبيق طيباتي ومميزاته" : "Learn about Tayyibati App and its features")
                   : (rtl ? "تعرف على فلسفة النظام وقواعده الأساسية" : "Learn about the philosophy and core rules of the system")}

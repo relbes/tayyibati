@@ -463,11 +463,36 @@ export async function enrollUserPlan(id: string, planId: number, isPremium: bool
   return res.json();
 }
 
-export async function syncPremium(): Promise<{ isPremium: boolean }> {
+export interface SyncPremiumParams {
+  appUserId?: string;
+  originalAppUserId?: string;
+  activeSubscriptions?: string[];
+  activeEntitlements?: string[];
+}
+
+export interface SyncPremiumResult {
+  isPremium: boolean;
+  planId?: number | null;
+  diagnostic?: {
+    tayyibatiUserId: string;
+    rcAppUserIdOnDevice?: string;
+    rcOriginalAppUserIdOnDevice?: string;
+    rcUserIdHasEntitlement: boolean;
+    rcOriginalUserIdHasEntitlement: boolean;
+    originalUserIdType: "anonymous" | "identified" | "same" | "none";
+    entitlementIdMatched?: string | null;
+    productIdMatched?: string | null;
+    syncSuccess: boolean;
+    reason: string;
+  };
+}
+
+export async function syncPremium(params?: SyncPremiumParams): Promise<SyncPremiumResult> {
   const base = BASE_URL;
   const res = await fetchWithRetry(`${base}/api/users/me/sync-premium`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify(params || {}),
   });
   if (!res.ok) throw new Error(`Failed to sync premium: ${res.status}`);
   return res.json();

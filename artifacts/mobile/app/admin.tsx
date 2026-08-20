@@ -17,6 +17,7 @@ import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
+import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { useColors } from "@/hooks/useColors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listFoods, createFood, deleteFood } from "@/lib/api";
@@ -71,11 +72,12 @@ export default function AdminScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#C9E4D4", borderBottomColor: "#A3CDB3" }]}>
+      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
+        <HeaderNatureBackground />
         <TouchableOpacity onPress={() => setShowAdd(!showAdd)}>
-          <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color="#064E24" />
+          <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color="#f3f6f4" />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: "#064E24" }]}>لوحة الإدارة</Text>
+        <Text style={[styles.title, { color: "#f3f6f4" }]}>لوحة الإدارة</Text>
         <BackButton />
       </View>
 
