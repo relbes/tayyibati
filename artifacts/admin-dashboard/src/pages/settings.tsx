@@ -11,22 +11,16 @@ import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles, Palette } from "lucide-react";
 
-import { getApiBaseUrl } from "@/lib/api";
+import { getApiBaseUrl, adminFetch } from "@/lib/api";
 
 const STORAGE_KEY = "tayyibati_api_url";
 
 const API_BASE = () => getApiBaseUrl();
-const adminHeaders = (): HeadersInit => {
-  const token = localStorage.getItem("tayyibati_admin_token");
-  return token ? { Authorization: `Bearer ${token}` } : {};
-};
 
 interface ConfigRow { id: number; key: string; value: string; description: string | null; isPublic: string; }
 
 async function fetchConfig(): Promise<ConfigRow[]> {
-  const res = await fetch(`${API_BASE()}/api/config`, {
-    headers: adminHeaders(),
-  });
+  const res = await adminFetch(`${API_BASE()}/api/config`);
 
   if (!res.ok) {
     throw new Error("Failed to fetch config");
@@ -36,12 +30,8 @@ async function fetchConfig(): Promise<ConfigRow[]> {
 }
 
 async function patchConfig(key: string, value: string): Promise<ConfigRow> {
-  const res = await fetch(`${API_BASE()}/api/config/${key}`, {
+  const res = await adminFetch(`${API_BASE()}/api/config/${key}`, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...adminHeaders(),
-    },
     body: JSON.stringify({ value }),
   });
 

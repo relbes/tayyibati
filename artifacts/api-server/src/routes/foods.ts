@@ -121,6 +121,49 @@ function getBrowseCatalogPayloads(allFoods: any[]) {
   return { freePayload: cachedFreeBrowsePayload, premiumPayload: cachedPremiumBrowsePayload };
 }
 
+export const DB_TAXONOMY_MAP: Record<string, string> = {
+  "Grains & Starches": "حبوب ونشويات",
+  "Basics & Natural Spices": "توابل وبهارات طبيعية",
+  "Fruits & Natural Juices": "فواكه وعصائر طبيعية",
+  "Meat & Protein": "لحوم وبروتينات",
+  "Fish & Seafood": "أسماك ومأكولات بحرية",
+  "Hot Drinks & Herbs": "مشروبات ساخنة وأعشاب",
+  "Natural Oils & Vinegar": "زيوت طبيعية وخال",
+  "Honey & Bee Products": "عسل ومنتجات النحل",
+  "Nuts, Seeds & Oils": "مكسرات وبذور وزيوت",
+  "Natural Remedies": "وصفات طبيعية",
+  "Cheese": "أجبان",
+  "Permitted Cheeses": "أجبان مسموحة",
+  "Flour & Baked Goods": "دقيق ومخبوزات",
+  "Sweets & Jams": "حلويات ومربى",
+  "Permitted Birds": "طيور مسموحة",
+  "Permitted Juices": "عصائر مسموحة",
+  "Natural Fats": "دهون طبيعية",
+  "Processed Starches (Allowed Variant)": "نشويات مصنعة (مسموحة)",
+  "Dates & Dried Fruits": "تمور وفواكه مجففة",
+  "Ice Cream": "آيس كريم",
+  "Food Flavorings": "نكهات طعام",
+  "Chocolate": "شوكولاتة",
+  "Poultry & Eggs": "دواجن وبيض",
+  "Fish & Forbidden Seafood": "أسماك ومأكولات بحرية ممنوعة",
+  "Dairy & Derivatives": "ألبان ومتقصاتها",
+  "Forbidden Cheeses": "أجبان ممنوعة",
+  "Processed Starches": "نشويات مصنعة",
+  "Carbonated & Artificial Drinks": "مشروبات غازية وصناعية",
+  "Forbidden Leafy Vegetables": "خضروات ورقية ممنوعة",
+  "Forbidden Fruits": "فواكه ممنوعة",
+  "Forbidden Vegetables": "خضروات ممنوعة",
+  "Forbidden Nuts": "مكسرات ممنوعة",
+  "Natural Seeds": "بذور طبيعية",
+  "Poultry & Forbidden Birds": "دواجن وطيور ممنوعة",
+  "Corn Flakes": "رقائق الذرة",
+  "Medications & Supplements": "أدوية ومكملات",
+  "Fresh Natural Juices": "عصائر طبيعية طازجة",
+  "Dairy & Cheese": "ألبان وأجبان",
+  "Spices & Condiments": "توابل وإضافات",
+  "Meat & Poultry": "لحوم ودواجن",
+};
+
 export function getArabicCategoryName(category: string | null | undefined): string {
   if (!category) return "أخرى";
   const trimmed = category.trim();
@@ -132,49 +175,6 @@ export function getArabicCategoryName(category: string | null | undefined): stri
 
   const taxonomyTrans = CATEGORY_TRANSLATIONS[trimmed];
   if (taxonomyTrans?.ar) return taxonomyTrans.ar;
-
-  const DB_TAXONOMY_MAP: Record<string, string> = {
-    "Grains & Starches": "حبوب ونشويات",
-    "Basics & Natural Spices": "توابل وبهارات طبيعية",
-    "Fruits & Natural Juices": "فواكه وعصائر طبيعية",
-    "Meat & Protein": "لحوم وبروتينات",
-    "Fish & Seafood": "أسماك ومأكولات بحرية",
-    "Hot Drinks & Herbs": "مشروبات ساخنة وأعشاب",
-    "Natural Oils & Vinegar": "زيوت طبيعية وخال",
-    "Honey & Bee Products": "عسل ومنتجات النحل",
-    "Nuts, Seeds & Oils": "مكسرات وبذور وزيوت",
-    "Natural Remedies": "وصفات طبيعية",
-    "Cheese": "أجبان",
-    "Permitted Cheeses": "أجبان مسموحة",
-    "Flour & Baked Goods": "دقيق ومخبوزات",
-    "Sweets & Jams": "حلويات ومربى",
-    "Permitted Birds": "طيور مسموحة",
-    "Permitted Juices": "عصائر مسموحة",
-    "Natural Fats": "دهون طبيعية",
-    "Processed Starches (Allowed Variant)": "نشويات مصنعة (مسموحة)",
-    "Dates & Dried Fruits": "تمور وفواكه مجففة",
-    "Ice Cream": "آيس كريم",
-    "Food Flavorings": "نكهات طعام",
-    "Chocolate": "شوكولاتة",
-    "Poultry & Eggs": "دواجن وبيض",
-    "Fish & Forbidden Seafood": "أسماك ومأكولات بحرية ممنوعة",
-    "Dairy & Derivatives": "ألبان ومتقصاتها",
-    "Forbidden Cheeses": "أجبان ممنوعة",
-    "Processed Starches": "نشويات مصنعة",
-    "Carbonated & Artificial Drinks": "مشروبات غازية وصناعية",
-    "Forbidden Leafy Vegetables": "خضروات ورقية ممنوعة",
-    "Forbidden Fruits": "فواكه ممنوعة",
-    "Forbidden Vegetables": "خضروات ممنوعة",
-    "Forbidden Nuts": "مكسرات ممنوعة",
-    "Natural Seeds": "بذور طبيعية",
-    "Poultry & Forbidden Birds": "دواجن وطيور ممنوعة",
-    "Corn Flakes": "رقائق الذرة",
-    "Medications & Supplements": "أدوية ومكملات",
-    "Fresh Natural Juices": "عصائر طبيعية طازجة",
-    "Dairy & Cheese": "ألبان وأجبان",
-    "Spices & Condiments": "توابل وإضافات",
-    "Meat & Poultry": "لحوم ودواجن",
-  };
 
   return DB_TAXONOMY_MAP[trimmed] || trimmed;
 }
@@ -375,7 +375,26 @@ router.get("/foods", async (req, res) => {
 
     const conditions = [];
     if (status) conditions.push(eq(foodsTable.status, status as any));
-    if (category) conditions.push(eq(foodsTable.category, category));
+    if (category) {
+      const catTrim = category.trim();
+      const possibleCategories: string[] = [catTrim];
+
+      for (const [dbCat, arCat] of Object.entries(DB_TAXONOMY_MAP)) {
+        if (
+          dbCat.toLowerCase().includes(catTrim.toLowerCase()) ||
+          arCat.includes(catTrim) ||
+          catTrim.includes(arCat)
+        ) {
+          if (!possibleCategories.includes(dbCat)) possibleCategories.push(dbCat);
+        }
+      }
+
+      if (possibleCategories.length === 1) {
+        conditions.push(eq(foodsTable.category, possibleCategories[0]));
+      } else {
+        conditions.push(inArray(foodsTable.category, possibleCategories));
+      }
+    }
     if (search) {
       conditions.push(
         or(

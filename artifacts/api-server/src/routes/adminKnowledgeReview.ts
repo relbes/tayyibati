@@ -11,6 +11,7 @@
  */
 
 import { Router } from "express";
+import { requireAdmin } from "./admin";
 import {
   getReviewQueuePaginated,
   getReviewStatistics,
@@ -21,6 +22,7 @@ import {
 } from "../lib/ai/knowledgeReviewService";
 
 export const adminKnowledgeReviewRouter = Router();
+adminKnowledgeReviewRouter.use(requireAdmin);
 
 // GET /api/admin/knowledge-review/statistics
 adminKnowledgeReviewRouter.get("/statistics", async (_req, res) => {
@@ -133,5 +135,45 @@ adminKnowledgeReviewRouter.post("/:id/merge", async (req, res) => {
     res.json({ success: true, item: updated });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || "Failed to merge review item" });
+  }
+});
+
+// PUT /api/admin/knowledge-review/:id
+adminKnowledgeReviewRouter.put("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return void res.status(400).json({ success: false, error: "Invalid review item ID" });
+    }
+
+    const { updateReviewItem } = await import("../lib/ai/knowledgeReviewService");
+    const updated = await updateReviewItem(id, req.body || {});
+    if (!updated) {
+      return void res.status(404).json({ success: false, error: "Review item not found" });
+    }
+
+    res.json({ success: true, item: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to update review item" });
+  }
+});
+
+// DELETE /api/admin/knowledge-review/:id
+adminKnowledgeReviewRouter.delete("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return void res.status(400).json({ success: false, error: "Invalid review item ID" });
+    }
+
+    const { deleteReviewItem } = await import("../lib/ai/knowledgeReviewService");
+    const deleted = await deleteReviewItem(id);
+    if (!deleted) {
+      return void res.status(404).json({ success: false, error: "Review item not found" });
+    }
+
+    res.json({ success: true, item: deleted, message: "Review item deleted successfully" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to delete review item" });
   }
 });

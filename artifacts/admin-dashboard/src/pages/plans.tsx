@@ -18,7 +18,7 @@ import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
 import { Plus, Pencil, Trash2, Star, CheckCircle, FileText, Camera, Layers } from "lucide-react";
 
-import { API_BASE, adminHeaders } from "@/lib/api";
+import { API_BASE, adminFetch } from "@/lib/api";
 
 
 interface Plan {
@@ -45,31 +45,34 @@ interface Plan {
 
 type PlanForm = Omit<Plan, "id">;
 
-const EMPTY_FORM: PlanForm = {
+const DEFAULT_FORM: PlanForm = {
   name: "",
+  nameAr: "",
   nameEn: "",
+  descriptionAr: "",
+  descriptionEn: "",
+  price: "0",
+  priceMonthly: 0,
+  priceYearly: 0,
+  currency: "USD",
   dailyLimit: 10,
   dailyTextLimit: 10,
   dailyImageLimit: 5,
-  price: "0",
-  currency: "SAR",
-  billingCycle: "monthly",
   features: "",
-  isActive: "true",
-  sortOrder: 0,
-  descriptionAr: "",
-  descriptionEn: "",
   featuresAr: "",
   featuresEn: "",
   isPopular: false,
   revenueCatProductId: "",
   revenueCatEntitlementId: "",
+  billingCycle: "monthly",
+  isActive: "true",
+  sortOrder: 0,
 };
 
+const EMPTY_FORM = DEFAULT_FORM;
+
 async function fetchPlans(): Promise<Plan[]> {
-  const res = await fetch(`${API_BASE}/api/admin/subscription-plans`, {
-    headers: adminHeaders(),
-  });
+  const res = await adminFetch(`${API_BASE}/api/admin/subscription-plans`);
   if (!res.ok) throw new Error("Failed to fetch plans");
   return res.json();
 }
@@ -85,9 +88,8 @@ async function createPlan(data: PlanForm): Promise<Plan> {
     revenueCatProductId: data.revenueCatProductId || null,
     revenueCatEntitlementId: data.revenueCatEntitlementId || null,
   };
-  const res = await fetch(`${API_BASE}/api/admin/subscription-plans`, {
+  const res = await adminFetch(`${API_BASE}/api/admin/subscription-plans`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to create plan");
@@ -108,9 +110,8 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
   if (data.revenueCatProductId !== undefined) body.revenueCatProductId = data.revenueCatProductId || null;
   if (data.revenueCatEntitlementId !== undefined) body.revenueCatEntitlementId = data.revenueCatEntitlementId || null;
 
-  const res = await fetch(`${API_BASE}/api/admin/subscription-plans/${id}`, {
+  const res = await adminFetch(`${API_BASE}/api/admin/subscription-plans/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error("Failed to update plan");
@@ -118,17 +119,15 @@ async function updatePlan(id: number, data: Partial<PlanForm>): Promise<Plan> {
 }
 
 async function deletePlan(id: number): Promise<void> {
-  const res = await fetch(`${API_BASE}/api/admin/subscription-plans/${id}`, {
+  const res = await adminFetch(`${API_BASE}/api/admin/subscription-plans/${id}`, {
     method: "DELETE",
-    headers: adminHeaders(),
   });
   if (!res.ok) throw new Error("Failed to delete plan");
 }
 
 async function bulkUpdateLimits(dailyTextLimit: number, dailyImageLimit: number): Promise<Plan[]> {
-  const res = await fetch(`${API_BASE}/api/plans/bulk-limits`, {
+  const res = await adminFetch(`${API_BASE}/api/plans/bulk-limits`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...adminHeaders() },
     body: JSON.stringify({ dailyTextLimit, dailyImageLimit }),
   });
   if (!res.ok) throw new Error("Failed to bulk update");

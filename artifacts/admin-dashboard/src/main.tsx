@@ -11,6 +11,4 @@ if (import.meta.env.DEV) {
 
 setBaseUrl(apiUrl);
 
-setAuthTokenGetter(() => localStorage.getItem("tayyibati_admin_token"));
-
 createRoot(document.getElementById("root")!).render(<App />);

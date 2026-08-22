@@ -1,97 +1,226 @@
 import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
-import { db } from "@workspace/db";
-import { analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable, dishes, pendingKnowledgeReviewsTable, aiFoodKnowledgeCacheTable } from "@workspace/db";
-import { desc, sql, count, avg, eq, and } from "drizzle-orm";
+import { db, adminUsersTable, type AdminUser, analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable, dishes, pendingKnowledgeReviewsTable, aiFoodKnowledgeCacheTable } from "@workspace/db";
+import { desc, sql, count, avg, eq, and, or, inArray } from "drizzle-orm";
 import { getUserPlanLimits } from "./analysis";
+import { comparePassword, createAdminSession, destroyAdminSession, getAdminSession } from "../lib/adminAuth";
 
 const router = Router();
 
-function getAdminPassword(): string | null {
-  return process.env.ADMIN_PASSWORD || (process.env.NODE_ENV !== "production" ? "admin123" : null);
-}
-
-function signToken(iat: number): string {
-  const secret = (process.env.SESSION_SECRET || "dev-secret") + (getAdminPassword() || "");
-  const payload = `admin:${iat}`;
-  const sig = createHmac("sha256", secret).update(payload).digest("hex");
-  return Buffer.from(`${payload}:${sig}`).toString("base64url");
-}
-
-export function requireAdmin(req: Request, res: Response, next: NextFunction): void {
-  const auth = req.headers["authorization"];
-  const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token || !verifyAdminToken(token)) {
-    res.status(401).json({ error: "Unauthorized" });
-    return;
-  }
-  next();
-}
-
-export function verifyAdminToken(token: string): boolean {
+export async function requireAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const decoded = Buffer.from(token, "base64url").toString();
-    const parts = decoded.split(":");
-    if (parts.length !== 3 || parts[0] !== "admin") return false;
-    const [, iat, sig] = parts;
-    if (Date.now() - parseInt(iat) > 86400000 * 7) return false;
-    const secret = (process.env.SESSION_SECRET || "dev-secret") + (getAdminPassword() || "");
-    const expected = createHmac("sha256", secret).update(`admin:${iat}`).digest("hex");
-    const sigBuf = Buffer.from(sig);
-    const expectedBuf = Buffer.from(expected);
-    if (sigBuf.length !== expectedBuf.length) return false;
-    return timingSafeEqual(sigBuf, expectedBuf);
-  } catch {
-    return false;
+    const sessionData = await getAdminSession(req);
+    if (!sessionData) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+
+    const { admin } = sessionData;
+    if (!admin.isActive || admin.role !== "SUPER_ADMIN") {
+      res.status(403).json({ error: "Forbidden: Administrative access required" });
+      return;
+    }
+
+    (req as any).adminUser = admin;
+    next();
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
 }
 
-router.post("/admin/login", (req, res) => {
-  const { password } = req.body as { password?: string };
-  const adminPassword = getAdminPassword();
+router.post("/admin/login", async (req, res) => {
+  try {
+    const { username, password } = req.body as { username?: string; password?: string };
 
-  if (!adminPassword) {
-    return void res.status(503).json({ error: "Admin password not configured. Set ADMIN_PASSWORD env var." });
+    if (!username || !password) {
+      return void res.status(401).json({ error: "بيانات تسجيل الدخول غير صحيحة" });
+    }
+
+    const input = username.trim().toLowerCase();
+
+    const users = await db
+      .select()
+      .from(adminUsersTable)
+      .where(or(eq(adminUsersTable.username, input), eq(adminUsersTable.email, input)))
+      .limit(1);
+
+    if (users.length === 0) {
+      return void res.status(401).json({ error: "بيانات تسجيل الدخول غير صحيحة" });
+    }
+
+    const admin = users[0];
+    if (!admin.isActive) {
+      return void res.status(401).json({ error: "بيانات تسجيل الدخول غير صحيحة" });
+    }
+
+    const validPassword = await comparePassword(password, admin.passwordHash);
+    if (!validPassword) {
+      return void res.status(401).json({ error: "بيانات تسجيل الدخول غير صحيحة" });
+    }
+
+    await db
+      .update(adminUsersTable)
+      .set({ lastLoginAt: new Date(), updatedAt: new Date() })
+      .where(eq(adminUsersTable.id, admin.id));
+
+    await createAdminSession(admin.id, res);
+
+    res.json({
+      success: true,
+      admin: {
+        id: admin.id,
+        username: admin.username,
+        email: admin.email,
+        role: admin.role,
+      },
+    });
+  } catch (err) {
+    req.log.error({ err }, "Admin login failure");
+    res.status(500).json({ error: "تعذّر الوصول إلى الخادم" });
   }
-  if (!password) {
-    return void res.status(400).json({ error: "Password required" });
-  }
-
-  const a = Buffer.from(password);
-  const b = Buffer.from(adminPassword);
-  const valid = a.length === b.length && timingSafeEqual(a, b);
-
-  if (!valid) {
-    return void res.status(401).json({ error: "كلمة المرور غير صحيحة" });
-  }
-
-  const token = signToken(Date.now());
-  res.json({ token });
 });
 
-router.get("/admin/me", (req, res) => {
-  const auth = req.headers["authorization"];
-  const token = typeof auth === "string" && auth.startsWith("Bearer ") ? auth.slice(7) : null;
-  if (!token || !verifyAdminToken(token)) {
-    return void res.status(401).json({ error: "Unauthorized" });
+router.post("/admin/logout", async (req, res) => {
+  try {
+    await destroyAdminSession(req, res);
+    res.json({ success: true, message: "Logged out successfully" });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
   }
-  res.json({ admin: true });
+});
+
+router.get("/admin/me", requireAdmin, (req, res) => {
+  const admin = (req as any).adminUser as AdminUser;
+  res.json({
+    authenticated: true,
+    admin: {
+      id: admin.id,
+      username: admin.username,
+      email: admin.email,
+      role: admin.role,
+    },
+  });
 });
 
 router.get("/admin/history", requireAdmin, async (req, res) => {
   try {
-    const { limit = "50", offset = "0" } = req.query as Record<string, string>;
+    const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || "50"), 10) || 50));
+    const offset = Math.max(0, parseInt(String(req.query.offset || "0"), 10) || 0);
+    const searchQuery = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const typeFilter = typeof req.query.analysisType === "string" ? req.query.analysisType : "";
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : "";
 
-    const items = await db
+    const allItems = await db
       .select()
       .from(analysisHistoryTable)
-      .orderBy(desc(analysisHistoryTable.createdAt))
-      .limit(Math.min(parseInt(limit), 200))
-      .offset(parseInt(offset));
+      .orderBy(desc(analysisHistoryTable.createdAt));
 
-    res.json(items);
+    const users = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
+    const userMap = new Map<string, string>();
+    for (const u of users) {
+      if (u.id && u.email) {
+        userMap.set(u.id, u.email);
+        userMap.set(u.id.trim(), u.email);
+        userMap.set(u.id.toLowerCase(), u.email);
+      }
+    }
+
+    let mapped = allItems.map((i) => {
+      const uId = i.userId ? i.userId.trim() : "";
+      const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "غير متوفر";
+      return {
+        ...i,
+        userEmail: email,
+      };
+    });
+
+    if (searchQuery) {
+      mapped = mapped.filter(
+        (i) =>
+          i.query.toLowerCase().includes(searchQuery) ||
+          (i.userEmail && i.userEmail.toLowerCase().includes(searchQuery)) ||
+          i.userId.toLowerCase().includes(searchQuery)
+      );
+    }
+
+    if (typeFilter && typeFilter !== "all") {
+      mapped = mapped.filter((i) => i.analysisType === typeFilter);
+    }
+
+    if (statusFilter && statusFilter !== "all") {
+      mapped = mapped.filter((i) => {
+        const r = (i.report || {}) as any;
+        return r.status === statusFilter;
+      });
+    }
+
+    const totalItems = mapped.length;
+    const paginatedItems = mapped.slice(offset, offset + limit);
+
+    res.json({
+      items: paginatedItems,
+      totalItems,
+      offset,
+      limit,
+    });
   } catch (err) {
     req.log.error({ err }, "Failed to list admin history");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/history", requireAdmin, async (req, res) => {
+  try {
+    const { ids } = req.body || {};
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return void res.status(400).json({ error: "Invalid or empty IDs array" });
+    }
+
+    const numIds = ids.map((id) => parseInt(String(id), 10)).filter((id) => !isNaN(id));
+    if (numIds.length === 0) {
+      return void res.status(400).json({ error: "No valid numeric IDs provided" });
+    }
+
+    const deleted = await db
+      .delete(analysisHistoryTable)
+      .where(inArray(analysisHistoryTable.id, numIds))
+      .returning();
+
+    res.json({ success: true, count: deleted.length, message: `Successfully deleted ${deleted.length} search history records` });
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk delete search history");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.get("/admin/export/history", requireAdmin, async (req, res) => {
+  try {
+    const items = await db.select().from(analysisHistoryTable).orderBy(desc(analysisHistoryTable.createdAt));
+    const users = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
+    const userMap = new Map(users.map((u) => [u.id, u.email]));
+
+    const headers = ["id", "user_email", "query", "analysis_type", "compatibility_score", "status", "created_at"];
+    const rows = items.map((i) => {
+      const rep = (i.report || {}) as any;
+      return [
+        i.id,
+        userMap.get(i.userId) || "غير متوفر",
+        i.query,
+        i.analysisType,
+        i.compatibilityScore ?? 0,
+        rep.status || "unknown",
+        i.createdAt ? new Date(i.createdAt).toISOString() : "",
+      ];
+    });
+
+    const csvContent = buildCsv(headers, rows);
+    const today = new Date().toISOString().slice(0, 10);
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="tayyibati_search_history_${today}.csv"`);
+    res.status(200).send(csvContent);
+  } catch (err) {
+    req.log.error({ err }, "Failed to export search history CSV");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -9,12 +9,14 @@
  */
 
 import { Router } from "express";
+import { requireAdmin } from "./admin";
 import { db, aiFoodKnowledgeCacheTable } from "@workspace/db";
 import { eq, and, gt, lte, desc, sql } from "drizzle-orm";
 import { aiCacheClearMemory } from "../lib/ai/aiCache";
 import { AI_CONFIG } from "../lib/config";
 
 export const adminAiCacheRouter = Router();
+adminAiCacheRouter.use(requireAdmin);
 
 // GET /api/admin/ai-cache/statistics
 adminAiCacheRouter.get("/statistics", async (_req, res) => {
@@ -92,13 +94,43 @@ adminAiCacheRouter.get("/", async (req, res) => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page || "1"), 10) || 1);
     const pageSize = Math.max(1, Math.min(200, parseInt(String(req.query.pageSize || "50"), 10) || 50));
+    const searchQuery = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const inputTypeFilter = typeof req.query.inputType === "string" ? req.query.inputType : "";
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : "";
 
     const allRecords = await db
       .select()
       .from(aiFoodKnowledgeCacheTable)
       .where(eq(aiFoodKnowledgeCacheTable.isDeleted, false));
 
-    const sorted = allRecords.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    let filtered = allRecords.map((r) => {
+      const resp = (r.responseJson || {}) as any;
+      const canonicalStatus = resp.status || "unknown";
+      return {
+        ...r,
+        resolvedFoodName: r.canonicalNameAr || resp.nameAr || r.originalQuery,
+        canonicalStatus,
+      };
+    });
+
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (r) =>
+          r.originalQuery.toLowerCase().includes(searchQuery) ||
+          (r.canonicalNameAr && r.canonicalNameAr.toLowerCase().includes(searchQuery)) ||
+          (r.canonicalNameEn && r.canonicalNameEn.toLowerCase().includes(searchQuery))
+      );
+    }
+
+    if (inputTypeFilter && inputTypeFilter !== "all") {
+      filtered = filtered.filter((r) => r.inputType === inputTypeFilter);
+    }
+
+    if (statusFilter && statusFilter !== "all") {
+      filtered = filtered.filter((r) => r.canonicalStatus === statusFilter);
+    }
+
+    const sorted = filtered.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
     const totalItems = sorted.length;
     const totalPages = Math.ceil(totalItems / pageSize) || 1;
@@ -137,9 +169,93 @@ adminAiCacheRouter.get("/:id", async (req, res) => {
       return void res.status(404).json({ success: false, error: "AI cache item not found" });
     }
 
-    res.json({ success: true, item });
+    const resp = (item.responseJson || {}) as any;
+    res.json({
+      success: true,
+      item: {
+        ...item,
+        resolvedFoodName: item.canonicalNameAr || resp.nameAr || item.originalQuery,
+        canonicalStatus: resp.status || "unknown",
+      },
+    });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || "Failed to fetch AI cache item" });
+  }
+});
+
+// POST /api/admin/ai-cache/:id/approve (Admin Review Confirmation Only)
+adminAiCacheRouter.post("/:id/approve", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return void res.status(400).json({ success: false, error: "Invalid cache item ID" });
+    }
+
+    const { notes } = req.body || {};
+    const [existing] = await db
+      .select()
+      .from(aiFoodKnowledgeCacheTable)
+      .where(and(eq(aiFoodKnowledgeCacheTable.id, id), eq(aiFoodKnowledgeCacheTable.isDeleted, false)))
+      .limit(1);
+
+    if (!existing) {
+      return void res.status(404).json({ success: false, error: "AI cache item not found" });
+    }
+
+    const resp = { ...(existing.responseJson as any), adminApproved: true, adminReviewNotes: notes || "Approved by admin" };
+
+    const [updated] = await db
+      .update(aiFoodKnowledgeCacheTable)
+      .set({
+        responseJson: resp,
+        updatedAt: new Date(),
+      })
+      .where(eq(aiFoodKnowledgeCacheTable.id, id))
+      .returning();
+
+    res.json({ success: true, item: updated, message: "AI cache item review approved successfully" });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to approve AI cache item" });
+  }
+});
+
+// PUT /api/admin/ai-cache/:id
+adminAiCacheRouter.put("/:id", async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id)) {
+      return void res.status(400).json({ success: false, error: "Invalid cache item ID" });
+    }
+
+    const { canonicalNameAr, canonicalNameEn, confidence, canonicalStatus, notes } = req.body || {};
+    const [existing] = await db
+      .select()
+      .from(aiFoodKnowledgeCacheTable)
+      .where(and(eq(aiFoodKnowledgeCacheTable.id, id), eq(aiFoodKnowledgeCacheTable.isDeleted, false)))
+      .limit(1);
+
+    if (!existing) {
+      return void res.status(404).json({ success: false, error: "AI cache item not found" });
+    }
+
+    const resp = { ...(existing.responseJson as any) };
+    if (canonicalStatus !== undefined) resp.status = canonicalStatus;
+    if (notes !== undefined) resp.adminReviewNotes = notes;
+
+    const patch: any = { updatedAt: new Date(), responseJson: resp };
+    if (canonicalNameAr !== undefined) patch.canonicalNameAr = canonicalNameAr;
+    if (canonicalNameEn !== undefined) patch.canonicalNameEn = canonicalNameEn;
+    if (confidence !== undefined && typeof confidence === "number") patch.confidence = confidence;
+
+    const [updated] = await db
+      .update(aiFoodKnowledgeCacheTable)
+      .set(patch)
+      .where(eq(aiFoodKnowledgeCacheTable.id, id))
+      .returning();
+
+    res.json({ success: true, item: updated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || "Failed to update AI cache item" });
   }
 });
 

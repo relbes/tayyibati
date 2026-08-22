@@ -9,7 +9,7 @@ import {
   getGetFoodStatsQueryKey,
 } from "@workspace/api-client-react";
 import type { Food, FoodInput } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,7 +67,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { API_BASE, adminHeaders } from "@/lib/api";
+import { API_BASE, adminFetch } from "@/lib/api";
 import { CategorySelect } from "@/components/CategorySelect";
 import { getCanonicalCategory, getCategoryLabel } from "@/lib/categories";
 
@@ -616,13 +616,24 @@ function FoodDialog({
   );
 }
 
+async function fetchFoods(params: { limit: number; offset: number; search?: string; status?: string; category?: string }): Promise<Food[]> {
+  const queryParams = new URLSearchParams({
+    limit: String(params.limit),
+    offset: String(params.offset),
+  });
+  if (params.search) queryParams.append("search", params.search);
+  if (params.status && params.status !== "all") queryParams.append("status", params.status);
+  if (params.category) queryParams.append("category", params.category);
+
+  const res = await adminFetch(`${API_BASE}/api/foods?${queryParams.toString()}`);
+  if (!res.ok) throw new Error("Failed to fetch foods");
+  const data = await res.json();
+  return Array.isArray(data) ? data : (data as any)?.items || (data as any)?.foods || [];
+}
+
 async function bulkDeleteFoods(payload: { ids?: number[]; status?: string }) {
-  const res = await fetch(`${API_BASE}/api/foods/bulk`, {
+  const res = await adminFetch(`${API_BASE}/api/foods/bulk`, {
     method: "DELETE",
-    headers: {
-      "Content-Type": "application/json",
-      ...adminHeaders(),
-    },
     body: JSON.stringify(payload),
   });
 
@@ -648,17 +659,10 @@ export default function Foods() {
   const { lang } = useLang();
   const queryClient = useQueryClient();
 
-  const queryParams = {
-    limit: PAGE_SIZE,
-    offset,
-    ...(search ? { search } : {}),
-    ...(statusFilter !== "all"
-      ? { status: statusFilter as "allowed" | "forbidden" | "conditional" }
-      : {}),
-    ...(categoryFilter ? { category: categoryFilter } : {}),
-  };
-
-  const { data: foods, isLoading } = useListFoods(queryParams);
+  const { data: foodList = [], isLoading } = useQuery({
+    queryKey: ["foods", offset, search, statusFilter, categoryFilter],
+    queryFn: () => fetchFoods({ limit: PAGE_SIZE, offset, search, status: statusFilter, category: categoryFilter }),
+  });
 
   const [isExporting, setIsExporting] = useState(false);
 
@@ -666,9 +670,7 @@ export default function Foods() {
     if (isExporting) return;
     setIsExporting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/admin/export/foods`, {
-        headers: adminHeaders(),
-      });
+      const res = await adminFetch(`${API_BASE}/api/admin/export/foods`);
       if (!res.ok) throw new Error("Failed to export foods CSV");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -703,7 +705,7 @@ export default function Foods() {
   const deleteMutation = useDeleteFood({
     mutation: {
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: getListFoodsQueryKey() });
+        invalidate();
         toast({ title: tr(lang, "foodDeleted") });
         setDeleteTarget(null);
       },
@@ -712,7 +714,7 @@ export default function Foods() {
   });
 
   function invalidate() {
-    queryClient.invalidateQueries({ queryKey: getListFoodsQueryKey() });
+    queryClient.invalidateQueries({ queryKey: ["foods"] });
     queryClient.invalidateQueries({ queryKey: getGetFoodStatsQueryKey() });
   }
 
@@ -732,9 +734,9 @@ export default function Foods() {
   }
 
   const hasPrev = offset > 0;
-  const hasNext = (foods?.length ?? 0) === PAGE_SIZE;
+  const hasNext = foodList.length === PAGE_SIZE;
 
-  const allPageIds = foods?.map((f) => f.id) ?? [];
+  const allPageIds = foodList.map((f) => f.id);
   const allSelected = allPageIds.length > 0 && allPageIds.every((id) => selectedIds.has(id));
   const someSelected = allPageIds.some((id) => selectedIds.has(id));
 
@@ -930,14 +932,14 @@ export default function Foods() {
                       <td className="px-4 py-3"><Skeleton className="h-4 w-16" /></td>
                     </tr>
                   ))
-                ) : foods?.length === 0 ? (
+                ) : foodList.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                       {lang === "ar" ? "لا توجد أطعمة" : "No foods found"}
                     </td>
                   </tr>
                 ) : (
-                  foods?.map((food) => (
+                  foodList.map((food) => (
                     <tr
                       key={food.id}
                       className={cn(
@@ -1008,7 +1010,7 @@ export default function Foods() {
             <p className="text-xs text-muted-foreground">
               {isLoading
                 ? (lang === "ar" ? "جاري التحميل..." : "Loading…")
-                : `${lang === "ar" ? "عرض" : "Showing"} ${offset + 1}–${offset + (foods?.length ?? 0)}`}
+                : `${lang === "ar" ? "عرض" : "Showing"} ${offset + 1}–${offset + foodList.length}`}
             </p>
             <div className="flex gap-2">
               <Button

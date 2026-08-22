@@ -7,7 +7,13 @@ import router from "./routes";
 import privacyRouter from "./routes/privacy";
 import { logger } from "./lib/logger";
 
+import cookieParser from "cookie-parser";
+import { seedInitialAdmin } from "./lib/adminAuth";
+
 const app: Express = express();
+
+// Seed initial local admin account idempotently on app startup
+seedInitialAdmin().catch(console.error);
 
 const isDev = process.env.NODE_ENV !== "production";
 
@@ -104,6 +110,9 @@ app.use(
 );
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use(cookieParser());
+
+app.use("/api/admin/login", authLimiter);
 
 app.use("/api", router);
 app.use("/privacy", privacyRouter);

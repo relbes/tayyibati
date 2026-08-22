@@ -16,7 +16,7 @@ import Users from "@/pages/users";
 import Login from "@/pages/login";
 import { LangProvider, useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { getApiBaseUrl } from "@/lib/api";
+import { adminFetch, API_BASE } from "@/lib/api";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -48,6 +48,7 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
     { path: "/dishes", label: lang === "ar" ? "الأطباق" : "Dishes", icon: Utensils },
     { path: "/knowledge-review", label: lang === "ar" ? "مراجعة المعرفة" : "Knowledge Review", icon: CheckSquare },
     { path: "/ai-review", label: lang === "ar" ? "مراجعة الذكاء الاصطناعي" : "AI Review", icon: Bot },
+    { path: "/history", label: lang === "ar" ? "سجل البحث" : "Search History", icon: HistoryIcon },
     { path: "/users", label: tr(lang, "users"), icon: UsersIcon },
     { path: "/subscription-plans", label: lang === "ar" ? "باقات الاشتراك" : "Subscription Plans", icon: Star },
     { path: "/settings", label: tr(lang, "settings"), icon: SettingsIcon },
@@ -166,36 +167,45 @@ function Layout({ onLogout }: { onLogout: () => void }) {
   );
 }
 
-
-
-async function verifyToken(token: string): Promise<boolean> {
+async function verifyAdminSession(): Promise<any | null> {
   try {
-    const res = await fetch(`${getApiBaseUrl()}/api/admin/me`, { headers: { Authorization: `Bearer ${token}` } });
-    return res.ok;
+    const res = await adminFetch(`${API_BASE}/api/admin/me`);
+    if (res.ok) {
+      const data = await res.json();
+      return data.authenticated ? data.admin : null;
+    }
+    return null;
   } catch {
-    return false;
+    return null;
   }
 }
 
 function App() {
-  const [token, setToken] = useState<string | null>(null);
+  const [adminUser, setAdminUser] = useState<any | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    const stored = localStorage.getItem("tayyibati_admin_token");
-    if (!stored) { setChecking(false); return; }
-    verifyToken(stored).then((valid) => {
-      if (valid) setToken(stored);
-      else localStorage.removeItem("tayyibati_admin_token");
+    localStorage.removeItem("tayyibati_admin_token");
+
+    verifyAdminSession().then((user) => {
+      setAdminUser(user);
       setChecking(false);
     });
   }, []);
 
-  const handleLogin = useCallback((t: string) => { setToken(t); }, []);
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem("tayyibati_admin_token");
-    setToken(null);
-    queryClient.clear();
+  const handleLoginSuccess = useCallback((user: any) => {
+    setAdminUser(user);
+  }, []);
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await adminFetch(`${API_BASE}/api/admin/logout`, { method: "POST" });
+    } catch (err) {
+      console.error("Logout error:", err);
+    } finally {
+      setAdminUser(null);
+      queryClient.clear();
+    }
   }, []);
 
   if (checking) {
@@ -206,12 +216,12 @@ function App() {
     );
   }
 
-  if (!token) {
+  if (!adminUser) {
     return (
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           <LangProvider>
-            <Login onLogin={handleLogin} />
+            <Login onLoginSuccess={handleLoginSuccess} />
           </LangProvider>
           <Toaster />
         </TooltipProvider>
@@ -223,9 +233,9 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <LangProvider>
-         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
-  <Layout onLogout={handleLogout} />
-</WouterRouter>
+          <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
+            <Layout onLogout={handleLogout} />
+          </WouterRouter>
         </LangProvider>
         <Toaster />
       </TooltipProvider>

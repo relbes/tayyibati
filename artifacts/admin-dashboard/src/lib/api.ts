@@ -8,15 +8,18 @@ export const getApiBaseUrl = (): string => {
 export const API_BASE = getApiBaseUrl();
 
 export function adminHeaders(): Record<string, string> {
-  const token = localStorage.getItem("tayyibati_admin_token");
-
-  const headers: Record<string, string> = {
+  return {
     "Content-Type": "application/json",
   };
+}
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
-  }
-
-  return headers;
+export function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  return fetch(url, {
+    ...options,
+    credentials: "include",
+    headers: {
+      ...adminHeaders(),
+      ...(options.headers || {}),
+    },
+  });
 }

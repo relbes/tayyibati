@@ -10,6 +10,7 @@ export * from "./products";
 export * from "./searchSynonyms";
 export * from "./knowledgeReview";
 export * from "./aiCache";
+export * from "./adminUsers";
 
 
 

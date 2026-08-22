@@ -315,3 +315,27 @@ export async function mergeReviewItem(id: number, canonicalFoodId: number, notes
     .returning();
   return updated;
 }
+
+export async function updateReviewItem(id: number, fields: { ingredientName?: string; reviewNotes?: string; status?: "pending" | "approved" | "rejected" | "merged"; aiConfidence?: number; canonicalFoodId?: number | null }) {
+  const patch: any = { lastSeenAt: new Date() };
+  if (fields.ingredientName !== undefined) patch.ingredientName = fields.ingredientName;
+  if (fields.reviewNotes !== undefined) patch.reviewNotes = fields.reviewNotes;
+  if (fields.status !== undefined) patch.status = fields.status;
+  if (fields.aiConfidence !== undefined) patch.aiConfidence = fields.aiConfidence;
+  if (fields.canonicalFoodId !== undefined) patch.canonicalFoodId = fields.canonicalFoodId;
+
+  const [updated] = await db
+    .update(pendingKnowledgeReviewsTable)
+    .set(patch)
+    .where(eq(pendingKnowledgeReviewsTable.id, id))
+    .returning();
+  return updated;
+}
+
+export async function deleteReviewItem(id: number) {
+  const [deleted] = await db
+    .delete(pendingKnowledgeReviewsTable)
+    .where(eq(pendingKnowledgeReviewsTable.id, id))
+    .returning();
+  return deleted;
+}

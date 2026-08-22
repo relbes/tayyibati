@@ -42,7 +42,7 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { useLang } from "@/contexts/LangContext";
-import { API_BASE, adminHeaders } from "@/lib/api";
+import { API_BASE, adminFetch } from "@/lib/api";
 
 const PAGE_SIZE = 50;
 
@@ -91,9 +91,7 @@ export default function DishesPage() {
       if (search) queryParams.append("search", search);
       if (categoryFilter && categoryFilter !== "all") queryParams.append("category", categoryFilter);
 
-      const res = await fetch(`${API_BASE}/api/dishes?${queryParams}`, {
-        headers: adminHeaders(),
-      });
+      const res = await adminFetch(`${API_BASE}/api/dishes?${queryParams}`);
       const data = await res.json();
       if (data.success) {
         setItems(data.items || []);
@@ -152,9 +150,8 @@ export default function DishesPage() {
       const url = editingDish ? `${API_BASE}/api/dishes/${editingDish.id}` : `${API_BASE}/api/dishes`;
       const method = editingDish ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await adminFetch(url, {
         method,
-        headers: adminHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -180,9 +177,8 @@ export default function DishesPage() {
     if (!deleteDish) return;
     setIsSubmitting(true);
     try {
-      const res = await fetch(`${API_BASE}/api/dishes/${deleteDish.id}`, {
+      const res = await adminFetch(`${API_BASE}/api/dishes/${deleteDish.id}`, {
         method: "DELETE",
-        headers: adminHeaders(),
       });
       const data = await res.json();
       if (data.success) {

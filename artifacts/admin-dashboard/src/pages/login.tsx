@@ -1,96 +1,92 @@
-import { API_BASE } from "@/lib/api";
+import { API_BASE, adminFetch } from "@/lib/api";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff, Lock } from "lucide-react";
+import { Eye, EyeOff, Lock, User } from "lucide-react";
 
 interface LoginProps {
-  onLogin: (token: string) => void;
+  onLoginSuccess: (admin: any) => void;
 }
 
-export default function Login({ onLogin }: LoginProps) {
+export default function Login({ onLoginSuccess }: LoginProps) {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-async function handleSubmit(e: React.FormEvent) {
-  e.preventDefault();
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
 
-  if (!password.trim()) return;
+    if (!username.trim() || !password.trim()) return;
 
-  setLoading(true);
-  setError(null);
+    setLoading(true);
+    setError(null);
 
-  try {
-    console.log("API =", API_BASE);
+    try {
+      const res = await adminFetch(`${API_BASE}/api/admin/login`, {
+        method: "POST",
+        body: JSON.stringify({ username, password }),
+      });
 
-const res = await fetch(`${API_BASE}/api/admin/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ password }),
-    });
+      const body = await res.json();
 
-    console.log("status =", res.status);
+      if (!res.ok || !body.success) {
+        setError(body.error || "بيانات تسجيل الدخول غير صحيحة");
+        return;
+      }
 
-    const text = await res.text();
-
-    console.log("response text =", text);
-
-    const body = JSON.parse(text);
-
-    console.log("parsed =", body);
-
-    if (!res.ok) {
-      setError(body.error || "فشل تسجيل الدخول");
-      return;
+      onLoginSuccess(body.admin);
+    } catch (err) {
+      console.error("Login error:", err);
+      setError("تعذّر الوصول إلى الخادم");
+    } finally {
+      setLoading(false);
     }
-
-    console.log("token =", body.token);
-
-    localStorage.setItem("tayyibati_admin_token", body.token);
-
-    console.log("saved");
-
-    onLogin(body.token);
-
-    console.log("done");
-  } catch (err) {
-    console.error(err);
-    setError("تعذّر الوصول إلى الخادم");
-  } finally {
-    setLoading(false);
   }
-}
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 dir-rtl">
       <div className="w-full max-w-sm space-y-6">
-        <div className="flex flex-col items-center gap-2">
+        <div className="flex flex-col items-center gap-2 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
             <span className="text-primary-foreground font-bold text-xl">ط</span>
           </div>
           <h1 className="text-2xl font-bold">طيباتي Admin</h1>
-          <p className="text-sm text-muted-foreground">سجّل دخولك للوصول إلى لوحة التحكم</p>
+          <p className="text-sm text-muted-foreground">تسجيل دخول لوحة التحكم</p>
         </div>
 
         <Card>
           <CardHeader className="pb-4">
             <CardTitle className="text-base flex items-center gap-2">
               <Lock className="h-4 w-4" />
-              تسجيل الدخول
+              تسجيل دخول لوحة التحكم
             </CardTitle>
             <CardDescription>
-              أدخل كلمة المرور للمتابعة.
+              أدخل اسم المستخدم وكلمة المرور للمتابعة.
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
+              <div className="space-y-2 text-right">
+                <Label htmlFor="username">اسم المستخدم أو البريد الإلكتروني</Label>
+                <div className="relative">
+                  <Input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="أدخل اسم المستخدم أو البريد"
+                    className="pr-9"
+                    autoFocus
+                  />
+                  <User className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                </div>
+              </div>
+
+              <div className="space-y-2 text-right">
                 <Label htmlFor="password">كلمة المرور</Label>
                 <div className="relative">
                   <Input
@@ -100,7 +96,6 @@ const res = await fetch(`${API_BASE}/api/admin/login`, {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="أدخل كلمة المرور"
                     className="pl-10"
-                    autoFocus
                   />
                   <button
                     type="button"
@@ -114,13 +109,13 @@ const res = await fetch(`${API_BASE}/api/admin/login`, {
               </div>
 
               {error && (
-                <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+                <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive text-center">
                   {error}
                 </div>
               )}
 
-              <Button type="submit" className="w-full" disabled={!password.trim() || loading}>
-                {loading ? "جارٍ الدخول…" : "دخول"}
+              <Button type="submit" className="w-full" disabled={!username.trim() || !password.trim() || loading}>
+                {loading ? "جاري تسجيل الدخول..." : "تسجيل الدخول"}
               </Button>
             </form>
           </CardContent>
