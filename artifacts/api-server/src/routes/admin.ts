@@ -3,7 +3,7 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { db, adminUsersTable, type AdminUser, analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable, dishes, pendingKnowledgeReviewsTable, aiFoodKnowledgeCacheTable } from "@workspace/db";
 import { desc, sql, count, avg, eq, and, or, inArray } from "drizzle-orm";
 import { getUserPlanLimits } from "./analysis";
-import { comparePassword, createAdminSession, destroyAdminSession, getAdminSession } from "../lib/adminAuth";
+import { comparePassword, createAdminSession, destroyAdminSession, getAdminSession, hashPassword, invalidateAllAdminSessions } from "../lib/adminAuth";
 
 const router = Router();
 
@@ -100,6 +100,70 @@ router.get("/admin/me", requireAdmin, (req, res) => {
       role: admin.role,
     },
   });
+});
+
+router.post("/admin/change-password", requireAdmin, async (req, res) => {
+  try {
+    const adminUser = (req as any).adminUser as AdminUser;
+    const { currentPassword, newPassword, confirmPassword } = (req.body || {}) as {
+      currentPassword?: string;
+      newPassword?: string;
+      confirmPassword?: string;
+    };
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return void res.status(400).json({ error: "جميع حقول كلمة المرور مطلوبة" });
+    }
+
+    const users = await db
+      .select()
+      .from(adminUsersTable)
+      .where(eq(adminUsersTable.id, adminUser.id))
+      .limit(1);
+
+    if (users.length === 0 || !users[0].isActive) {
+      return void res.status(401).json({ error: "الحساب غير نشط أو غير موجود" });
+    }
+
+    const currentAdmin = users[0];
+
+    const validCurrent = await comparePassword(currentPassword, currentAdmin.passwordHash);
+    if (!validCurrent) {
+      return void res.status(401).json({ error: "كلمة المرور الحالية غير صحيحة" });
+    }
+
+    if (newPassword.length < 10) {
+      return void res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تحتوي على 10 أحرف على الأقل" });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return void res.status(400).json({ error: "كلمة المرور الجديدة وتأكيدها غير متطابقين" });
+    }
+
+    if (newPassword === currentPassword) {
+      return void res.status(400).json({ error: "كلمة المرور الجديدة يجب أن تكون مختلفة عن كلمة المرور الحالية" });
+    }
+
+    const newHash = await hashPassword(newPassword);
+
+    await db
+      .update(adminUsersTable)
+      .set({
+        passwordHash: newHash,
+        updatedAt: new Date(),
+      })
+      .where(eq(adminUsersTable.id, currentAdmin.id));
+
+    await invalidateAllAdminSessions(currentAdmin.id, res);
+
+    res.json({
+      success: true,
+      message: "تم تغيير كلمة المرور بنجاح. تم إنهاء كافة الجلسات النشطة، يرجى تسجيل الدخول مجدداً.",
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to change admin password");
+    res.status(500).json({ error: "تعذّر تغيير كلمة المرور" });
+  }
 });
 
 router.get("/admin/history", requireAdmin, async (req, res) => {

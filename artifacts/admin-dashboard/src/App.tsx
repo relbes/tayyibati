@@ -1,4 +1,4 @@
-import { Switch, Route, Router as WouterRouter, Link, useLocation } from "wouter";
+import { Switch, Route, Router as WouterRouter, Link, useLocation, Redirect } from "wouter";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -151,6 +151,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
         <main className="flex-1 overflow-y-auto">
           <Switch>
             <Route path="/" component={Overview} />
+            <Route path="/login">{() => <Redirect to="/" />}</Route>
             <Route path="/foods" component={Foods} />
             <Route path="/dishes" component={Dishes} />
             <Route path="/knowledge-review" component={KnowledgeReview} />
@@ -194,6 +195,9 @@ function App() {
   }, []);
 
   const handleLoginSuccess = useCallback((user: any) => {
+    if (window.location.pathname === "/login") {
+      window.history.replaceState(null, "", "/");
+    }
     setAdminUser(user);
   }, []);
 
@@ -203,6 +207,9 @@ function App() {
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
+      if (window.location.pathname !== "/login") {
+        window.history.replaceState(null, "", "/login");
+      }
       setAdminUser(null);
       queryClient.clear();
     }

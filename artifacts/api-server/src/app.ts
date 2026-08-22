@@ -37,13 +37,36 @@ app.use(
   }),
 );
 
-const allowedOrigins = process.env.ALLOWED_ORIGINS
+const defaultDevOrigins = [
+  "http://localhost:22133",
+  "http://127.0.0.1:22133",
+  "http://localhost:5000",
+  "http://127.0.0.1:5000",
+];
+
+const allowedOriginsList = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(",").map((o) => o.trim())
-  : undefined;
+  : [];
 
 app.use(
   cors({
-    origin: allowedOrigins ?? true,
+    origin: (origin, callback) => {
+      if (!origin) return callback(null, true);
+
+      if (
+        allowedOriginsList.includes(origin) ||
+        defaultDevOrigins.includes(origin) ||
+        (isDev && (origin.startsWith("http://localhost:") || origin.startsWith("http://127.0.0.1:")))
+      ) {
+        return callback(null, true);
+      }
+
+      if (allowedOriginsList.length === 0) {
+        return callback(null, true);
+      }
+
+      callback(null, false);
+    },
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
     credentials: true,

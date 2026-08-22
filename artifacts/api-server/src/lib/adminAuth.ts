@@ -85,6 +85,16 @@ export async function destroyAdminSession(req: Request, res: Response): Promise<
   res.clearCookie(COOKIE_NAME, { path: "/" });
 }
 
+/**
+ * Invalidates all active sessions for a specific admin user (e.g. after password change).
+ */
+export async function invalidateAllAdminSessions(adminUserId: string, res?: Response): Promise<void> {
+  await db.delete(adminSessionsTable).where(eq(adminSessionsTable.adminUserId, adminUserId));
+  if (res) {
+    res.clearCookie(COOKIE_NAME, { path: "/" });
+  }
+}
+
 function getSessionIdFromRequest(req: Request): string | null {
   if (req.cookies && req.cookies[COOKIE_NAME]) {
     return req.cookies[COOKIE_NAME];

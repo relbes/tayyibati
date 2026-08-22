@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { setBaseUrl, useHealthCheck } from "@workspace/api-client-react";
+import { useState, useEffect, useCallback } from "react";
+import { setBaseUrl } from "@workspace/api-client-react";
 import { useQueryClient, useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles, Palette } from "lucide-react";
+import { CheckCircle, XCircle, RefreshCw, Globe, Trash2, Shield, Info, Eye, EyeOff, Key, Sparkles, Palette, AlertCircle } from "lucide-react";
 
 import { getApiBaseUrl, adminFetch } from "@/lib/api";
 
@@ -61,6 +61,246 @@ function Toggle({ enabled, onChange, label, desc }: { enabled: boolean; onChange
   );
 }
 
+function ChangeAdminPasswordCard({ isAr }: { isAr: boolean }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const getStrength = (pwd: string) => {
+    if (!pwd) return 0;
+    let score = 0;
+    if (pwd.length >= 10) score += 1;
+    if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+    return score;
+  };
+
+  const strength = getStrength(newPassword);
+
+  const getStrengthLabel = (score: number) => {
+    if (score === 0) return { label: isAr ? "غير مدخلة" : "None", color: "bg-muted" };
+    if (score <= 1) return { label: isAr ? "ضعيفة (10 أحرف مطلوب)" : "Weak (min 10 chars)", color: "bg-red-500" };
+    if (score <= 2) return { label: isAr ? "متوسطة" : "Medium", color: "bg-amber-500" };
+    if (score <= 3) return { label: isAr ? "جيدة" : "Good", color: "bg-blue-500" };
+    return { label: isAr ? "قوية جداً" : "Strong", color: "bg-emerald-500" };
+  };
+
+  const strengthInfo = getStrengthLabel(strength);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setErrorMessage(isAr ? "جميع الحقول مطلوبة" : "All password fields are required");
+      return;
+    }
+
+    if (newPassword.length < 10) {
+      setErrorMessage(isAr ? "كلمة المرور الجديدة يجب أن تحتوي على 10 أحرف على الأقل" : "New password must be at least 10 characters long");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setErrorMessage(isAr ? "كلمة المرور الجديدة وتأكيدها غير متطابقين" : "New password and confirmation do not match");
+      return;
+    }
+
+    if (newPassword === currentPassword) {
+      setErrorMessage(isAr ? "كلمة المرور الجديدة يجب أن تكون مختلفة عن الحالية" : "New password must be different from current password");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const res = await adminFetch(`${API_BASE()}/api/admin/change-password`, {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword,
+          newPassword,
+          confirmPassword,
+        }),
+      });
+
+      const contentType = res.headers.get("content-type") || "";
+      let data: any = {};
+
+      if (contentType.includes("application/json")) {
+        data = await res.json();
+      } else {
+        throw new Error(
+          isAr
+            ? "تعذر الاتصال بخادم الإدارة (استجابة غير متوقعة من الخادم)"
+            : "Admin server returned an unexpected response"
+        );
+      }
+
+      if (!res.ok) {
+        throw new Error(data.error || (isAr ? "فشل تغيير كلمة المرور" : "Failed to change password"));
+      }
+
+      toast({
+        title: isAr ? "تم تغيير كلمة المرور بنجاح" : "Password Changed Successfully",
+        description: isAr ? "تم إنهاء الجلسة، يرجى تسجيل الدخول مجدداً." : "All sessions invalidated. Please log in again.",
+      });
+
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+
+      setTimeout(() => {
+        window.location.href = "/login";
+      }, 1000);
+    } catch (err: any) {
+      setErrorMessage(err.message);
+      toast({
+        title: isAr ? "خطأ في تغيير كلمة المرور" : "Password Change Failed",
+        description: err.message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Card className="border-border/80">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <Shield className="h-4 w-4 text-primary" />
+          {isAr ? "تغيير كلمة مرور المدير" : "Change Admin Password"}
+        </CardTitle>
+        <CardDescription>
+          {isAr
+            ? "قم بتحديث كلمة مرور حساب المدير الخاص بك. سيؤدي هذا الإجراء إلى إنهاء كافة الجلسات النشطة المطابقة."
+            : "Update your admin account password. This will invalidate all existing active sessions."}
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {errorMessage && (
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-600 dark:text-red-400 text-sm flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
+
+          <div className="space-y-1.5">
+            <Label htmlFor="current-pwd">{isAr ? "كلمة المرور الحالية" : "Current Password"}</Label>
+            <div className="relative">
+              <Input
+                id="current-pwd"
+                type={showCurrent ? "text" : "password"}
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                className="pr-10 font-mono text-sm"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowCurrent((v) => !v)}
+                tabIndex={-1}
+              >
+                {showCurrent ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="new-pwd">{isAr ? "كلمة المرور الجديدة" : "New Password"}</Label>
+            <div className="relative">
+              <Input
+                id="new-pwd"
+                type={showNew ? "text" : "password"}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                className="pr-10 font-mono text-sm"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowNew((v) => !v)}
+                tabIndex={-1}
+              >
+                {showNew ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {newPassword && (
+              <div className="space-y-1 pt-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{isAr ? "قوة كلمة المرور:" : "Strength:"}</span>
+                  <span className="font-semibold">{strengthInfo.label}</span>
+                </div>
+                <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden flex gap-1">
+                  {[1, 2, 3, 4].map((step) => (
+                    <div
+                      key={step}
+                      className={`h-full flex-1 transition-all ${
+                        strength >= step ? strengthInfo.color : "bg-transparent"
+                      }`}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-pwd">{isAr ? "تأكيد كلمة المرور الجديدة" : "Confirm New Password"}</Label>
+            <div className="relative">
+              <Input
+                id="confirm-pwd"
+                type={showConfirm ? "text" : "password"}
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="••••••••••••"
+                required
+                className="pr-10 font-mono text-sm"
+              />
+              <button
+                type="button"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => setShowConfirm((v) => !v)}
+                tabIndex={-1}
+              >
+                {showConfirm ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
+          </div>
+
+          <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto gap-2">
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="h-4 w-4 animate-spin" />
+                {isAr ? "جاري الحفظ..." : "Saving..."}
+              </>
+            ) : (
+              <>
+                <Key className="h-4 w-4" />
+                {isAr ? "حفظ كلمة المرور الجديدة" : "Save New Password"}
+              </>
+            )}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function Settings() {
   const [apiUrl, setApiUrl] = useState("");
   const [saved, setSaved] = useState(false);
@@ -74,7 +314,150 @@ export default function Settings() {
     setSaved(!!stored);
   }, []);
 
-  const { data: health, isLoading: checking, refetch, isError } = useHealthCheck();
+  const [healthState, setHealthState] = useState<{
+    status: "idle" | "checking" | "online" | "warning" | "notFound" | "unreachable";
+    message: string;
+    detail?: string;
+    statusCode?: number;
+  }>({
+    status: "idle",
+    message: lang === "ar" ? "اضغط على اختبار لفحص الاتصال" : "Click Test to check connection status",
+  });
+
+  const runHealthTest = useCallback(async (customInputUrl?: string) => {
+    setHealthState((prev) => ({
+      ...prev,
+      status: "checking",
+      message: lang === "ar" ? "جاري فحص الاتصال..." : "Testing connection...",
+      detail: undefined,
+    }));
+
+    let raw = (customInputUrl !== undefined ? customInputUrl : (localStorage.getItem(STORAGE_KEY) || "")).trim();
+    let healthUrl: string;
+    let healthzUrl: string;
+
+    if (!raw) {
+      const base = getApiBaseUrl().replace(/\/+$/, "");
+      if (!base || base.startsWith("/")) {
+        healthUrl = "/api/health";
+        healthzUrl = "/api/healthz";
+      } else if (base.endsWith("/api")) {
+        healthUrl = `${base}/health`;
+        healthzUrl = `${base}/healthz`;
+      } else {
+        healthUrl = `${base}/api/health`;
+        healthzUrl = `${base}/api/healthz`;
+      }
+    } else {
+      const clean = raw.replace(/\/+$/, "");
+      if (clean.endsWith("/api")) {
+        healthUrl = `${clean}/health`;
+        healthzUrl = `${clean}/healthz`;
+      } else {
+        healthUrl = `${clean}/api/health`;
+        healthzUrl = `${clean}/api/healthz`;
+      }
+    }
+
+    const tryFetch = async (url: string) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      try {
+        const res = await fetch(url, { method: "GET", signal: controller.signal });
+        clearTimeout(timer);
+        return res;
+      } catch (err) {
+        clearTimeout(timer);
+        throw err;
+      }
+    };
+
+    let res: Response | null = null;
+    let fetchError: any = null;
+
+    try {
+      res = await tryFetch(healthUrl);
+    } catch (err: any) {
+      fetchError = err;
+    }
+
+    if (!res || res.status === 404) {
+      try {
+        const resFallback = await tryFetch(healthzUrl);
+        if (resFallback.ok || resFallback.status !== 404) {
+          res = resFallback;
+          fetchError = null;
+        }
+      } catch (fallbackErr) {
+        if (!fetchError) fetchError = fallbackErr;
+      }
+    }
+
+    if (res) {
+      if (res.status === 200) {
+        setHealthState({
+          status: "online",
+          message: lang === "ar" ? "خادم API متصل ويعمل بشكل سليم" : "API server is online",
+          statusCode: 200,
+        });
+        return;
+      } else if (res.status === 401 || res.status === 403) {
+        setHealthState({
+          status: "warning",
+          message: lang === "ar"
+            ? "خادم API متصل لكن يتطلب المصادقة"
+            : "API server is reachable but authentication is required",
+          statusCode: res.status,
+        });
+        return;
+      } else if (res.status === 404) {
+        setHealthState({
+          status: "notFound",
+          message: lang === "ar"
+            ? "خادم API متصل ولكن لم يتم العثور على نقطة فحص الصحة"
+            : "API server is reachable but health endpoint was not found",
+          statusCode: 404,
+        });
+        return;
+      } else {
+        setHealthState({
+          status: "warning",
+          message: lang === "ar"
+            ? `استجاب الخادم بالحالة HTTP ${res.status}`
+            : `API responded with HTTP ${res.status}`,
+          statusCode: res.status,
+        });
+        return;
+      }
+    }
+
+    if (fetchError) {
+      const isTimeout = fetchError.name === "AbortError";
+      const isCorsOrTypeError = fetchError instanceof TypeError || fetchError.name === "TypeError";
+      const detailMsg = isTimeout
+        ? (lang === "ar" ? "انتهت مهلة الطلب (لم يستجب الخادم خلال 6 ثوانٍ)" : "Request timed out after 6 seconds")
+        : isCorsOrTypeError
+        ? (lang === "ar" ? "قيود CORS أو حجب شبكي (Failed to fetch)" : "CORS restriction or network block (TypeError: Failed to fetch)")
+        : fetchError.message || String(fetchError);
+
+      setHealthState({
+        status: "unreachable",
+        message: lang === "ar" ? "تعذر الوصول إلى خادم API" : "Unable to reach API server",
+        detail: detailMsg,
+      });
+      return;
+    }
+
+    setHealthState({
+      status: "unreachable",
+      message: lang === "ar" ? "تعذر الوصول إلى خادم API" : "Unable to reach API server",
+    });
+  }, [lang]);
+
+  useEffect(() => {
+    runHealthTest();
+  }, [runHealthTest]);
+
   const { data: configRows = [] } = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 
   const patchMut = useMutation({
@@ -151,7 +534,7 @@ export default function Settings() {
     setSaved(!!trimmed);
     queryClient.clear();
     toast({ title: "Settings saved", description: "API URL updated." });
-    setTimeout(() => refetch(), 300);
+    setTimeout(() => runHealthTest(trimmed), 300);
   }
 
   function handleClear() {
@@ -161,9 +544,8 @@ export default function Settings() {
     setSaved(false);
     queryClient.clear();
     toast({ title: "Cleared", description: "Using default relative API path." });
+    setTimeout(() => runHealthTest(""), 300);
   }
-
-  const isConnected = !!health?.status;
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
@@ -173,6 +555,9 @@ export default function Settings() {
           {lang === "ar" ? "إعداد API الطيباتي وميزات التطبيق" : "Configure the Tayyibati API and app features"}
         </p>
       </div>
+
+      {/* Change Admin Password */}
+      <ChangeAdminPasswordCard isAr={lang === "ar"} />
 
       {/* API Connection */}
       <Card>
@@ -209,23 +594,59 @@ export default function Settings() {
           </div>
 
           <div className="flex items-center gap-3 rounded-lg border p-4 bg-muted/30">
-            <div className="flex-1">
-              <p className="text-sm font-medium">Connection Status</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {checking ? "Checking…" : isConnected ? "API server is reachable" : "Unable to reach API server"}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-0.5">
+                <p className="text-sm font-medium">{lang === "ar" ? "حالة الاتصال بالخادم" : "Connection Status"}</p>
+                {healthState.status === "online" && (
+                  <Badge className="bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20 text-xs">
+                    200 OK
+                  </Badge>
+                )}
+                {healthState.status === "warning" && (
+                  <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20 text-xs">
+                    HTTP {healthState.statusCode}
+                  </Badge>
+                )}
+                {healthState.status === "notFound" && (
+                  <Badge className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20 text-xs">
+                    HTTP 404
+                  </Badge>
+                )}
+                {healthState.status === "unreachable" && (
+                  <Badge variant="destructive" className="text-xs">
+                    {lang === "ar" ? "غير متصل" : "Offline / Blocked"}
+                  </Badge>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground truncate">
+                {healthState.message}
               </p>
+              {healthState.detail && (
+                <p className="text-[11px] text-destructive/80 font-mono mt-1 truncate">
+                  {healthState.detail}
+                </p>
+              )}
             </div>
-            <div className="flex items-center gap-2">
-              {checking ? (
+            <div className="flex items-center gap-2 shrink-0">
+              {healthState.status === "checking" ? (
                 <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
-              ) : isConnected ? (
-                <CheckCircle className="h-5 w-5 text-green-600" />
+              ) : healthState.status === "online" ? (
+                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+              ) : healthState.status === "warning" ? (
+                <AlertCircle className="h-5 w-5 text-amber-500" />
+              ) : healthState.status === "notFound" ? (
+                <AlertCircle className="h-5 w-5 text-orange-500" />
               ) : (
                 <XCircle className="h-5 w-5 text-destructive" />
               )}
-              <Button variant="outline" size="sm" onClick={() => refetch()} disabled={checking}>
-                <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                Test
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => runHealthTest(apiUrl)}
+                disabled={healthState.status === "checking"}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${healthState.status === "checking" ? "animate-spin" : ""}`} />
+                {lang === "ar" ? "اختبار" : "Test"}
               </Button>
             </div>
           </div>
