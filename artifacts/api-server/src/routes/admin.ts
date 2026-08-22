@@ -225,6 +225,216 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
   }
 });
 
+router.get("/admin/dashboard", requireAdmin, async (req, res) => {
+  try {
+    const range = typeof req.query.range === "string" ? req.query.range : "7d";
+    let days = 7;
+    if (range === "30d") days = 30;
+    else if (range === "90d") days = 90;
+
+    const startDate = new Date();
+    startDate.setDate(startDate.getDate() - days);
+    const startDateStr = startDate.toISOString();
+
+    const [[userCount], [newUsersCount], [premiumUserCount], [totals], [todayCount], [foodCount], [dishCount]] = await Promise.all([
+      db.select({ c: count() }).from(usersTable),
+      db.select({ c: count() }).from(usersTable).where(sql`${usersTable.createdAt} >= ${startDateStr}`),
+      db.select({ c: count() }).from(usersTable).where(eq(usersTable.isPremium, true)),
+      db.select({
+        totalAnalyses: count(analysisHistoryTable.id),
+        avgScore: avg(analysisHistoryTable.compatibilityScore),
+        textAnalyses: sql<number>`cast(sum(case when ${analysisHistoryTable.analysisType} = 'text' then 1 else 0 end) as int)`,
+        imageAnalyses: sql<number>`cast(sum(case when ${analysisHistoryTable.analysisType} = 'image' then 1 else 0 end) as int)`,
+        labelAnalyses: sql<number>`cast(sum(case when ${analysisHistoryTable.analysisType} = 'label' then 1 else 0 end) as int)`,
+      }).from(analysisHistoryTable),
+      db.select({ c: count() }).from(analysisHistoryTable).where(sql`date_trunc('day', ${analysisHistoryTable.createdAt}) = date_trunc('day', now())`),
+      db.select({ c: count() }).from(foodsTable),
+      db.select({ c: count() }).from(dishes),
+    ]);
+
+    const dailyRegistrations = await db
+      .select({
+        date: sql<string>`to_char(date_trunc('day', ${usersTable.createdAt}), 'YYYY-MM-DD')`,
+        count: sql<number>`cast(count(*) as int)`,
+      })
+      .from(usersTable)
+      .where(sql`${usersTable.createdAt} >= now() - interval '${sql.raw(days + " days")}'`)
+      .groupBy(sql`date_trunc('day', ${usersTable.createdAt})`)
+      .orderBy(sql`date_trunc('day', ${usersTable.createdAt})`);
+
+    const freeUsers = Math.max(0, (userCount?.c ?? 0) - (premiumUserCount?.c ?? 0));
+
+    const plansRows = await db
+      .select({
+        planId: usersTable.planId,
+        userCount: sql<number>`cast(count(*) as int)`,
+      })
+      .from(usersTable)
+      .groupBy(usersTable.planId);
+
+    const plansList = await db.select({ id: subscriptionPlansTable.id, name: subscriptionPlansTable.name, nameEn: subscriptionPlansTable.nameEn }).from(subscriptionPlansTable);
+    const planNameMap = new Map(plansList.map((p) => [p.id, p.name]));
+    const planDistribution = plansRows.map((r) => ({
+      planName: r.planId ? planNameMap.get(r.planId) || `Plan #${r.planId}` : "الخطة المجانية",
+      userCount: r.userCount,
+    }));
+
+    const dailyAnalyses = await db
+      .select({
+        date: sql<string>`to_char(date_trunc('day', ${analysisHistoryTable.createdAt}), 'YYYY-MM-DD')`,
+        total: sql<number>`cast(count(*) as int)`,
+        text: sql<number>`cast(sum(case when ${analysisHistoryTable.analysisType} = 'text' then 1 else 0 end) as int)`,
+        image: sql<number>`cast(sum(case when ${analysisHistoryTable.analysisType} = 'image' then 1 else 0 end) as int)`,
+        label: sql<number>`cast(sum(case when ${analysisHistoryTable.analysisType} = 'label' then 1 else 0 end) as int)`,
+      })
+      .from(analysisHistoryTable)
+      .where(sql`${analysisHistoryTable.createdAt} >= now() - interval '${sql.raw(days + " days")}'`)
+      .groupBy(sql`date_trunc('day', ${analysisHistoryTable.createdAt})`)
+      .orderBy(sql`date_trunc('day', ${analysisHistoryTable.createdAt})`);
+
+    const scoreBuckets = [
+      { range: "0–20", min: 0, max: 20 },
+      { range: "21–40", min: 21, max: 40 },
+      { range: "41–60", min: 41, max: 60 },
+      { range: "61–80", min: 61, max: 80 },
+      { range: "81–100", min: 81, max: 100 },
+    ];
+
+    const scoreDistribution = await Promise.all(
+      scoreBuckets.map(async (b) => {
+        const [row] = await db
+          .select({ count: sql<number>`cast(count(*) as int)` })
+          .from(analysisHistoryTable)
+          .where(sql`${analysisHistoryTable.compatibilityScore} >= ${b.min} and ${analysisHistoryTable.compatibilityScore} <= ${b.max}`);
+        return { range: b.range, count: row?.count ?? 0 };
+      })
+    );
+
+    const popularSearches = await db
+      .select({
+        query: analysisHistoryTable.query,
+        count: sql<number>`cast(count(*) as int)`,
+      })
+      .from(analysisHistoryTable)
+      .groupBy(analysisHistoryTable.query)
+      .orderBy(sql`count(*) desc`)
+      .limit(10);
+
+    const [knowledgeStatusCounts, [cacheStats]] = await Promise.all([
+      db
+        .select({
+          status: pendingKnowledgeReviewsTable.status,
+          count: sql<number>`cast(count(*) as int)`,
+        })
+        .from(pendingKnowledgeReviewsTable)
+        .groupBy(pendingKnowledgeReviewsTable.status),
+      db
+        .select({
+          totalEntries: sql<number>`cast(count(*) as int)`,
+          totalHits: sql<number>`cast(coalesce(sum(${aiFoodKnowledgeCacheTable.hitCount}), 0) as int)`,
+          avgConfidence: sql<number>`coalesce(avg(${aiFoodKnowledgeCacheTable.confidence}), 0)`,
+        })
+        .from(aiFoodKnowledgeCacheTable)
+        .where(eq(aiFoodKnowledgeCacheTable.isDeleted, false)),
+    ]);
+
+    const knowledgeStatusMap = new Map(knowledgeStatusCounts.map((k) => [k.status, k.count]));
+
+    const [foodBreakdown, catCountRow] = await Promise.all([
+      db
+        .select({
+          status: foodsTable.status,
+          count: sql<number>`cast(count(*) as int)`,
+        })
+        .from(foodsTable)
+        .groupBy(foodsTable.status),
+      db.select({ c: sql<number>`cast(count(distinct ${foodsTable.category}) as int)` }).from(foodsTable),
+    ]);
+
+    const foodStatusMap = new Map(foodBreakdown.map((f) => [f.status, f.count]));
+
+    const recentHistory = await db
+      .select()
+      .from(analysisHistoryTable)
+      .orderBy(desc(analysisHistoryTable.createdAt))
+      .limit(15);
+
+    const userEmails = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
+    const emailMap = new Map<string, string>();
+    for (const u of userEmails) {
+      if (u.id && u.email) {
+        emailMap.set(u.id, u.email);
+        emailMap.set(u.id.trim(), u.email);
+        emailMap.set(u.id.toLowerCase(), u.email);
+      }
+    }
+
+    const recentActivity = recentHistory.map((i) => {
+      const uId = i.userId ? i.userId.trim() : "";
+      return {
+        id: i.id,
+        userId: i.userId,
+        userEmail: emailMap.get(uId) || emailMap.get(uId.toLowerCase()) || "غير متوفر",
+        query: i.query,
+        analysisType: i.analysisType,
+        compatibilityScore: i.compatibilityScore ?? 0,
+        createdAt: i.createdAt,
+      };
+    });
+
+    res.json({
+      summary: {
+        totalUsers: userCount?.c ?? 0,
+        newUsers: newUsersCount?.c ?? 0,
+        premiumUsers: premiumUserCount?.c ?? 0,
+        totalAnalyses: totals?.totalAnalyses ?? 0,
+        analysesToday: todayCount?.c ?? 0,
+        averageScore: Math.round(Number(totals?.avgScore ?? 0)),
+        totalFoods: foodCount?.c ?? 0,
+        totalDishes: dishCount?.c ?? 0,
+      },
+      userAnalytics: {
+        dailyRegistrations,
+        freeVsPremium: {
+          free: freeUsers,
+          premium: premiumUserCount?.c ?? 0,
+        },
+        planDistribution,
+      },
+      analysisAnalytics: {
+        dailyAnalyses,
+        typeDistribution: {
+          text: totals?.textAnalyses ?? 0,
+          image: totals?.imageAnalyses ?? 0,
+          label: totals?.labelAnalyses ?? 0,
+        },
+        scoreDistribution,
+      },
+      popularSearches,
+      knowledge: {
+        pendingReviews: knowledgeStatusMap.get("pending") ?? 0,
+        approvedReviews: knowledgeStatusMap.get("approved") ?? 0,
+        rejectedReviews: knowledgeStatusMap.get("rejected") ?? 0,
+        mergedReviews: knowledgeStatusMap.get("merged") ?? 0,
+        cacheEntries: cacheStats?.totalEntries ?? 0,
+        cacheHits: cacheStats?.totalHits ?? 0,
+        avgConfidence: Math.round(Number(cacheStats?.avgConfidence ?? 0) * 100),
+      },
+      foodStats: {
+        total: foodCount?.c ?? 0,
+        allowed: foodStatusMap.get("allowed") ?? 0,
+        forbidden: foodStatusMap.get("forbidden") ?? 0,
+        conditional: foodStatusMap.get("conditional") ?? 0,
+        categories: catCountRow[0]?.c ?? 0,
+      },
+      recentActivity,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to load dashboard V2 data");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/admin/stats", requireAdmin, async (req, res) => {
   try {
     const [totals] = await db
