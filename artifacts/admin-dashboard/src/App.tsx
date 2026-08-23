@@ -13,10 +13,11 @@ import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
 import Users from "@/pages/users";
+import ContactRequests from "@/pages/contact-requests";
 import Login from "@/pages/login";
 import { LangProvider, useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { adminFetch, API_BASE } from "@/lib/api";
+import { adminFetch, API_BASE, fetchAdminLeads } from "@/lib/api";
 import {
   LayoutDashboard,
   UtensilsCrossed,
@@ -27,6 +28,7 @@ import {
   Settings as SettingsIcon,
   Star,
   Users as UsersIcon,
+  MessageSquare,
   Menu,
   X,
   LogOut,
@@ -41,6 +43,19 @@ const queryClient = new QueryClient({
 function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => void; onLogout: () => void }) {
   const [location] = useLocation();
   const { lang, toggle } = useLang();
+  const [newLeadsCount, setNewLeadsCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetchAdminLeads({ limit: 1 })
+      .then((data) => {
+        if (isMounted) setNewLeadsCount(data.newCount || 0);
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [location]);
 
   const NAV_ITEMS = [
     { path: "/", label: lang === "ar" ? "لوحة التحكم" : "Dashboard", icon: LayoutDashboard },
@@ -48,6 +63,7 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
     { path: "/dishes", label: lang === "ar" ? "الأطباق" : "Dishes", icon: Utensils },
     { path: "/knowledge-review", label: lang === "ar" ? "مراجعة المعرفة" : "Knowledge Review", icon: CheckSquare },
     { path: "/ai-review", label: lang === "ar" ? "مراجعة الذكاء الاصطناعي" : "AI Review", icon: Bot },
+    { path: "/contact-requests", label: lang === "ar" ? "طلبات التواصل" : "Contact Requests", icon: MessageSquare, badge: newLeadsCount },
     { path: "/history", label: lang === "ar" ? "سجل البحث" : "Search History", icon: HistoryIcon },
     { path: "/users", label: tr(lang, "users"), icon: UsersIcon },
     { path: "/subscription-plans", label: lang === "ar" ? "باقات الاشتراك" : "Subscription Plans", icon: Star },
@@ -85,7 +101,7 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
 
         <nav className="flex-1 overflow-y-auto py-4 px-3">
           <ul className="space-y-1">
-            {NAV_ITEMS.map(({ path, label, icon: Icon }) => {
+            {NAV_ITEMS.map(({ path, label, icon: Icon, badge }) => {
               const active = path === "/" ? location === "/" : location.startsWith(path);
               return (
                 <li key={path}>
@@ -93,14 +109,21 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
                     href={path}
                     onClick={onClose}
                     className={cn(
-                      "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
+                      "flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                       active
                         ? "bg-sidebar-accent text-sidebar-accent-foreground"
                         : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
                     )}
                   >
-                    <Icon className="h-4 w-4 shrink-0" />
-                    {label}
+                    <div className="flex items-center gap-3">
+                      <Icon className="h-4 w-4 shrink-0" />
+                      <span>{label}</span>
+                    </div>
+                    {typeof badge === "number" && badge > 0 && (
+                      <span className="inline-flex items-center justify-center h-5 px-1.5 rounded-full text-xs font-bold bg-amber-500 text-white">
+                        {badge}
+                      </span>
+                    )}
                   </Link>
                 </li>
               );
@@ -156,6 +179,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
             <Route path="/dishes" component={Dishes} />
             <Route path="/knowledge-review" component={KnowledgeReview} />
             <Route path="/ai-review" component={AiReview} />
+            <Route path="/contact-requests" component={ContactRequests} />
             <Route path="/history" component={History} />
             <Route path="/users" component={Users} />
             <Route path="/subscription-plans" component={Plans} />

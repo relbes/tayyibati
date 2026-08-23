@@ -47,14 +47,13 @@ type PlanForm = Omit<Plan, "id">;
 
 const DEFAULT_FORM: PlanForm = {
   name: "",
-  nameAr: "",
   nameEn: "",
+
   descriptionAr: "",
   descriptionEn: "",
   price: "0",
-  priceMonthly: 0,
-  priceYearly: 0,
   currency: "USD",
+
   dailyLimit: 10,
   dailyTextLimit: 10,
   dailyImageLimit: 5,
