@@ -259,7 +259,7 @@ export class ProductDatabase {
     if (filter.nameAr) {
       const normName = this.normalizeText(filter.nameAr);
       const match = Array.from(PRODUCT_STORE.values()).find(
-        (p) => this.normalizeText(p.nameAr).includes(normName) || (p.nameEn && this.normalizeText(p.nameEn).includes(normName))
+        (p) => this.normalizeText(p.nameAr) === normName || (p.nameEn && this.normalizeText(p.nameEn) === normName)
       );
       if (match) return match;
     }

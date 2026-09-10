@@ -130,6 +130,33 @@ export function expandSearchQuery(query: string): string[] {
     variants.add(`الأ${normQ}`);
   }
 
+  // Systematic Arabic Orthographic Variation (e.g. "بازلاء" <-> "بازيلاء", "فاصوليا" <-> "فاصولياء", "باميا" <-> "بامية")
+  // Process current variants to produce orthographic equivalents
+  const currentVariants = Array.from(variants);
+  for (const v of currentVariants) {
+    // 1. "يلاء" <-> "لاء" (e.g. بازيلاء <-> بازلاء)
+    if (v.includes("يلاء")) {
+      variants.add(v.replace(/يلاء/g, "لاء"));
+    }
+    if (v.includes("لاء")) {
+      variants.add(v.replace(/لاء/g, "يلاء"));
+    }
+    // 2. "ولياء" <-> "وليا" (e.g. فاصولياء <-> فاصوليا)
+    if (v.includes("ولياء")) {
+      variants.add(v.replace(/ولياء/g, "وليا"));
+    }
+    if (v.includes("وليا")) {
+      variants.add(v.replace(/وليا/g, "ولياء"));
+    }
+    // 3. Word-ending "يا" <-> "يه" / "ية" (e.g. باميا <-> بامية/باميه, كستنا <-> كستناء/كستنة)
+    if (v.endsWith("يا") && v.length >= 4) {
+      variants.add(v.slice(0, -2) + "يه");
+      variants.add(v.slice(0, -2) + "ية");
+    } else if ((v.endsWith("يه") || v.endsWith("ية")) && v.length >= 4) {
+      variants.add(v.slice(0, -2) + "يا");
+    }
+  }
+
   const result = Array.from(variants);
   EXPANSION_CACHE.set(normQ, result);
   return result;

@@ -9,6 +9,7 @@
  */
 import { db, foodsTable, foodAliases } from "@workspace/db";
 import { normalizeName, normalize, stripArticle, norm, stripAlefLam, extractBaseEntity } from "./arabicNormalization";
+import { expandSearchQuery } from "./searchExpansion";
 
 export { normalizeName, normalize, stripArticle, norm, stripAlefLam };
 
@@ -761,11 +762,16 @@ export function resolveFoodIdentity(
     return { food: chosenFood, matchType: "BASE_ENTITY", confidence: "HIGH", originalInput: rawInput, matchedTerm: chosenFood.nameAr };
   }
 
-  // Stage 3: Article-stripped exact match on food name
-  for (const f of foods) {
-    const { sAr } = foodNormMap.get(f.id)!;
-    if (sAr && (sAr === strippedQ || sAr === normQ)) {
-      return { food: f, matchType: "NORMALIZED", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+  // Stage 3: Article-stripped exact match on food name (evaluating all expanded variants)
+  const expandedVariants = expandSearchQuery(rawInput);
+  for (const variant of expandedVariants) {
+    const vNorm = normalizeName(variant);
+    const vStrip = stripArticle(vNorm);
+    for (const f of foods) {
+      const { sAr, nAr } = foodNormMap.get(f.id)!;
+      if (sAr && (sAr === vStrip || sAr === vNorm || nAr === vNorm)) {
+        return { food: f, matchType: "NORMALIZED", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+      }
     }
   }
 
@@ -778,15 +784,19 @@ export function resolveFoodIdentity(
     }
   }
 
-  // Stage 5: Multi-name Concept / Constituent Word Match
+  // Stage 5: Multi-name Concept / Constituent Word Match (evaluating expanded variants)
   // E.g. "الدجاج والفراخ" contains constituent concept words ["دجاج", "فراخ"]
   // E.g. "الشمام / الكنتالوب" contains constituent concept words ["شمام", "كنتالوب"]
   for (const f of foods) {
     const { nAr } = foodNormMap.get(f.id)!;
     const concepts = nAr.split(/[/—,\s]+و?\s*/).map((c) => stripArticle(normalizeName(c))).filter((c) => c.length >= 2);
     for (const concept of concepts) {
-      if (concept === strippedQ || concept === normQ) {
-        return { food: f, matchType: "WORD_BOUNDARY", confidence: "HIGH", originalInput: rawInput, matchedTerm: concept };
+      for (const variant of expandedVariants) {
+        const vNorm = normalizeName(variant);
+        const vStrip = stripArticle(vNorm);
+        if (concept === vStrip || concept === vNorm) {
+          return { food: f, matchType: "WORD_BOUNDARY", confidence: "HIGH", originalInput: rawInput, matchedTerm: concept };
+        }
       }
     }
   }

@@ -114,6 +114,17 @@ export const GENERIC_DESCRIPTORS = new Set([
 ]);
 
 /**
+ * Explicit Culinary Preparation & Cooking Modifiers
+ * When present alongside base ingredients, indicates a prepared dish query.
+ */
+export const PREPARATION_DESCRIPTORS = new Set([
+  "مشوي", "مشويه", "مشوية", "مقلي", "مقليه", "مقلية", "مسلوق", "مسلوقه", "مسلوقة",
+  "بالفرن", "محشي", "محشية", "محشيه", "طاجن", "صينية", "صينيه", "شوربة", "شوربه",
+  "سلطة", "سلطه", "متبل", "معمر", "شاورما", "كفتة", "كفته", "برياني", "كبسة", "كبسه",
+  "مندي", "مكمول", "طبيخة", "طبيخه", "فتة", "فته", "كسكسي", "مبكبكة", "مبكبكه"
+]);
+
+/**
  * Dedicated protein-specific descriptors for search and entity extraction.
  */
 export const PROTEIN_DESCRIPTORS = new Set([

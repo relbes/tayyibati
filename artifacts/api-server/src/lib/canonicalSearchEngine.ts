@@ -27,6 +27,7 @@ import {
   ARABIC_STOP_WORDS,
   CULINARY_DESCRIPTORS,
   GENERIC_DESCRIPTORS,
+  PREPARATION_DESCRIPTORS,
 } from "./arabicNormalization";
 import { expandSearchQuery, generateSmartSuggestions, loadDbSynonyms } from "./searchExpansion";
 
@@ -430,7 +431,19 @@ export class CanonicalSearchEngine {
 
       if (normAr) addExactFood(normAr, f);
       if (stripAr) addExactFood(stripAr, f);
-      if (normEn) addExactFood(normEn, f);
+      if (normEn) {
+        addExactFood(normEn, f);
+        addPrefix(foodPrefixIndex, normEn, f);
+        // Also index clean first word or slash/paren separated parts of nameEn (e.g. "Rice (Egyptian/Basmati...)" -> "rice")
+        const enParts = f.nameEn.split(/[/—,()]+/);
+        for (const ep of enParts) {
+          const epNorm = normalize(ep.trim());
+          if (epNorm && epNorm.length >= 2) {
+            addExactFood(epNorm, f);
+            addPrefix(foodPrefixIndex, epNorm, f);
+          }
+        }
+      }
 
       // Index base entity & root noun tokens (e.g. "الأرز", "ارز", "رز" for "الأرز بجميع أشكاله...")
       const baseEntity = extractBaseEntity(f.nameAr);
@@ -446,6 +459,45 @@ export class CanonicalSearchEngine {
         if (baseNorm) addPrefix(foodPrefixIndex, baseNorm, f);
         if (baseStrip) addPrefix(foodPrefixIndex, baseStrip, f);
         if (baseNoAlef && baseNoAlef.length >= 2) addPrefix(foodPrefixIndex, baseNoAlef, f);
+      }
+
+      // Split compound food names & multi-synonyms (e.g. "كمثرى / انجاص / اجاص", "لبن / حليب", "لحم الضاني / خروف")
+      const rawParts = f.nameAr.split(/[/—,()]+/);
+      for (const part of rawParts) {
+        const pTrimmed = part.trim();
+        if (pTrimmed.length < 2) continue;
+
+        const pNorm = normalize(pTrimmed);
+        const pStrip = stripArticle(pNorm);
+        const pNoAlef = pStrip.replace(/^[اأإآ]/, "");
+        const pNoAl = pNorm.startsWith("ال") && pNorm.length > 3 ? pNorm.slice(2) : "";
+
+        if (pNorm) {
+          addExactFood(pNorm, f);
+          addPrefix(foodPrefixIndex, pNorm, f);
+        }
+        if (pStrip) {
+          addExactFood(pStrip, f);
+          addPrefix(foodPrefixIndex, pStrip, f);
+        }
+        if (pNoAl) {
+          addExactFood(pNoAl, f);
+        }
+        if (pNoAlef && pNoAlef.length >= 2) {
+          addExactFood(pNoAlef, f);
+        }
+
+        // Also index base entity of the constituent part if multi-word (e.g. "لحم الضاني" -> "ضاني", "لحم خروف" -> "خروف")
+        const partWords = pTrimmed.split(/\s+/);
+        if (partWords.length > 1) {
+          const partBase = extractBaseEntity(pTrimmed);
+          if (partBase) {
+            const pbNorm = normalize(partBase);
+            const pbStrip = stripArticle(pbNorm);
+            if (pbNorm) addExactFood(pbNorm, f);
+            if (pbStrip) addExactFood(pbStrip, f);
+          }
+        }
       }
 
       // Root primary food noun indexing (e.g. "رز", "ارز", "أرز" for "الأرز بجميع أشكاله...")
@@ -1317,7 +1369,33 @@ export class CanonicalSearchEngine {
     for (const variant of expandedVariants) {
       const foodHit = indexes.exactFoodIndex.get(variant);
       if (foodHit) {
-        const primaryFood = Array.isArray(foodHit) ? foodHit[0] : foodHit;
+        let primaryFood = foodHit;
+        if (Array.isArray(foodHit)) {
+          // Sort candidates:
+          // 1. Exact full name match to variant
+          // 2. Root category / no parent
+          // 3. Shorter name length
+          // 4. Lower ID
+          const sorted = [...foodHit].sort((a: any, b: any) => {
+            const aNorm = normalize(a.nameAr);
+            const bNorm = normalize(b.nameAr);
+            const aStrip = stripArticle(aNorm);
+            const bStrip = stripArticle(bNorm);
+
+            const aExact = (aNorm === variant || aStrip === variant) ? 1 : 0;
+            const bExact = (bNorm === variant || bStrip === variant) ? 1 : 0;
+            if (bExact !== aExact) return bExact - aExact;
+
+            const aRoot = (a.foodType === "general_category" || a.parentFoodId === null) ? 1 : 0;
+            const bRoot = (b.foodType === "general_category" || b.parentFoodId === null) ? 1 : 0;
+            if (bRoot !== aRoot) return bRoot - aRoot;
+
+            if (a.nameAr.length !== b.nameAr.length) return a.nameAr.length - b.nameAr.length;
+            return a.id - b.id;
+          });
+          primaryFood = sorted[0];
+        }
+
         foodCount++;
         foodDetails.push(`${primaryFood.nameAr} (95%)`);
         return this.formatResult({
@@ -1498,6 +1576,34 @@ export class CanonicalSearchEngine {
       const baseConfidence = 100;
       const dishCache = await warmDishEngineCache();
 
+      // Rule 1 Prepared Dish Guard:
+      // If the query contains explicit culinary/preparation indicators (e.g. "مشوي", "بالفرن", "مقلي", "طاجن", "محشي"),
+      // do NOT prematurely collapse the query to a raw food entity if an eligible prepared dish exists in dishCache.
+      const hasPreparationIndicator = modifiers.some(m => PREPARATION_DESCRIPTORS.has(m) || PREPARATION_DESCRIPTORS.has(stripArticle(m)));
+
+      if (hasPreparationIndicator) {
+        // Evaluate candidate dishes in dishCache first
+        for (const d of dishCache.dishes || []) {
+          const dNorm = normalize(d.nameAr);
+          const match = this.calculateTokenMatch(queryNorm, dNorm, false);
+          if (match.matches && match.score >= 70 && this.verifyDishEquivalence(rawQuery, d, dishCache)) {
+            dishCount++;
+            dishDetails.push(`${d.nameAr} (${match.score}%)`);
+            return this.formatResult({
+              entity_type: "dish",
+              canonical_id: d.id,
+              canonical_name: d.nameAr,
+              confidence: match.score,
+              matched_alias: null,
+              search_method: match.method,
+              matchedReason: `Matched via Prepared Dish Guard (${match.method})`,
+              modifiers,
+              matchType: "PREFIX",
+            }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
+          }
+        }
+      }
+
       for (const bVar of baseVariants) {
         // Check Food Alias on Base Entity
         const foodAliasHit = indexes.foodAliasIndex.get(bVar);
@@ -1613,42 +1719,76 @@ export class CanonicalSearchEngine {
       }
     }
 
-    if (dishCandidates.length > 0) {
-      dishCandidates.sort((a, b) => b.score - a.score);
-      const winner = dishCandidates[0];
-      dishCount += dishCandidates.length;
-      dishDetails.push(`${winner.dish.nameAr} (${winner.score}%)`);
-
-      return this.formatResult({
-        canonicalId: winner.dish.id,
-        canonicalEntityType: "dish",
-        canonicalName: winner.dish.nameAr,
-        searchConfidence: Math.min(winner.score, 100),
-        matchType: winner.method === "exact_canonical" || winner.method === "exact_alias" ? "EXACT" : (winner.method === "starts_with" ? "PREFIX" : "FUZZY"),
-        matchedReason: `Matched via Dish Canonical Prioritization (${winner.method})`,
-        matchedAlias: winner.variant !== queryNorm ? winner.variant : null,
-      }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
-    }
-
     // Check fuzzy on foods across all expanded variants
+    const foodCandidates: Array<{ food: any; score: number; method: SearchMethod; variant: string }> = [];
     for (const variant of expandedVariants) {
       for (const f of knowledgeCache.foods || []) {
         const fNorm = normalize(f.nameAr);
         const match = this.calculateTokenMatch(variant, fNorm, false);
         if (match.matches && match.score >= 60) {
-          foodCount++;
-          foodDetails.push(`${f.nameAr} (${match.score}%)`);
-          return this.formatResult({
-            entity_type: "food",
-            canonical_id: f.id,
-            canonical_name: f.nameAr,
-            confidence: match.score,
-            matched_alias: variant !== queryNorm ? variant : null,
-            search_method: match.method,
-            matchedReason: `Matched via Food Similarity (${match.method})`,
-          }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
+          let score = match.score;
+          const stripVariant = stripArticle(variant);
+          const stripFood = stripArticle(fNorm);
+
+          if (stripFood.startsWith(stripVariant)) {
+            score += 15;
+          }
+          if (stripFood === stripVariant) {
+            score += 25;
+          }
+          // If query has preparation descriptors (e.g. "مشوي", "بالفرن"), penalize raw food candidates that lack them
+          const queryTokens = stripVariant.split(" ");
+          const foodTokens = stripFood.split(" ");
+          const hasPrepWord = queryTokens.some(qt => PREPARATION_DESCRIPTORS.has(qt) || PREPARATION_DESCRIPTORS.has(stripArticle(qt)));
+          const foodHasPrepWord = foodTokens.some(ft => PREPARATION_DESCRIPTORS.has(ft) || PREPARATION_DESCRIPTORS.has(stripArticle(ft)));
+
+          if (hasPrepWord && !foodHasPrepWord) {
+            score -= 30; // Significant penalty: query requests a prepared dish, not raw ingredient
+          }
+
+          foodCandidates.push({ food: f, score, method: match.method, variant });
         }
       }
+    }
+
+    if (foodCandidates.length > 0) {
+      foodCandidates.sort((a, b) => b.score - a.score);
+    }
+
+    // Compare top food vs top dish: if top food score >= top dish score, prioritize food
+    const topFood = foodCandidates[0] || null;
+    const topDish = dishCandidates[0] || null;
+
+    if (topFood && (!topDish || topFood.score >= topDish.score)) {
+      // Confidence floor: if topFood score is below 60, reject as insufficient match
+      if (topFood.score >= 60) {
+        foodCount += foodCandidates.length;
+        foodDetails.push(`${topFood.food.nameAr} (${topFood.score}%)`);
+        return this.formatResult({
+          entity_type: "food",
+          canonical_id: topFood.food.id,
+          canonical_name: topFood.food.nameAr,
+          confidence: Math.min(topFood.score, 100),
+          matched_alias: topFood.variant !== queryNorm ? topFood.variant : null,
+          search_method: topFood.method,
+          matchedReason: `Matched via Food Similarity (${topFood.method})`,
+        }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
+      }
+    }
+
+    if (topDish) {
+      dishCount += dishCandidates.length;
+      dishDetails.push(`${topDish.dish.nameAr} (${topDish.score}%)`);
+
+      return this.formatResult({
+        canonicalId: topDish.dish.id,
+        canonicalEntityType: "dish",
+        canonicalName: topDish.dish.nameAr,
+        searchConfidence: Math.min(topDish.score, 100),
+        matchType: topDish.method === "exact_canonical" || topDish.method === "exact_alias" ? "EXACT" : (topDish.method === "starts_with" ? "PREFIX" : "FUZZY"),
+        matchedReason: `Matched via Dish Canonical Prioritization (${topDish.method})`,
+        matchedAlias: topDish.variant !== queryNorm ? topDish.variant : null,
+      }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
     }
 
     // TIER 8: Smart "Did You Mean" Unmapped Response (Zero AI Invocation)
@@ -1763,45 +1903,52 @@ export class CanonicalSearchEngine {
       }
     }
 
+    // Helper for whole word/token boundary matching: checks if a token exists as a complete word in target token list
+    const hasWordTokenMatch = (queryToken: string, targetTokens: string[]): boolean => {
+      return targetTokens.some((tt) => tt === queryToken);
+    };
+
     const isWordStart =
       qClean.startsWith(cClean + " ") ||
       cClean.startsWith(qClean + " ") ||
-      (cClean.length >= 3 && qClean.startsWith(cClean + " ")) ||
-      (qClean.length >= 3 && cClean.startsWith(qClean + " ")) ||
-      (cClean.length >= 4 && qClean.startsWith(cClean)) ||
-      (qClean.length >= 4 && cClean.startsWith(qClean));
+      (qClean.length >= 4 && cClean.startsWith(qClean + " ")) ||
+      (cClean.length >= 4 && qClean.startsWith(cClean + " "));
 
     if (isWordStart) {
       return { matches: true, score: 85, method: "starts_with" };
     }
 
     const mainQTokens = qTokens.filter((t) => t.length >= 3 && !CULINARY_DESCRIPTORS.has(t) && !ARABIC_STOP_WORDS.has(t));
-    if (mainQTokens.length > 1 && mainQTokens.every((t) => cClean.includes(t))) {
+
+    // Multi-token similarity: require actual shared words/tokens, not mid-word substring slices
+    if (mainQTokens.length > 1 && mainQTokens.every((t) => hasWordTokenMatch(t, cTokens) || cTokens.some(ct => ct.startsWith(t)))) {
       return { matches: true, score: 85, method: "token_similarity" };
     }
-    if (
-      qClean.includes(cClean) ||
-      cClean.includes(qClean) ||
-      (mainQTokens.length > 0 && mainQTokens.some((t) => t.length >= 3 && cClean.includes(t)))
-    ) {
+
+    // Single-word query containment: require whole word token match in candidate (e.g. "بني" must be a standalone word, not inside "سبنيورية")
+    if (qTokens.length === 1) {
+      const singleQ = qTokens[0];
+      if (hasWordTokenMatch(singleQ, cTokens) || cTokens.some((ct) => ct.length >= 4 && ct.startsWith(singleQ))) {
+        return { matches: true, score: 75, method: "contains" };
+      }
+    } else if (qClean.includes(cClean) || cClean.includes(qClean)) {
+      // Multi-word exact phrase containment
       return { matches: true, score: 75, method: "contains" };
     }
 
-    const qMainTokens = qTokens.filter((t) => t.length >= 3 && !ARABIC_STOP_WORDS.has(t) && !CULINARY_DESCRIPTORS.has(t));
-    const cMainTokens = cTokens.filter((t) => t.length >= 3 && !ARABIC_STOP_WORDS.has(t));
+    // Non-descriptor, meaningful content tokens (must exclude preparation modifiers so "مشوي" alone doesn't trigger a match)
+    const qContentTokens = qTokens.filter((t) => t.length >= 3 && !ARABIC_STOP_WORDS.has(t) && !CULINARY_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(stripArticle(t)));
+    const cContentTokens = cTokens.filter((t) => t.length >= 3 && !ARABIC_STOP_WORDS.has(t) && !CULINARY_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(stripArticle(t)));
 
-    if (qMainTokens.length > 0 && cMainTokens.length > 0) {
-      const sharedTokens = qMainTokens.filter((t) =>
-        cMainTokens.some((ct) => ct === t || (t.length >= 4 && ct.length >= 4 && (ct.includes(t) || t.includes(ct))))
+    if (qContentTokens.length > 0 && cContentTokens.length > 0) {
+      const sharedContent = qContentTokens.filter((t) =>
+        cContentTokens.some((ct) => ct === t || (t.length >= 4 && ct.length >= 4 && (ct.startsWith(t) || t.startsWith(ct))))
       );
-      if (sharedTokens.length > 0) {
-        const score = sharedTokens.length > 1 ? 75 : 70;
+      if (sharedContent.length > 0) {
+        // Also check if any additional tokens match
+        const score = sharedContent.length > 1 ? 75 : 70;
         return { matches: true, score, method: "token_similarity" };
       }
-    }
-
-    if (qClean.length >= 4 && cClean.length >= 4 && (qClean.slice(0, 4) === cClean.slice(0, 4) || qClean.slice(-4) === cClean.slice(-4))) {
-      return { matches: true, score: 60, method: "fuzzy" };
     }
 
     return { matches: false, score: 0, method: "fuzzy" };
