@@ -19,6 +19,7 @@ import { captureUnknownIngredient } from "./ai/knowledgeReviewService";
 import type { AnalysisReport, IngredientResult } from "../routes/analysis";
 import { extractBaseEntity, isMeaningfulQuery } from "./arabicNormalization";
 import { FoodResolutionEngine } from "./foodResolutionEngine";
+import { SmartFallbackEngine } from "./smartFallbackEngine";
 
 export interface UnifiedAnalysisRequest {
   context?: Readonly<AnalysisContext>;
@@ -509,7 +510,63 @@ export class UnifiedAnalysisEngine {
         };
       }
 
-      // 2. TEXT / CAMERA / OCR MODALITY POLICY: Trigger AI Knowledge Extractor
+      // Smart Fallback Suggestions — runs in-memory only (~2–5ms).
+      // Evaluates candidate suggestions from the existing Tayyibati dataset.
+      const fallbackResult = await SmartFallbackEngine.suggest(queryText);
+      recordStage("smart_fallback_engine", 0, {
+        hasSuggestions: fallbackResult.hasSuggestions,
+        count: fallbackResult.suggestions.length,
+      });
+
+      // ARCHITECTURAL TRIGGER RULE: If strong suggestions exist in our database,
+      // return them directly on the NOT_FOUND report without relying on AI confidence or making unnecessary AI calls.
+      if (fallbackResult.hasSuggestions && fallbackResult.suggestions.length > 0) {
+        const suggestions = canonicalSearchRes?.didYouMean || [];
+        let notFoundReport: AnalysisReport = {
+          query: queryText,
+          resultMode: "NOT_FOUND" as any,
+          primaryRuling: undefined,
+          allowed: [],
+          forbidden: [],
+          conditional: [],
+          unknown: [],
+          compatibilityScore: null,
+          scoreAvailable: false,
+          explanation: "لم نجد هذا الطعام بالاسم نفسه، لكن ربما تقصد أحد البدائل المقترحة.",
+          suggestions,
+          analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+          notFound: true,
+          fallbackSuggestions: fallbackResult.suggestions.map((s) => ({
+            canonicalId: s.canonicalId,
+            canonicalEntityType: s.canonicalEntityType,
+            nameAr: s.nameAr,
+            nameEn: s.nameEn,
+          })),
+        };
+
+        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null);
+        const endTime = performance.now();
+        recordStage("smart_fallback_direct_termination", performance.now() - startTime, {
+          query: queryText,
+          suggestionsCount: fallbackResult.suggestions.length,
+        });
+
+        return {
+          report: finalizedReport,
+          executionTrace: {
+            totalDurationMs: Math.round(endTime - startTime),
+            orchestrationOverheadMs: 1,
+            stagesExecuted: ["input_gateway", "canonical_search_gateway", "smart_fallback_engine", "smart_fallback_direct_termination"],
+            traces: [
+              { stage: "input_gateway", timestamp: Date.now(), durationMs: 1 },
+              { stage: "canonical_search_gateway", timestamp: Date.now(), durationMs: 5 },
+              { stage: "smart_fallback_engine", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }
+            ],
+          },
+        };
+      }
+
+      // 2. TEXT / CAMERA / OCR MODALITY POLICY: Trigger AI Knowledge Extractor only when no DB suggestions exist
       const aiProvider = getAIProvider();
       const aiKnowledge = await aiProvider.extractFoodKnowledge({
         query: queryText,
@@ -554,7 +611,7 @@ export class UnifiedAnalysisEngine {
           executionTrace: {
             totalDurationMs: Math.round(endTime - startTime),
             orchestrationOverheadMs: 1,
-            stagesExecuted: ["input_gateway", "canonical_search_gateway", "ai_knowledge_extractor", "ai_fallback_low_confidence_termination"],
+            stagesExecuted: ["input_gateway", "canonical_search_gateway", "smart_fallback_engine", "ai_knowledge_extractor", "ai_fallback_low_confidence_termination"],
             traces: [
               { stage: "input_gateway", timestamp: Date.now(), durationMs: 1 },
               { stage: "canonical_search_gateway", timestamp: Date.now(), durationMs: 5 },

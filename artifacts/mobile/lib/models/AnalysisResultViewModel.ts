@@ -35,6 +35,13 @@ export interface AnalysisResultViewModel {
   ingredientDecisions: IngredientDecisionVM[];
   mealDecision: MealDecisionVM | null;
   canonicalResult?: CanonicalResultVM | null;
+  /** Smart fallback suggestions — only populated when presentationMode is NOT_FOUND */
+  fallbackSuggestions?: Array<{
+    canonicalId: number;
+    canonicalEntityType: "food" | "dish";
+    nameAr: string;
+    nameEn: string;
+  }>;
 }
 
 /**
@@ -275,5 +282,7 @@ export function createAnalysisResultViewModel(
     ingredientDecisions: finalDecisions,
     mealDecision,
     canonicalResult,
+    // Propagate smart fallback suggestions when the report is NOT_FOUND
+    fallbackSuggestions: report.fallbackSuggestions ?? undefined,
   };
 }

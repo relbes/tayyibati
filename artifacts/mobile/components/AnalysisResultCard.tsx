@@ -224,6 +224,9 @@ export function AnalysisResultCard({
         retryLabel="إعادة المحاولة"
         onRetry={onRetry || (() => {})}
         iconName="search-outline"
+        suggestions={viewModel.fallbackSuggestions || report?.fallbackSuggestions}
+        onSelectSuggestion={onSelectSuggestion}
+        isAnalyzing={isAnalyzing}
       />
     );
   }

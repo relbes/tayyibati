@@ -172,6 +172,17 @@ export interface AnalysisReport {
   needsClarification?: boolean;
   clarificationType?: string;
   questionAr?: string;
+  /**
+   * Smart fallback suggestions — present ONLY when notFound === true.
+   * Real existing Tayyibati food/dish records similar to the unresolved query.
+   * These are alternatives, NOT confirmed identifications.
+   */
+  fallbackSuggestions?: Array<{
+    canonicalId: number;
+    canonicalEntityType: "food" | "dish";
+    nameAr: string;
+    nameEn: string;
+  }>;
 }
 
 interface AnalysisContextType {

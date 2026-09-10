@@ -1903,6 +1903,21 @@ export class CanonicalSearchEngine {
       }
     }
 
+    // Helper for descriptor check: identifies generic, culinary, preparation descriptors, and stop words
+    const isDescriptorToken = (token: string): boolean => {
+      const stripped = stripArticle(token);
+      return (
+        ARABIC_STOP_WORDS.has(token) ||
+        ARABIC_STOP_WORDS.has(stripped) ||
+        CULINARY_DESCRIPTORS.has(token) ||
+        CULINARY_DESCRIPTORS.has(stripped) ||
+        GENERIC_DESCRIPTORS.has(token) ||
+        GENERIC_DESCRIPTORS.has(stripped) ||
+        PREPARATION_DESCRIPTORS.has(token) ||
+        PREPARATION_DESCRIPTORS.has(stripped)
+      );
+    };
+
     // Helper for whole word/token boundary matching: checks if a token exists as a complete word in target token list
     const hasWordTokenMatch = (queryToken: string, targetTokens: string[]): boolean => {
       return targetTokens.some((tt) => tt === queryToken);
@@ -1914,11 +1929,12 @@ export class CanonicalSearchEngine {
       (qClean.length >= 4 && cClean.startsWith(qClean + " ")) ||
       (cClean.length >= 4 && qClean.startsWith(cClean + " "));
 
-    if (isWordStart) {
+    // Single-word or all-descriptor queries must NOT match multi-token candidates via starts_with
+    if (isWordStart && !(qTokens.every((t) => isDescriptorToken(t)) && cTokens.length > qTokens.length)) {
       return { matches: true, score: 85, method: "starts_with" };
     }
 
-    const mainQTokens = qTokens.filter((t) => t.length >= 3 && !CULINARY_DESCRIPTORS.has(t) && !ARABIC_STOP_WORDS.has(t));
+    const mainQTokens = qTokens.filter((t) => t.length >= 3 && !isDescriptorToken(t));
 
     // Multi-token similarity: require actual shared words/tokens, not mid-word substring slices
     if (mainQTokens.length > 1 && mainQTokens.every((t) => hasWordTokenMatch(t, cTokens) || cTokens.some(ct => ct.startsWith(t)))) {
@@ -1926,19 +1942,22 @@ export class CanonicalSearchEngine {
     }
 
     // Single-word query containment: require whole word token match in candidate (e.g. "بني" must be a standalone word, not inside "سبنيورية")
+    // ARCHITECTURAL GUARD: A single generic descriptor token (e.g. "بني", "ابيض", "مصري", "مشوي") MUST NEVER match a composite candidate (e.g. "الأرز بجميع أشكاله ... بني")
     if (qTokens.length === 1) {
       const singleQ = qTokens[0];
-      if (hasWordTokenMatch(singleQ, cTokens) || cTokens.some((ct) => ct.length >= 4 && ct.startsWith(singleQ))) {
+      if (!isDescriptorToken(singleQ) && (hasWordTokenMatch(singleQ, cTokens) || cTokens.some((ct) => ct.length >= 4 && ct.startsWith(singleQ)))) {
         return { matches: true, score: 75, method: "contains" };
       }
     } else if (qClean.includes(cClean) || cClean.includes(qClean)) {
-      // Multi-word exact phrase containment
-      return { matches: true, score: 75, method: "contains" };
+      // Multi-word exact phrase containment: disallow if all query tokens are generic descriptors
+      if (!qTokens.every((t) => isDescriptorToken(t))) {
+        return { matches: true, score: 75, method: "contains" };
+      }
     }
 
-    // Non-descriptor, meaningful content tokens (must exclude preparation modifiers so "مشوي" alone doesn't trigger a match)
-    const qContentTokens = qTokens.filter((t) => t.length >= 3 && !ARABIC_STOP_WORDS.has(t) && !CULINARY_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(stripArticle(t)));
-    const cContentTokens = cTokens.filter((t) => t.length >= 3 && !ARABIC_STOP_WORDS.has(t) && !CULINARY_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(t) && !PREPARATION_DESCRIPTORS.has(stripArticle(t)));
+    // Non-descriptor, meaningful content tokens (must exclude preparation & generic descriptors so descriptors alone don't trigger a match)
+    const qContentTokens = qTokens.filter((t) => t.length >= 3 && !isDescriptorToken(t));
+    const cContentTokens = cTokens.filter((t) => t.length >= 3 && !isDescriptorToken(t));
 
     if (qContentTokens.length > 0 && cContentTokens.length > 0) {
       const sharedContent = qContentTokens.filter((t) =>

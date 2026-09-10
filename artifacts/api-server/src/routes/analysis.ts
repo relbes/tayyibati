@@ -224,6 +224,18 @@ export interface AnalysisReport {
   suggestions_legacy?: string[];
   analysisType: "text" | "image" | "label";
   notFound?: boolean;
+  /**
+   * Smart fallback suggestions — present ONLY when notFound === true.
+   * These are real existing Tayyibati food/dish records that are similar to
+   * the unresolved query. They are alternatives, NOT confirmed identifications.
+   * Old clients that do not know this field will safely ignore it.
+   */
+  fallbackSuggestions?: Array<{
+    canonicalId: number;
+    canonicalEntityType: "food" | "dish";
+    nameAr: string;
+    nameEn: string;
+  }>;
   imageRecognition?: {
     status: "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN" | "INSUFFICIENT_IMAGE";
     imageType: "SINGLE_FOOD" | "MULTIPLE_FOODS" | "DISH" | "PACKAGED_PRODUCT" | "AMBIGUOUS";
