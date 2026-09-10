@@ -452,8 +452,10 @@ export class CanonicalSearchEngine {
       const firstWordNorm = normalize(f.nameAr.split(/[/—,\s()]+/)[0] || "");
       const firstWordStrip = stripArticle(firstWordNorm);
       const firstWordNoAlef = firstWordStrip.replace(/^[اأإآ]/, "");
+      const firstWordNoAl = firstWordNorm.startsWith("ال") && firstWordNorm.length > 3 ? firstWordNorm.slice(2) : "";
 
       if (firstWordNorm) addExactFood(firstWordNorm, f);
+      if (firstWordNoAl) addExactFood(firstWordNoAl, f);
       if (firstWordStrip) addExactFood(firstWordStrip, f);
       if (firstWordNoAlef && firstWordNoAlef.length >= 2) addExactFood(firstWordNoAlef, f);
 
@@ -707,27 +709,32 @@ export class CanonicalSearchEngine {
     // C. Base Entity Resolution for Foods (e.g. "أرز مصري" -> base "أرز")
     const extractedBase = extractBaseEntity(rawQuery);
     if (extractedBase) {
-      const baseKey = normalize(extractedBase);
-      if (baseKey) {
-        const baseFoodHit = indexes.exactFoodIndex.get(baseKey) || indexes.foodAliasIndex.get(baseKey);
-        if (baseFoodHit && !seenFoodIds.has(baseFoodHit.id)) {
-          seenFoodIds.add(baseFoodHit.id);
-          foods.push({
-            canonicalId: baseFoodHit.id,
-            canonicalEntityType: "food",
-            canonicalName: baseFoodHit.nameAr,
-            searchConfidence: 90,
-            matchType: "BASE_ENTITY",
-            matchedAlias: baseKey,
-            matchedReason: `Matched via Base Food Entity '${baseKey}'`,
-            entity_type: "food",
-            canonical_id: baseFoodHit.id,
-            canonical_name: baseFoodHit.nameAr,
-            confidence: 90,
-            matched_alias: baseKey,
-            search_method: "base_entity_resolution",
-            searchOutcome: "FOUND",
-          });
+      const baseVariants = expandSearchQuery(extractedBase);
+      for (const bVar of baseVariants) {
+        const baseFoodHit = indexes.exactFoodIndex.get(bVar) || indexes.foodAliasIndex.get(bVar);
+        if (baseFoodHit) {
+          const hits = Array.isArray(baseFoodHit) ? baseFoodHit : [baseFoodHit];
+          for (const foodHit of hits) {
+            if (!seenFoodIds.has(foodHit.id)) {
+              seenFoodIds.add(foodHit.id);
+              foods.push({
+                canonicalId: foodHit.id,
+                canonicalEntityType: "food",
+                canonicalName: foodHit.nameAr,
+                searchConfidence: 90,
+                matchType: "BASE_ENTITY",
+                matchedAlias: bVar,
+                matchedReason: `Matched via Base Food Entity '${bVar}'`,
+                entity_type: "food",
+                canonical_id: foodHit.id,
+                canonical_name: foodHit.nameAr,
+                confidence: 90,
+                matched_alias: bVar,
+                search_method: "base_entity_resolution",
+                searchOutcome: "FOUND",
+              });
+            }
+          }
         }
       }
     }
@@ -943,12 +950,13 @@ export class CanonicalSearchEngine {
       for (const variant of expandedVariants) {
         const foodHit = indexes.foodAliasIndex.get(variant) || indexes.exactFoodIndex.get(variant);
         if (foodHit) {
+          const primaryFood = Array.isArray(foodHit) ? foodHit[0] : foodHit;
           return this.formatResult({
             entity_type: "food",
-            canonical_id: foodHit.id,
-            canonical_name: foodHit.nameAr,
+            canonical_id: primaryFood.id,
+            canonical_name: primaryFood.nameAr,
             confidence: 100,
-            matched_alias: variant !== foodHit.nameAr ? variant : null,
+            matched_alias: variant !== primaryFood.nameAr ? variant : null,
             search_method: "exact_alias",
             matchedReason: "Matched via Food Index (Ingredient Profile)",
           }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, 1, [], 1, [], 0, [], 0, [], 0, []);
@@ -963,10 +971,11 @@ export class CanonicalSearchEngine {
         if (baseKey) {
           const baseFood = indexes.exactFoodIndex.get(baseKey) || indexes.foodAliasIndex.get(baseKey);
           if (baseFood) {
+            const primaryBaseFood = Array.isArray(baseFood) ? baseFood[0] : baseFood;
             return this.formatResult({
               entity_type: "food",
-              canonical_id: baseFood.id,
-              canonical_name: baseFood.nameAr,
+              canonical_id: primaryBaseFood.id,
+              canonical_name: primaryBaseFood.nameAr,
               confidence: 90,
               matched_alias: variant,
               search_method: "base_entity_resolution",
@@ -1308,12 +1317,13 @@ export class CanonicalSearchEngine {
     for (const variant of expandedVariants) {
       const foodHit = indexes.exactFoodIndex.get(variant);
       if (foodHit) {
+        const primaryFood = Array.isArray(foodHit) ? foodHit[0] : foodHit;
         foodCount++;
-        foodDetails.push(`${foodHit.nameAr} (95%)`);
+        foodDetails.push(`${primaryFood.nameAr} (95%)`);
         return this.formatResult({
           entity_type: "food",
-          canonical_id: foodHit.id,
-          canonical_name: foodHit.nameAr,
+          canonical_id: primaryFood.id,
+          canonical_name: primaryFood.nameAr,
           confidence: 95,
           matched_alias: null,
           search_method: "exact_canonical",
@@ -1510,12 +1520,13 @@ export class CanonicalSearchEngine {
         // Check Exact Food on Base Entity
         const exactFoodHit = indexes.exactFoodIndex.get(bVar);
         if (exactFoodHit) {
+          const primaryFood = Array.isArray(exactFoodHit) ? exactFoodHit[0] : exactFoodHit;
           foodCount++;
-          foodDetails.push(`${exactFoodHit.nameAr} via base entity '${baseEntity}' (${baseConfidence}%)`);
+          foodDetails.push(`${primaryFood.nameAr} via base entity '${baseEntity}' (${baseConfidence}%)`);
           return this.formatResult({
             entity_type: "food",
-            canonical_id: exactFoodHit.id,
-            canonical_name: exactFoodHit.nameAr,
+            canonical_id: primaryFood.id,
+            canonical_name: primaryFood.nameAr,
             confidence: baseConfidence,
             matched_alias: null,
             search_method: "base_entity_resolution",

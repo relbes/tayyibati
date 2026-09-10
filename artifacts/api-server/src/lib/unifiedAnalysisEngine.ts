@@ -814,7 +814,7 @@ export class UnifiedAnalysisEngine {
       const stageSingleStart = performance.now();
       const knowledgeCache = await getKnowledgeCache();
       let targetFoodName = queryText;
-      const explicitId = input.canonicalId || input.foodId;
+      const explicitId = input.canonicalId || input.foodId || ((canonicalSearchRes?.canonicalEntityType === "food" || (canonicalSearchRes as any)?.entity_type === "food") ? (canonicalSearchRes?.canonicalId || (canonicalSearchRes as any)?.canonical_id) : undefined);
       if (explicitId) {
         const foundFood = knowledgeCache.foodById.get(Number(explicitId));
         if (foundFood) targetFoodName = foundFood.nameAr;
