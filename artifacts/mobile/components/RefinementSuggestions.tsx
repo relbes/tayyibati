@@ -38,7 +38,7 @@ export function RefinementSuggestions({ result, onSelect, colors }: RefinementSu
     result.matches ||
     result.refinementSuggestions ||
     result.relevantVariants ||
-    (result.notFound ? result.suggestions : []) ||
+    (result.notFound && !result.fallbackSuggestions?.length ? result.suggestions : []) ||
     [];
 
   if (!isMultipleDishes && matches.length === 0) return null;

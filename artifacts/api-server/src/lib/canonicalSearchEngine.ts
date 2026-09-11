@@ -29,7 +29,7 @@ import {
   GENERIC_DESCRIPTORS,
   PREPARATION_DESCRIPTORS,
 } from "./arabicNormalization";
-import { expandSearchQuery, generateSmartSuggestions, loadDbSynonyms } from "./searchExpansion";
+import { expandSearchQuery, generateSmartSuggestions, loadDbSynonyms, getQuerySynonymTargets } from "./searchExpansion";
 
 export type EntityType = "food" | "dish" | "product";
 
@@ -1278,6 +1278,9 @@ export class CanonicalSearchEngine {
     
     // Stage 1 & 2: Expansion Layer
     const expandedVariants = expandSearchQuery(rawQuery);
+    // Compute which expanded variants came from synonym dictionary (baseline + dialect).
+    // Used by Tier 2/3 to assign matchType = "SYNONYM" instead of "EXACT"/"ALIAS".
+    const synonymTargetVariants = getQuerySynonymTargets(rawQuery);
 
     let foodAliasCount = 0; const foodAliasDetails: string[] = [];
     let foodCount = 0; const foodDetails: string[] = [];
@@ -1351,15 +1354,24 @@ export class CanonicalSearchEngine {
       const foodHit = indexes.foodAliasIndex.get(variant);
       if (foodHit) {
         foodAliasCount++;
-        foodAliasDetails.push(`${foodHit.nameAr} via alias '${variant}' (100%)`);
+        // Determine if this hit was reached via synonym expansion (baseline or dialect).
+        // Synonym-derived matches are labeled SYNONYM at 90% confidence, not EXACT at 100%.
+        const isSynonymHit = synonymTargetVariants.has(variant) && stripArticle(variant) !== stripArticle(queryNorm);
+        const aliasConf = isSynonymHit ? 90 : 100;
+        const aliasMethod: SearchMethod = "exact_alias";
+        const aliasMatchReason = isSynonymHit
+          ? `Matched via Synonym Expansion '${variant}' (dialect/baseline)`
+          : `Matched via Food Alias '${variant}'`;
+        foodAliasDetails.push(`${foodHit.nameAr} via alias '${variant}' (${aliasConf}%)`);
         return this.formatResult({
           entity_type: "food",
           canonical_id: foodHit.id,
           canonical_name: foodHit.nameAr,
-          confidence: 100,
+          confidence: aliasConf,
           matched_alias: variant,
-          search_method: "exact_alias",
-          matchedReason: `Matched via Food Alias '${variant}'`,
+          search_method: aliasMethod,
+          matchType: isSynonymHit ? "SYNONYM" : "ALIAS",
+          matchedReason: aliasMatchReason,
         }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
       }
     }
@@ -1396,16 +1408,24 @@ export class CanonicalSearchEngine {
           primaryFood = sorted[0];
         }
 
+        const isSynonymHit = synonymTargetVariants.has(variant) && stripArticle(variant) !== stripArticle(queryNorm);
+        const foodConf = isSynonymHit ? 90 : 95;
+        const foodMatchType: MatchType = isSynonymHit ? "SYNONYM" : "EXACT";
+        const foodMatchReason = isSynonymHit
+          ? `Matched via Synonym Expansion '${variant}' (dialect/baseline)`
+          : "Matched via Food Canonical Name";
+
         foodCount++;
-        foodDetails.push(`${primaryFood.nameAr} (95%)`);
+        foodDetails.push(`${primaryFood.nameAr} (${foodConf}%)`);
         return this.formatResult({
           entity_type: "food",
           canonical_id: primaryFood.id,
           canonical_name: primaryFood.nameAr,
-          confidence: 95,
-          matched_alias: null,
+          confidence: foodConf,
+          matched_alias: isSynonymHit ? variant : null,
           search_method: "exact_canonical",
-          matchedReason: "Matched via Food Canonical Name",
+          matchType: foodMatchType,
+          matchedReason: foodMatchReason,
         }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
       }
     }

@@ -40,6 +40,46 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
   كبسه: ["كبسة", "الكبسة"],
 };
 
+/**
+ * Curated regional / dialectal food name synonyms.
+ *
+ * Rules:
+ *  - Only include mappings that are genuine, unambiguous lexical equivalents
+ *    in their respective dialect (i.e. same referent, different regional name).
+ *  - Do NOT include speculative, context-dependent, or multi-meaning mappings.
+ *  - Do NOT add: خروف→لحم الضاني, قرع→كوسة, جريش→قمح, برغل→قمح, عجل→كندوز, etc.
+ *  - Each entry: key = normalized dialect term, value = normalized canonical equivalent.
+ *
+ * Match type produced in canonical search: treated as SYNONYM (confidence ~90%).
+ * Ranking: above FUZZY/TYPO, below exact canonical/alias.
+ */
+export const DIALECT_REGIONAL_SYNONYMS: Record<string, string> = {
+  // ─── Vegetables / Legumes ───────────────────────────────────────────────
+  // Egyptian: بسلة = green peas (بازيلاء, Food 1604) — unambiguous, uncontested
+  بسلة: "بازيلاء",
+  // Common written form: بازلا (hamza dropped, ends in لا not لاء, so orthographic rule لاء↔يلاء doesn't fire)
+  بازلا: "بازيلاء",
+  // Levantine/Gulf: باميه = okra (بامية, Food 1392) — same word, different ه/ة spelling convention
+  باميه: "بامية",
+  // Gulf: حبحب = watermelon (بطيخ, Food 1497) — unambiguous Gulf dialect, single referent
+  حبحب: "بطيخ",
+  // Levantine: بندورة = tomato (طماطم, Food 1510) — unambiguous Levantine dialect, also in DB synonyms
+  بندورة: "طماطم",
+  // ─── Meat / Protein ─────────────────────────────────────────────────────
+  // Egyptian: فراخ = chicken (دجاج, Food 1410) — unambiguous, فراخ even appears in Food 1410 name
+  فراخ: "دجاج",
+  // Egyptian: فرخة = chicken singular (دجاج) — same referent as فراخ, no DB conflict
+  فرخة: "دجاج",
+
+  // ─── REMOVED after audit ─────────────────────────────────────────────────
+  // طرشي → مخلل  REMOVED: مخلل resolves to 2 foods (ID:1326, ID:1599); no single canonical target
+  // كرنب → ملفوف REMOVED: كرنب appears in DB as "ورق الكرنب" (ID:1491, 1585); global mapping conflicts
+  // عيش  → خبز   REMOVED: خبز resolves to 10 different bread foods; ambiguous resolution
+  // رغيف → خبز   REMOVED: رغيف is a specific bread form (loaf), not a synonym for خبز in general
+  // حمصية→ حمص   REMOVED: حمصية typically refers to a prepared dish (hummus stew), not the raw ingredient
+  // حوت  → سمك   REMOVED: حوت = whale in MSA; its Gulf use as "fish" is ambiguous and regional
+};
+
 import { db, searchSynonyms } from "@workspace/db";
 
 /**
@@ -66,6 +106,7 @@ export async function loadDbSynonyms(): Promise<void> {
 
 /**
  * Initialize / Precompute Synonym Dictionary in memory.
+ * Loads BASELINE_SYNONYMS first, then DIALECT_REGIONAL_SYNONYMS, then custom synonyms.
  */
 export function initializeSynonymDictionary(customSynonyms?: SearchSynonymRecord[]): void {
   SYNONYM_DICTIONARY.clear();
@@ -76,6 +117,18 @@ export function initializeSynonymDictionary(customSynonyms?: SearchSynonymRecord
     const normTerm = normalize(term);
     const normSyns = synonyms.map((s) => normalize(s));
     SYNONYM_DICTIONARY.set(normTerm, normSyns);
+  }
+
+  // Load dialect/regional synonyms — curated single-target mappings
+  for (const [dialectTerm, canonicalTarget] of Object.entries(DIALECT_REGIONAL_SYNONYMS)) {
+    const normTerm = normalize(dialectTerm);
+    const normTarget = normalize(canonicalTarget);
+    if (!normTerm || !normTarget) continue;
+    const existing = SYNONYM_DICTIONARY.get(normTerm) || [];
+    if (!existing.includes(normTarget)) {
+      existing.push(normTarget);
+    }
+    SYNONYM_DICTIONARY.set(normTerm, existing);
   }
 
   // Load dynamic custom synonyms if provided
@@ -97,6 +150,12 @@ export function initializeSynonymDictionary(customSynonyms?: SearchSynonymRecord
 
 /**
  * Generate all deterministic search variants for a query (cached O(1) lookup after first run).
+ *
+ * The returned array includes:
+ *  1. The normalized query and article variants (ال/أ/ا prefix).
+ *  2. Systematic Arabic orthographic variants (يلاء/لاء, ولياء/وليا, يا/ية).
+ *  3. Synonym-expanded targets from SYNONYM_DICTIONARY (baseline + dialect).
+ *     For multi-word queries, each token is checked individually against the dictionary.
  */
 export function expandSearchQuery(query: string): string[] {
   const normQ = normalize(query);
@@ -157,6 +216,27 @@ export function expandSearchQuery(query: string): string[] {
     }
   }
 
+  // ── Synonym Dictionary Expansion ──────────────────────────────────────────
+  // Check the full normalized query AND each whitespace token individually.
+  // This ensures dialect multi-word queries like "بسلة مسلوقة" expand correctly.
+  const queryTokens = [normQ, strippedQ, ...normQ.split(/\s+/)].filter(Boolean);
+  for (const token of queryTokens) {
+    const synonymTargets = SYNONYM_DICTIONARY.get(token);
+    if (synonymTargets) {
+      for (const target of synonymTargets) {
+        if (target && !variants.has(target)) {
+          // Add the synonym target and its orthographic variants
+          variants.add(target);
+          const strippedTarget = stripArticle(target);
+          if (strippedTarget && strippedTarget !== target) {
+            variants.add(strippedTarget);
+            variants.add(`ال${strippedTarget}`);
+          }
+        }
+      }
+    }
+  }
+
   const result = Array.from(variants);
   EXPANSION_CACHE.set(normQ, result);
   return result;
@@ -186,6 +266,37 @@ export function generateSmartSuggestions(query: string, candidatePool?: string[]
   }
 
   return Array.from(suggestions).slice(0, 5);
+}
+
+/**
+ * Returns the set of normalized synonym-target variants for a query.
+ *
+ * Used by CanonicalSearchEngine to determine whether a Tier 2/3 match was made via
+ * a synonym expansion (baseline or dialect), so it can assign matchType = "SYNONYM"
+ * instead of "EXACT" or "ALIAS".
+ *
+ * Only covers synonym-derived targets — does NOT include pure orthographic variants
+ * (alef normalization, يلاء/لاء, etc.), which remain EXACT.
+ */
+export function getQuerySynonymTargets(query: string): Set<string> {
+  const normQ = normalize(query);
+  const strippedQ = stripArticle(normQ);
+  const targets = new Set<string>();
+
+  const checkTokens = [normQ, strippedQ, ...normQ.split(/\s+/).filter(Boolean)];
+  for (const token of checkTokens) {
+    const synonymTargets = SYNONYM_DICTIONARY.get(token);
+    if (synonymTargets) {
+      for (const target of synonymTargets) {
+        if (target) {
+          targets.add(target);
+          const strippedTarget = stripArticle(target);
+          if (strippedTarget) targets.add(strippedTarget);
+        }
+      }
+    }
+  }
+  return targets;
 }
 
 // Auto-initialize baseline synonyms on module load

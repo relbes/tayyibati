@@ -521,7 +521,6 @@ export class UnifiedAnalysisEngine {
       // ARCHITECTURAL TRIGGER RULE: If strong suggestions exist in our database,
       // return them directly on the NOT_FOUND report without relying on AI confidence or making unnecessary AI calls.
       if (fallbackResult.hasSuggestions && fallbackResult.suggestions.length > 0) {
-        const suggestions = canonicalSearchRes?.didYouMean || [];
         let notFoundReport: AnalysisReport = {
           query: queryText,
           resultMode: "NOT_FOUND" as any,
@@ -533,7 +532,7 @@ export class UnifiedAnalysisEngine {
           compatibilityScore: null,
           scoreAvailable: false,
           explanation: "لم نجد هذا الطعام بالاسم نفسه، لكن ربما تقصد أحد البدائل المقترحة.",
-          suggestions,
+          suggestions: [],
           analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
           notFound: true,
           fallbackSuggestions: fallbackResult.suggestions.map((s) => ({

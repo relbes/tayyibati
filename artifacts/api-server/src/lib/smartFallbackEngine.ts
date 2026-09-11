@@ -23,7 +23,7 @@ import {
   PREPARATION_DESCRIPTORS,
   GENERIC_DESCRIPTORS,
 } from "./arabicNormalization";
-import { expandSearchQuery } from "./searchExpansion";
+import { expandSearchQuery, DIALECT_REGIONAL_SYNONYMS } from "./searchExpansion";
 import { getKnowledgeCache } from "./knowledgeCache";
 import { warmDishEngineCache } from "./dishCompatibilityEngine";
 
@@ -101,6 +101,32 @@ function countSharedPrefix(a: string, b: string): number {
 }
 
 /**
+ * Extract Arabic consonantal skeleton by stripping vowels, weak letters,
+ * tatweel, diacritics, and normalising hamzas.
+ * e.g. "بازلا" -> "بزل", "بازيلاء" -> "بزل", "البازين" -> "بزن".
+ */
+function getArabicSkeleton(str: string): string {
+  let s = normalize(str);
+  s = stripArticle(s);
+  s = s.replace(/\s*\([^)]*\)/g, "");
+  s = s.replace(/\s*\/.*$/, "");
+  s = s.replace(/[\u064B-\u065F\u0640]/g, "");
+  s = s.replace(/[إأآءئؤيةهىا]/g, "");
+  return s.trim();
+}
+
+/**
+ * Normalise core food/dish name by removing parentheses, slashes, and leading articles.
+ * e.g. "الكوسا بلبن (أبلما)" -> "كوسا بلبن".
+ */
+function getNormalizedCoreName(str: string): string {
+  let s = normalize(str);
+  s = s.replace(/\s*\([^)]*\)/g, "");
+  s = s.replace(/\s*\/.*$/, "");
+  return s.split(/\s+/).map(stripArticle).filter(Boolean).join(" ");
+}
+
+/**
  * Clean and split a normalized Arabic string into meaningful content tokens.
  * Handles conjunctions (e.g. "وبصل" -> "بصل"), strips stop words, descriptors, and short noise.
  */
@@ -172,13 +198,21 @@ function buildCandidateTokenSet(nameAr: string, nameEn?: string | null): Set<str
 
 interface ScoreParams {
   queryStripped: string;
+  querySkeleton: string;
   coreBaseStripped: string | null;
+  coreBaseSkeleton: string | null;
   baseEntityStripped: string | null;
   contentTokens: string[];
   prepWords: string[];
   expandedVariants: string[];
   hasPreparationIndicator: boolean;
   englishQueryTokens: string[];
+  /**
+   * Normalized canonical targets derived from DIALECT_REGIONAL_SYNONYMS for query tokens.
+   * Used by Signal 1.3 to directly boost the correct canonical food when the query is a
+   * known dialect/regional variant (e.g. "بسلة" → target = "بازيلاء").
+   */
+  dialectSynonymTargets: string[];
 }
 
 /**
@@ -193,17 +227,21 @@ function scoreCandidate(
 
   const {
     queryStripped,
+    querySkeleton,
     coreBaseStripped,
+    coreBaseSkeleton,
     baseEntityStripped,
     contentTokens,
     prepWords,
     expandedVariants,
     hasPreparationIndicator,
     englishQueryTokens,
+    dialectSynonymTargets,
   } = params;
 
   const candNorm = normalize(candidate.nameAr);
   const candStripped = stripArticle(candNorm);
+  const candSkeleton = getArabicSkeleton(candidate.nameAr);
   const candTokens = buildCandidateTokenSet(candidate.nameAr, candidate.nameEn);
 
   let score = 0;
@@ -223,6 +261,45 @@ function scoreCandidate(
     score += 35;
   }
 
+  // -- Signal 1.3: Dialect Synonym Match (+70) --------------------------------
+  // Fires when the query token is a known regional/dialectal synonym (e.g. "بسلة")
+  // and the candidate's stripped canonical name matches the synonym target (e.g. "بازيلاء").
+  // This signal is STRICTLY based on the curated DIALECT_REGIONAL_SYNONYMS dictionary —
+  // no fuzzy/skeleton guessing. Intentionally scores ABOVE skeleton (Signal 1.5) so the
+  // correct canonical food wins decisively.
+  if (dialectSynonymTargets.length > 0) {
+    for (const target of dialectSynonymTargets) {
+      if (candStripped === target || candNorm === target) {
+        score += 70;
+        break;
+      }
+      // Also match partial: candidate is a multi-word food whose stripped name starts with the target
+      // (e.g. target "بازيلاء" matches "بازيلاء المجمدة" if that were a food)
+      if (target.length >= 4 && candStripped.startsWith(target)) {
+        score += 55;
+        break;
+      }
+    }
+  }
+
+  // -- Signal 1.5: Arabic Consonantal Skeleton Match (+55 / +45) --------------
+  // When consonantal skeleton matches (e.g. "بازلا" [بزل] and "بازيلاء" [بزل]),
+  // this is a high-confidence orthographic / phonetic variant match.
+  const targetSkeleton = coreBaseSkeleton || querySkeleton;
+  if (targetSkeleton && targetSkeleton.length >= 3) {
+    if (candSkeleton === targetSkeleton) {
+      score += 55;
+    } else {
+      for (const ct of candTokens) {
+        const ctSkel = getArabicSkeleton(ct);
+        if (ctSkel.length >= 3 && ctSkel === targetSkeleton) {
+          score += 45;
+          break;
+        }
+      }
+    }
+  }
+
   // -- Signal 2: Content-Token Overlap (+30 max) -----------------------------
   if (contentTokens.length > 0) {
     const matched = contentTokens.filter((t) => isWholeWordMatch(t, candTokens));
@@ -239,17 +316,19 @@ function scoreCandidate(
     }
   }
 
-  // -- Signal 4: Levenshtein Typo Distance Matching (+40 / +35) --------------
-  // Requires shared prefix >= 3 chars to prevent "بازلا" matching "بابا" or "باشا"
+  // -- Signal 4: Levenshtein Typo Distance Matching (+45 / +35) --------------
+  // Distance 1: requires shared prefix >= 2
+  // Distance 2: requires shared prefix >= 3 AND word length >= 6 to avoid
+  // accidental substitutions on short 4-5 letter words (e.g. "بازلا" vs "بازين")
   if (queryStripped.length >= 4) {
     for (const ct of candTokens) {
       if (ct.length >= 4) {
         const prefixLen = countSharedPrefix(queryStripped, ct);
         const dist = levenshteinDistance(queryStripped, ct);
         if (dist === 1 && prefixLen >= 2) {
-          score += 40;
+          score += 45;
           break;
-        } else if (dist === 2 && prefixLen >= 3) {
+        } else if (dist === 2 && prefixLen >= 3 && queryStripped.length >= 6) {
           score += 35;
           break;
         }
@@ -268,7 +347,7 @@ function scoreCandidate(
     }
   }
 
-  // -- Preparation Indicator Rules -------------------------------------------
+  // -- Preparation Indicator & Food vs Dish Priority -------------------------
   if (hasPreparationIndicator) {
     if (entityType === "dish") {
       // Prepared dish boost applies ONLY if the candidate has an underlying ingredient/content match
@@ -285,6 +364,12 @@ function scoreCandidate(
       // For raw foods when query explicitly asks for a prepared dish:
       // Cap raw food score so it remains a secondary alternative when matching dishes exist
       score = Math.min(score, 60);
+    }
+  } else {
+    // Plain food query without preparation words:
+    // Existing foods get priority over prepared dishes
+    if (entityType === "food" && score > 0) {
+      score += 15;
     }
   }
 
@@ -355,15 +440,38 @@ export class SmartFallbackEngine {
       return empty;
     }
 
+    const querySkeleton = getArabicSkeleton(queryStripped);
+    const coreBaseSkeleton = coreBaseStripped ? getArabicSkeleton(coreBaseStripped) : null;
+
+    // Compute dialect synonym targets: check query and each token against DIALECT_REGIONAL_SYNONYMS.
+    // E.g. "بسلة" → normalize("بازيلاء") → ["بازيلاء"].
+    const dialectSynonymTargets: string[] = [];
+    {
+      const checkTokens = [queryStripped, ...(queryStripped.split(/\s+/).filter(Boolean))];
+      for (const tok of checkTokens) {
+        const directHit = DIALECT_REGIONAL_SYNONYMS[tok];
+        if (directHit) {
+          const normTarget = normalize(directHit);
+          const strippedTarget = stripArticle(normTarget);
+          if (strippedTarget && !dialectSynonymTargets.includes(strippedTarget)) {
+            dialectSynonymTargets.push(strippedTarget);
+          }
+        }
+      }
+    }
+
     const scoreParams: ScoreParams = {
       queryStripped,
+      querySkeleton,
       coreBaseStripped,
+      coreBaseSkeleton,
       baseEntityStripped,
       contentTokens,
       prepWords,
       expandedVariants,
       hasPreparationIndicator,
       englishQueryTokens,
+      dialectSynonymTargets,
     };
 
     // -- Phase 2: Candidate Scoring ------------------------------------------
@@ -428,18 +536,46 @@ export class SmartFallbackEngine {
           if (a.candidate.canonicalEntityType === "dish" && a.score >= 35) return -1;
           if (b.candidate.canonicalEntityType === "dish" && b.score >= 35) return 1;
         }
+      } else {
+        // Plain food queries: Existing foods take priority over prepared dishes if scores are close
+        if (a.candidate.canonicalEntityType !== b.candidate.canonicalEntityType) {
+          if (a.candidate.canonicalEntityType === "food" && a.score >= b.score - 10) return -1;
+          if (b.candidate.canonicalEntityType === "food" && b.score >= a.score - 10) return 1;
+        }
       }
       if (b.score !== a.score) return b.score - a.score;
       return a.candidate.nameAr.length - b.candidate.nameAr.length;
     });
 
-    const seen = new Set<string>();
+    const seenEntities = new Set<string>();
+    const seenCoreNames = new Set<string>();
+    const seenSkeletons = new Map<string, number>();
     const topCandidates: FallbackSuggestion[] = [];
+
     for (const { candidate } of scored) {
-      const key = `${candidate.canonicalEntityType}:${candidate.canonicalId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const entityKey = `${candidate.canonicalEntityType}:${candidate.canonicalId}`;
+      if (seenEntities.has(entityKey)) continue;
+
+      // Filter literal duplicate names (e.g. "كوسا بلبن" vs "الكوسا بلبن")
+      const coreName = `${candidate.canonicalEntityType}:${getNormalizedCoreName(candidate.nameAr)}`;
+      if (seenCoreNames.has(coreName)) continue;
+
+      // Consonantal skeleton deduplication for same entity type
+      // For foods: max 1 per skeleton concept (e.g. do not return multiple pea variations)
+      // For dishes: allow up to 2 per skeleton concept (e.g. 2 different pigeon dishes)
+      const skel = getArabicSkeleton(candidate.nameAr);
+      const skelKey = `${candidate.canonicalEntityType}:${skel}`;
+      const skelCount = seenSkeletons.get(skelKey) || 0;
+      const maxPerSkel = candidate.canonicalEntityType === "food" ? 1 : 2;
+      if (skel.length >= 3 && skelCount >= maxPerSkel) {
+        continue;
+      }
+
+      seenEntities.add(entityKey);
+      seenCoreNames.add(coreName);
+      seenSkeletons.set(skelKey, skelCount + 1);
       topCandidates.push(candidate);
+
       if (topCandidates.length >= MAX_SUGGESTIONS) break;
     }
 
