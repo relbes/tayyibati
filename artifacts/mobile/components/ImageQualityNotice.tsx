@@ -20,16 +20,22 @@ export function ImageQualityNotice({ report, onRetry, onSelectCandidate, onManua
 
   if (!ir) return null;
 
+  const isPackaged = ir.imageType === "PACKAGED_PRODUCT";
+  const title = isPackaged ? "لم نتمكن من تحديد المنتج بدقة" : "لم نتمكن من تحديد الطعام بدقة";
+  const subtitle = isPackaged
+    ? "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات."
+    : "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات.";
+
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={[styles.header, { flexDirection: rtl ? "row-reverse" : "row" }]}>
         <Icon name="alert-triangle" size={24} color={colors.destructive} />
         <Text style={[styles.title, { color: colors.foreground }]}>
-          الصورة غير واضحة
+          {title}
         </Text>
       </View>
       <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
-        لم نتمكن من تحديد الطعام بدقة بسبب عدم وضوح الصورة، أو أن العنصر صغير جداً.
+        {subtitle}
       </Text>
 
       <TouchableOpacity 

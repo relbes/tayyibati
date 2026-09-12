@@ -303,20 +303,34 @@ function buildTextExtractionPrompt(): string {
 
 function buildImageExtractionPrompt(mode: "image" | "label"): string {
   const isLabel = mode === "label";
-  return `أنت مساعد متخصص في تحليل الصور والأطعمة والمكونات بدقة عالية.
+  return `أنت مساعد خبير ومحافظ في تحليل الصور والتعرف على الأطعمة والمكونات والمنتجات بدقة وموثوقية عالية.
 
-مهمتك: ${isLabel ? "استخراج قائمة المكونات الكاملة والبيانات من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). ترجم كل مكوّن للعربية." : "تحليل الصورة: حدّد الطعام الرئيسي والطبق وكل مكوناته الظاهرة، واستنتج المكونات المحتملة للوصفة."}
+مهمتك:
+${isLabel
+  ? "استخراج قائمة المكونات الكاملة والبيانات المقروءة فقط من ملصق المنتج في الصورة (بما فيها الأرقام E، المستحلبات، المواد الحافظة، الألوان). لا تخمّن أي مكوّن غير مقروء."
+  : "فحص الصورة لتحديد ما إذا كانت تحتوي على طعام واضح، أو منتج معبأ، أو وجبة/طبق، أو صورة غامضة/غير واضحة، أو غير متعلقة بالطعام."
+}
 
-قواعد التسمية والمخرجات:
-- استخدم الاسم القياسي القصير للمكوّن (مثال: اكتب "شوكولاتة" لا "كرات شوكولاتة بنية").
-- اذكر نوع المكوّن بدقة (لحم بقري، لحم غنم، دجاج، حليب بقر، إلخ).
-- لا تقيّم الأطعمة أو تُطلق أحكاماً عليها، مهمتك التعرف فقط.
+قواعد أساسية صارمة لمكافحة التخمين (Anti-Hallucination & Uncertainty Rules):
+1. عدم التخمين: إذا كانت الصورة ضبابية، غير واضحة، الإضاءة سيئة، العنصر محجوباً، أو لا تظهر المعالم المميزة بوضوح، لا تخمّن طعاماً محدداً ولا تجزم به أبداً.
+2. التمييز بين اليقين والاحتمال:
+   - "CONFIDENT": فقط إذا كان الطعام ظاهراً بالكامل بوضوح تام، وتظهر تفاصيله المميزة التي لا يمكن الخلط بينها وبين طعام آخر (مثلاً تفاحة حمراء واضحة جداً، أو موزة كاملة ناضجة بقشرتها المميزة وظاهرة بوضوح تام).
+   - "AMBIGUOUS": إذا كان الطعام يشبه أكثر من شيء (مثلاً مسحوق أصفر قد يكون كركم أو كاري، حساء غير واضح المكونات، فاكهة تشبه الموز أو الكوسة أو غيرها، أو طعام محجوب جزئياً). ضع هنا من 2 إلى 3 خيارات مرجحة فقط.
+   - "INSUFFICIENT_IMAGE": إذا كانت الصورة مشوشة، باهتة، بعيدة جداً، أو لا تكفي للحكم.
+   - "NON_FOOD": إذا كانت الصورة لا تحوي طعاماً إطلاقاً.
+3. المنتجات المعبأة (PACKAGED_PRODUCT): إذا كانت العبوة ظاهرة لكن الاسم أو المكونات غير مقروءة بوضوح، لا تخترع اسماً للمنتج، بل صنفه كمنتج معبأ واذكر الاحتمالات الظاهرة إن وجدت دون الجزم.
+4. درجة الثقة (recognitionScore):
+   - يجب أن تعكس اليقين البصري الحقيقي (0.90 فأعلى: يقين قاطع وميزات بصرية فريدة واضحة؛ 0.50 إلى 0.84: ترجيح مع وجود شك أو إمكانية شبه؛ أقل من 0.50: شك كبير أو صورة غير كافية).
 
 أعِد JSON صالحاً فقط بهذا الشكل بدقة:
 {
   "isFood": true,
   "imageRecognition": {
     "imageType": "SINGLE_FOOD" | "MULTIPLE_FOODS" | "DISH" | "PACKAGED_PRODUCT" | "AMBIGUOUS",
+    "imageQuality": "CLEAR" | "BLURRY" | "POOR_LIGHTING" | "OBSTRUCTED" | "PARTIAL",
+    "visualClarity": "HIGH" | "MEDIUM" | "LOW",
+    "distinctiveFeaturesVisible": true,
+    "uncertaintyReason": "سبب الشك إن وجد (مثل: الصورة غير واضحة أو العنصر يشبه عدة أطعمة)",
     "candidates": [
       {
         "nameAr": "الاسم بالعربية",
@@ -326,15 +340,15 @@ function buildImageExtractionPrompt(mode: "image" | "label"): string {
     ],
     "visibleComponents": ["مكون مرئي 1", "مكون مرئي 2"],
     "likelyIngredients": ["مكون محتمل 1", "مكون محتمل 2"],
-    "confirmedIngredients": ["مكون مؤكد 1 (استخدمه فقط في حال قراءة الملصقات بوضوح)"]
+    "confirmedIngredients": ["مكون مؤكد مقروء من الملصق فقط"]
   }
 }
 
-قواعد صارمة:
-1. recognitionScore: تقدير من 0.0 إلى 1.0 لمدى ثقتك أن الطعام في الصورة هو هذا الكيان (0.9=واضح جداً، 0.3=احتمال ضعيف).
-2. candidates: قدّم من 1 إلى 3 احتمالات للطبق الرئيسي في الصورة. إذا كانت الصورة غامضة، ضع الاحتمالات الواردة.
-3. imageType: إذا كان هناك عدة أطعمة منفصلة بوضوح في نفس الطبق (مثلاً أرز في جهة ولحم في جهة أخرى وسلطة منفصلة)، اجعله "MULTIPLE_FOODS" واذكرها جميعاً في visibleComponents.
-4. isFood=false فقط إذا كانت الصورة لا تحوي طعاماً إطلاقاً.`;
+قواعد المخرجات:
+- استخدم الاسم القياسي القصير للمكوّن (مثل "شوكولاتة" بدلاً من "كرات شوكولاتة").
+- اذكر من 1 إلى 3 مرشحين كحد أقصى في candidates مرتبين بالأعلى احتمالاً.
+- لا تقدم مرشحين متطابقين أو مجرد اختلافات إملائية لنفس الطعام.
+- إذا كانت الصورة لا تحوي طعاماً، ضع isFood=false.`;
 }
 
 
@@ -363,6 +377,10 @@ interface ExtractionResult {
   
   imageRecognition?: {
     imageType: "SINGLE_FOOD" | "MULTIPLE_FOODS" | "DISH" | "PACKAGED_PRODUCT" | "AMBIGUOUS";
+    imageQuality?: "CLEAR" | "BLURRY" | "POOR_LIGHTING" | "OBSTRUCTED" | "PARTIAL";
+    visualClarity?: "HIGH" | "MEDIUM" | "LOW";
+    distinctiveFeaturesVisible?: boolean;
+    uncertaintyReason?: string;
     candidates: {
       nameAr: string;
       nameEn: string;
@@ -412,16 +430,20 @@ function parseExtraction(content: string): ExtractionResult {
     const ir = parsed.imageRecognition as Record<string, any>;
     imageRecognition = {
       imageType: typeof ir.imageType === "string" ? ir.imageType as any : "AMBIGUOUS",
+      imageQuality: typeof ir.imageQuality === "string" ? ir.imageQuality as any : undefined,
+      visualClarity: typeof ir.visualClarity === "string" ? ir.visualClarity as any : undefined,
+      distinctiveFeaturesVisible: typeof ir.distinctiveFeaturesVisible === "boolean" ? ir.distinctiveFeaturesVisible : undefined,
+      uncertaintyReason: typeof ir.uncertaintyReason === "string" ? ir.uncertaintyReason.trim() : undefined,
       candidates: Array.isArray(ir.candidates)
         ? ir.candidates.map((c: any) => ({
-            nameAr: typeof c.nameAr === "string" ? c.nameAr : "",
-            nameEn: typeof c.nameEn === "string" ? c.nameEn : "",
-            recognitionScore: typeof c.recognitionScore === "number" ? c.recognitionScore : 0.5
-          }))
+            nameAr: typeof c.nameAr === "string" ? c.nameAr.trim() : "",
+            nameEn: typeof c.nameEn === "string" ? c.nameEn.trim() : "",
+            recognitionScore: typeof c.recognitionScore === "number" ? Math.max(0, Math.min(1, c.recognitionScore)) : 0.5
+          })).filter((c: any) => c.nameAr.length > 0)
         : [],
-      visibleComponents: Array.isArray(ir.visibleComponents) ? ir.visibleComponents.map(String) : [],
-      likelyIngredients: Array.isArray(ir.likelyIngredients) ? ir.likelyIngredients.map(String) : [],
-      confirmedIngredients: Array.isArray(ir.confirmedIngredients) ? ir.confirmedIngredients.map(String) : [],
+      visibleComponents: Array.isArray(ir.visibleComponents) ? ir.visibleComponents.map(String).map(s => s.trim()).filter(Boolean) : [],
+      likelyIngredients: Array.isArray(ir.likelyIngredients) ? ir.likelyIngredients.map(String).map(s => s.trim()).filter(Boolean) : [],
+      confirmedIngredients: Array.isArray(ir.confirmedIngredients) ? ir.confirmedIngredients.map(String).map(s => s.trim()).filter(Boolean) : [],
     };
   }
 
@@ -1071,22 +1093,68 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
   }
 });
 
-function evaluateImageRecognition(ir: NonNullable<ExtractionResult["imageRecognition"]>) {
-  if (ir.imageType === "MULTIPLE_FOODS") return "CONFIDENT";
+function evaluateImageRecognition(ir: NonNullable<ExtractionResult["imageRecognition"]>): "CONFIDENT" | "AMBIGUOUS" | "UNKNOWN" | "INSUFFICIENT_IMAGE" {
+  // 1. Poor visual quality or clarity: never confident, require clearer image
+  if (
+    ir.imageQuality === "BLURRY" ||
+    ir.imageQuality === "POOR_LIGHTING" ||
+    ir.imageQuality === "OBSTRUCTED" ||
+    ir.imageQuality === "PARTIAL" ||
+    ir.visualClarity === "LOW"
+  ) {
+    return "INSUFFICIENT_IMAGE";
+  }
+
+  // 2. Explicit ambiguous image type from vision model
+  if (ir.imageType === "AMBIGUOUS") {
+    return "AMBIGUOUS";
+  }
+
+  // 3. Multiple foods handling: confident only when separate components are genuinely clear and reliable.
+  // Never guess or invent an entire meal name if only components are visible.
+  if (ir.imageType === "MULTIPLE_FOODS") {
+    const isQualityClear = ir.imageQuality === "CLEAR" || ir.imageQuality === undefined;
+    const isClarityHigh = ir.visualClarity === "HIGH";
+    const hasFeatures = ir.distinctiveFeaturesVisible !== false;
+    if (ir.visibleComponents.length >= 2 && isQualityClear && isClarityHigh && hasFeatures && !ir.uncertaintyReason) {
+      return "CONFIDENT";
+    }
+    return "AMBIGUOUS";
+  }
+
+  // 4. No candidates provided
   if (!ir.candidates || ir.candidates.length === 0) {
-    if (ir.visibleComponents.length > 0 || ir.likelyIngredients.length > 0 || ir.confirmedIngredients.length > 0) return "AMBIGUOUS";
+    if (ir.visibleComponents.length > 0 || ir.likelyIngredients.length > 0 || ir.confirmedIngredients.length > 0) {
+      return "AMBIGUOUS";
+    }
     return "UNKNOWN";
   }
 
   const top = ir.candidates[0];
-  if (top.recognitionScore > 0.8) {
-    if (ir.candidates.length > 1 && top.recognitionScore - ir.candidates[1].recognitionScore < 0.15) {
-      return "AMBIGUOUS";
-    }
+  const second = ir.candidates.length > 1 ? ir.candidates[1] : null;
+
+  // 5. Very low score indicates extreme doubt, unrecognizable object, or non-food
+  if (top.recognitionScore < 0.45) {
+    return "UNKNOWN";
+  }
+
+  // 6. Strict CONFIDENT requirements:
+  // - Top score must be high (>= 0.88)
+  // - Distinctive visual features must be present
+  // - Visual clarity must be acceptable (not LOW)
+  // - If a second candidate exists, the top candidate must lead by a decisive margin (>= 0.20).
+  //   If the gap is < 0.20, the model itself saw a viable alternative, which is visually ambiguous.
+  const isHighConfidence = top.recognitionScore >= 0.88;
+  const hasDistinctiveFeatures = ir.distinctiveFeaturesVisible !== false;
+  const isQualityClear = ir.imageQuality === "CLEAR" || ir.imageQuality === undefined;
+  const isClarityHigh = ir.visualClarity === "HIGH" || ir.visualClarity === undefined;
+  const hasDecisiveMargin = !second || (top.recognitionScore - second.recognitionScore >= 0.20);
+
+  if (isHighConfidence && hasDistinctiveFeatures && isQualityClear && isClarityHigh && hasDecisiveMargin) {
     return "CONFIDENT";
   }
-  
-  if (top.recognitionScore < 0.3) return "UNKNOWN";
+
+  // 7. Otherwise, any doubt, competing alternative, or moderate score must route to AMBIGUOUS
   return "AMBIGUOUS";
 }
 
@@ -1153,29 +1221,59 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
     const status = evaluateImageRecognition(ir);
     const knowledgeCache = await getKnowledgeCache();
 
-    // Enrich candidates
-    const enrichedCandidates = ir.candidates.map(c => {
+    // Enrich and deduplicate candidates: maximum 3 genuinely distinct candidates
+    const enrichedCandidates: any[] = [];
+    const seenNames = new Set<string>();
+
+    for (const c of ir.candidates.slice(0, 3)) {
+      const normC = normalize(c.nameAr);
+      const stripC = stripArticle(normC);
+      if (!stripC || seenNames.has(stripC)) continue;
+      seenNames.add(stripC);
+
       const resolution = resolveWithInheritance(c.nameAr, knowledgeCache);
-      return {
+      const canonicalNameAr = (resolution as any)?.primaryFood?.nameAr || (resolution as any)?.resolvedEntity?.nameAr || c.nameAr;
+      const normCanonical = stripArticle(normalize(canonicalNameAr));
+      if (seenNames.has(normCanonical) && normCanonical !== stripC) continue;
+      seenNames.add(normCanonical);
+
+      enrichedCandidates.push({
         ...c,
         resolution: resolution ? {
           resolved: true,
-          canonicalNameAr: (resolution as any).primaryFood?.nameAr || (resolution as any).resolvedEntity?.nameAr || c.nameAr,
-          canonicalNameEn: (resolution as any).primaryFood?.nameEn || (resolution as any).resolvedEntity?.nameEn || c.nameEn,
+          canonicalNameAr,
+          canonicalNameEn: (resolution as any)?.primaryFood?.nameEn || (resolution as any)?.resolvedEntity?.nameEn || c.nameEn,
           resolutionType: resolution.matchType
         } : undefined
-      };
-    });
+      });
+      if (enrichedCandidates.length >= 3) break;
+    }
     ir.candidates = enrichedCandidates as any;
 
     if ((status as any) === "AMBIGUOUS" || (status as any) === "UNKNOWN" || (status as any) === "INSUFFICIENT_IMAGE") {
+      const isPackaged = ir.imageType === "PACKAGED_PRODUCT";
+      let explanation = "";
+      if (status === "INSUFFICIENT_IMAGE") {
+        explanation = isPackaged
+          ? "لم نتمكن من تحديد المنتج بدقة. حاول التقاط صورة أوضح للعبوة، ويفضل إظهار الاسم والمكونات."
+          : "لم نتمكن من تحديد الطعام بدقة. حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات.";
+      } else if (status === "AMBIGUOUS") {
+        explanation = isPackaged
+          ? "لم نتمكن من تحديد المنتج بدقة. ربما تقصد أحد هذه الخيارات:"
+          : "لم نتمكن من تحديد الطعام بدقة. ربما تقصد أحد هذه الخيارات:";
+      } else {
+        explanation = isPackaged
+          ? "لم نتمكن من تحديد المنتج بدقة. حاول التقاط صورة أوضح للعبوة، ويفضل إظهار الاسم والمكونات."
+          : "لم نتمكن من تحديد الطعام بدقة. حاول التقاط صورة أوضح، ويفضل إظهار الطعام والمكونات بوضوح.";
+      }
+
       const report: AnalysisReport = {
         query: queryLabel,
         analysisType: imageAnalysisType,
         scoreAvailable: false,
         compatibilityScore: null,
         allowed: [], forbidden: [], conditional: [], unknown: [],
-        explanation: status === "AMBIGUOUS" ? "قد يكون الطعام أحد الخيارات التالية" : "لم نتمكن من تحديد الطعام بدقة",
+        explanation,
         suggestions: [],
         imageRecognition: { ...ir, status, candidates: enrichedCandidates }
       };

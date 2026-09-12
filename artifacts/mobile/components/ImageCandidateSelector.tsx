@@ -20,27 +20,44 @@ export function ImageCandidateSelector({ report, onSelectCandidate, onManualEntr
   const ir = report.imageRecognition;
   if (!ir) return null;
 
+  const isPackaged = ir.imageType === "PACKAGED_PRODUCT";
+  const mainTitle = ir.status === "AMBIGUOUS"
+    ? (isPackaged ? "لم نتمكن من تحديد المنتج بدقة" : "لم نتمكن من تحديد الطعام بدقة")
+    : (isPackaged ? "لم نتمكن من تحديد المنتج بدقة" : "لم نتمكن من تحديد الطعام بدقة");
+
+  const subtitle = isPackaged
+    ? "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات."
+    : "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات.";
+
   return (
     <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
-        {ir.status === "AMBIGUOUS" ? "قد يكون الطعام أحد الخيارات التالية:" : "لم نتمكن من تحديد الطعام بدقة"}
+        {mainTitle}
+      </Text>
+      <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
+        {subtitle}
       </Text>
       
       {ir.candidates.length > 0 && !isManual && (
-        <View style={styles.candidates}>
-          {ir.candidates.map((c, idx) => (
-            <TouchableOpacity 
-              key={idx} 
-              style={[styles.candidateChip, { backgroundColor: colors.primary + "1A", borderColor: colors.primary + "40", flexDirection: rtl ? "row-reverse" : "row" }]}
-              onPress={() => onSelectCandidate(c.resolution?.canonicalNameAr || c.nameAr)}
-            >
-              <Text style={[styles.candidateText, { color: colors.primary }]}>
-                {c.resolution?.canonicalNameAr || c.nameAr}
-              </Text>
-              <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={16} color={colors.primary} />
-            </TouchableOpacity>
-          ))}
-        </View>
+        <>
+          <Text style={[styles.candidatesPrompt, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
+            ربما تقصد أحد هذه الخيارات:
+          </Text>
+          <View style={styles.candidates}>
+            {ir.candidates.map((c, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[styles.candidateChip, { backgroundColor: colors.primary + "1A", borderColor: colors.primary + "40", flexDirection: rtl ? "row-reverse" : "row" }]}
+                onPress={() => onSelectCandidate(c.resolution?.canonicalNameAr || c.nameAr)}
+              >
+                <Text style={[styles.candidateText, { color: colors.primary }]}>
+                  {c.resolution?.canonicalNameAr || c.nameAr}
+                </Text>
+                <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={16} color={colors.primary} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
       )}
 
       {!isManual ? (
@@ -85,7 +102,20 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontFamily: "Tajawal_700Bold",
-    marginBottom: 16,
+    marginBottom: 6,
+    width: "100%",
+  },
+  subtitle: {
+    fontSize: 14,
+    fontFamily: "Tajawal_400Regular",
+    lineHeight: 20,
+    marginBottom: 14,
+    width: "100%",
+  },
+  candidatesPrompt: {
+    fontSize: 15,
+    fontFamily: "Tajawal_700Bold",
+    marginBottom: 10,
     width: "100%",
   },
   candidates: {

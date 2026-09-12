@@ -394,6 +394,7 @@ export default function CameraScreen() {
 
               <AnalysisResultCard
                 report={result}
+                onRetry={resetAll}
                 onGoHome={() => {
                   try {
                     router.dismissTo("/(tabs)");
