@@ -38,7 +38,7 @@
     },
     "android": {
       "package": "com.tayyibati.app",
-      "versionCode": 22,
+      "versionCode": 23,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#F7F9F6"
