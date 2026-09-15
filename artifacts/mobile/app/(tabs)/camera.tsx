@@ -225,64 +225,67 @@ export default function CameraScreen() {
             </View>
           )}
 
-          {/* ── Main Image Action Card / Preview ── */}
+          {/* ── Large Food Image Banner & Actions (when no image picked) ── */}
           {!pickedImage ? (
-            <View
-              style={[
-                styles.mainActionCard,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: colors.card,
-                },
-              ]}
-            >
-              <View style={[styles.mainIconContainer, { backgroundColor: "#E6F6F0" }]}>
-                <Icon name="camera" size={42} color="#008C5A" />
+            <>
+              {/* Large Food Image Container with Viewfinder Brackets and Arabic Overlay */}
+              <View style={styles.foodBannerCard}>
+                <Image
+                  source={require("@/assets/images/camera_food_bowl.jpg")}
+                  style={styles.foodBannerImage}
+                  resizeMode="cover"
+                />
+
+                {/* Viewfinder corner brackets */}
+                <View style={[styles.cornerBracket, styles.cornerTL]} />
+                <View style={[styles.cornerBracket, styles.cornerTR]} />
+                <View style={[styles.cornerBracket, styles.cornerBL]} />
+                <View style={[styles.cornerBracket, styles.cornerBR]} />
+
+                {/* Arabic overlay */}
+                <View style={styles.foodOverlayContent}>
+                  <Text style={styles.foodOverlayTitle}>وجّه الكاميرا نحو وجبتك</Text>
+                  <Text style={styles.foodOverlaySubtitle}>لتحصل على تحليل فوري ودقيق</Text>
+                </View>
               </View>
 
-              <View style={styles.textStack}>
-                <Text style={[styles.cardTitle, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
-                  صوّر الطعام أو الوجبة
-                </Text>
-                <Text style={[styles.cardDesc, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
-                  سنستخرج المكونات، ونفحصها وفق قاعدة الطيبات
-                </Text>
-              </View>
-
-              <View style={styles.actionButtonsStack}>
-                {/* Primary Button */}
+              {/* Action Buttons Row: Capture Photo & Pick from Gallery on ONE ROW */}
+              <View style={[styles.actionButtonsRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+                {/* Primary Button: التقاط صورة (on right in RTL) */}
                 <TouchableOpacity
                   style={[
-                    styles.primaryActionBtn,
-                    { backgroundColor: "#008C5A", flexDirection: rtl ? "row-reverse" : "row" },
+                    styles.rowActionBtn,
+                    styles.rowPrimaryBtn,
+                    { flexDirection: rtl ? "row" : "row-reverse" },
                   ]}
                   onPress={() => pickImage("camera")}
                   activeOpacity={0.85}
                 >
-                  <Icon name="camera" size={24} color="#ffffff" />
-                  <Text style={styles.primaryActionBtnText}>التقاط صورة</Text>
+                  <Text style={styles.rowPrimaryBtnText}>التقاط صورة</Text>
+                  <Icon name="camera" size={22} color="#ffffff" />
                 </TouchableOpacity>
 
-                {/* Secondary Button */}
+                {/* Secondary Button: اختيار صورة من الجهاز (on left in RTL) */}
                 <TouchableOpacity
                   style={[
-                    styles.secondaryActionBtn,
-                    {
-                      backgroundColor: "#E6F6F0",
-                      borderColor: "#A3E2CB",
-                      flexDirection: rtl ? "row-reverse" : "row",
-                    },
+                    styles.rowActionBtn,
+                    styles.rowSecondaryBtn,
+                    { flexDirection: rtl ? "row" : "row-reverse" },
                   ]}
                   onPress={() => pickImage("library")}
                   activeOpacity={0.85}
                 >
-                  <Icon name="images" size={24} color="#008C5A" />
-                  <Text style={[styles.secondaryActionBtnText, { color: "#008C5A" }]}>
-                    اختيار صورة من الجهاز
-                  </Text>
+                  <View style={styles.rowSecondaryTextCol}>
+                    <Text style={styles.rowSecondaryBtnText}>اختيار صورة</Text>
+                    <Text style={styles.rowSecondaryBtnSubtext}>من الجهاز</Text>
+                  </View>
+                  <Icon name="image" size={24} color="#008C5A" />
                 </TouchableOpacity>
               </View>
-            </View>
+
+              {/* Tips Section (4 cards in 2x2 grid) */}
+              <CameraQualityTips />
+            </>
           ) : (
             /* Image Preview Card */
             <View style={styles.imageContainer}>
@@ -315,9 +318,6 @@ export default function CameraScreen() {
               )}
             </View>
           )}
-
-          {/* Image Quality Tips (only when no image picked) */}
-          {!pickedImage && <CameraQualityTips />}
 
           {/* Confirmation State UI */}
           {showConfirmationUI && (
@@ -518,45 +518,129 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_500Medium",
     lineHeight: 22,
   },
-  mainActionCard: {
-    padding: 22,
+  foodBannerCard: {
+    width: "100%",
+    height: 205,
     borderRadius: 22,
-    borderWidth: 1,
-    alignItems: "center",
-    gap: 16,
-    elevation: 2,
+    overflow: "hidden",
+    position: "relative",
+    backgroundColor: "#2B1D12",
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
     shadowRadius: 8,
+    elevation: 3,
   },
-  mainIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  textStack: {
-    gap: 6,
+  foodBannerImage: {
     width: "100%",
+    height: "100%",
   },
-  cardTitle: {
-    fontSize: 22,
+  cornerBracket: {
+    position: "absolute",
+    width: 28,
+    height: 28,
+    borderColor: "#FFFFFF",
+  },
+  cornerTL: {
+    top: 14,
+    left: 14,
+    borderTopWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderTopLeftRadius: 8,
+  },
+  cornerTR: {
+    top: 14,
+    right: 14,
+    borderTopWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderTopRightRadius: 8,
+  },
+  cornerBL: {
+    bottom: 14,
+    left: 14,
+    borderBottomWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderBottomLeftRadius: 8,
+  },
+  cornerBR: {
+    bottom: 14,
+    right: 14,
+    borderBottomWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderBottomRightRadius: 8,
+  },
+  foodOverlayContent: {
+    position: "absolute",
+    top: 18,
+    right: 22,
+    alignItems: "flex-end",
+  },
+  foodOverlayTitle: {
+    fontSize: 17,
     fontFamily: "Tajawal_700Bold",
-    width: "100%",
+    color: "#FFFFFF",
+    textAlign: "right",
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: 0, height: 1.5 },
+    textShadowRadius: 4,
   },
-  cardDesc: {
-    fontSize: 15,
-    fontFamily: "Tajawal_400Regular",
-    lineHeight: 23,
-    width: "100%",
+  foodOverlaySubtitle: {
+    fontSize: 12.5,
+    fontFamily: "Tajawal_500Medium",
+    color: "rgba(255, 255, 255, 0.95)",
+    textAlign: "right",
+    marginTop: 2,
+    textShadowColor: "rgba(0, 0, 0, 0.75)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  actionButtonsStack: {
+  actionButtonsRow: {
     width: "100%",
     gap: 12,
-    marginTop: 6,
+    alignItems: "center",
+  },
+  rowActionBtn: {
+    flex: 1,
+    height: 54,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    paddingHorizontal: 12,
+  },
+  rowPrimaryBtn: {
+    backgroundColor: "#008C5A",
+    shadowColor: "#008C5A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.18,
+    shadowRadius: 5,
+    elevation: 2,
+  },
+  rowPrimaryBtnText: {
+    color: "#FFFFFF",
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 15.5,
+  },
+  rowSecondaryBtn: {
+    backgroundColor: "#E6F6F0",
+    borderWidth: 1.5,
+    borderColor: "#A3E2CB",
+  },
+  rowSecondaryTextCol: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  rowSecondaryBtnText: {
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 13.5,
+    color: "#008C5A",
+    lineHeight: 17,
+  },
+  rowSecondaryBtnSubtext: {
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 13.5,
+    color: "#008C5A",
+    lineHeight: 17,
   },
   primaryActionBtn: {
     width: "100%",

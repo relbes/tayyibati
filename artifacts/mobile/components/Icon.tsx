@@ -237,6 +237,8 @@ const ICON_MAP: Record<string, any> = {
   "food-camera": CameraFilledIcon,
   "camera-outline": CameraFilledIcon,
   "photo-camera": CameraFilledIcon,
+  "image": Image,
+  "gallery": Image,
   "image-outline": Image,
   "images": LayoutGrid,
   "images-outline": LayoutGrid,
