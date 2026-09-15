@@ -18,6 +18,7 @@ import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import { useColors } from "@/hooks/useColors";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { listFoods, createFood, deleteFood } from "@/lib/api";
@@ -70,16 +71,36 @@ export default function AdminScreen() {
     s === "allowed" ? "مسموح" : s === "forbidden" ? "محظور" : "مشروط";
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
-        <HeaderNatureBackground />
-        <TouchableOpacity onPress={() => setShowAdd(!showAdd)}>
-          <Icon name={showAdd ? "close-circle" : "add-circle"} size={26} color="#f3f6f4" />
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
+      {/* Standardized Botanical Header */}
+      <PageHeader
+        title="لوحة الإدارة"
+        subtitle="إدارة النظام وقاعدة بيانات الأغذية"
+        badgeType="admin"
+      >
+        <TouchableOpacity
+          onPress={() => setShowAdd(!showAdd)}
+          style={{
+            position: "absolute",
+            left: -55,
+            top: 2,
+            width: 42,
+            height: 42,
+            borderRadius: 12,
+            backgroundColor: "#0D5C3A",
+            alignItems: "center",
+            justifyContent: "center",
+            shadowColor: "#022B1B",
+            shadowOffset: { width: 0, height: 3 },
+            shadowOpacity: 0.28,
+            shadowRadius: 5,
+            elevation: 4,
+          }}
+          accessibilityLabel="إضافة عنصر"
+        >
+          <Icon name={showAdd ? "close" : "add"} size={22} color="#ffffff" />
         </TouchableOpacity>
-        <Text style={[styles.title, { color: "#f3f6f4" }]}>لوحة الإدارة</Text>
-        <BackButton />
-      </View>
+      </PageHeader>
 
       {/* Add Form */}
       {showAdd && (

@@ -40,13 +40,22 @@ const CATEGORY_TRANSLATIONS: Record<string, { ar: string; en: string }> = {
 
 let cachedFreeBrowsePayload: any = null;
 let cachedPremiumBrowsePayload: any = null;
-let lastCacheFoodCount = -1;
+/** Content fingerprint: `id:status` pairs sorted by id — detects status edits without count changes */
+let lastCacheFingerprint = "";
+
+function getBrowseCatalogFingerprint(allFoods: any[]): string {
+  return [...allFoods]
+    .sort((a, b) => a.id - b.id)
+    .map((f) => `${f.id}:${f.status}`)
+    .join(",");
+}
 
 function getBrowseCatalogPayloads(allFoods: any[]) {
+  const fingerprint = getBrowseCatalogFingerprint(allFoods);
   if (
     cachedFreeBrowsePayload &&
     cachedPremiumBrowsePayload &&
-    lastCacheFoodCount === allFoods.length
+    lastCacheFingerprint === fingerprint
   ) {
     return { freePayload: cachedFreeBrowsePayload, premiumPayload: cachedPremiumBrowsePayload };
   }
@@ -117,7 +126,7 @@ function getBrowseCatalogPayloads(allFoods: any[]) {
     categories: premiumCategories,
   };
 
-  lastCacheFoodCount = allFoods.length;
+  lastCacheFingerprint = fingerprint;
   return { freePayload: cachedFreeBrowsePayload, premiumPayload: cachedPremiumBrowsePayload };
 }
 

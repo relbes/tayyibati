@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   FlatList,
+  ScrollView,
   TouchableOpacity,
   Platform,
   Alert,
@@ -11,9 +12,19 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import Svg, {
+  Path,
+  Circle,
+  Rect,
+  Defs,
+  RadialGradient,
+  LinearGradient,
+  Stop,
+  Ellipse,
+} from "react-native-svg";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
-import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
@@ -23,6 +34,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
+
+
 export default function HistoryScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -30,7 +43,7 @@ export default function HistoryScreen() {
   const { user } = useAuth();
   const { setCurrentReport } = useAnalysis();
   const qc = useQueryClient();
-  const topPadding = Platform.OS === "web" ? 67 : insets.top;
+  const topPadding = Platform.OS === "web" ? 16 : Math.max(insets.top, 44);
   const rtl = isRTL();
 
   const { data: items = [], isLoading, refetch } = useQuery({
@@ -77,7 +90,16 @@ export default function HistoryScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.item, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: rtl ? "row-reverse" : "row" }]}
+        style={[
+          styles.item,
+          {
+            backgroundColor: colors.card,
+            borderColor: colors.border,
+            flexDirection: rtl ? "row-reverse" : "row",
+            marginHorizontal: 16,
+            marginBottom: 10,
+          },
+        ]}
         onPress={() => handleView(item)}
         activeOpacity={0.7}
       >
@@ -114,47 +136,48 @@ export default function HistoryScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
-        <HeaderNatureBackground />
-        <View style={{ flexDirection: rtl ? "row-reverse" : "row", alignItems: "center", gap: 12, width: "100%" }}>
-          <BackButton onPress={() => router.push("/(tabs)/profile")} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, { color: "#f3f6f4", textAlign: rtl ? "right" : "left" }]}>سجل التحليلات</Text>
-            {user && (
-              <Text style={[styles.subtitle, { color: "#E2E8F0", textAlign: rtl ? "right" : "left" }]}>
-                {items.length} تحليل
-              </Text>
-            )}
-          </View>
-        </View>
-      </View>
-
+    <View style={styles.container}>
       {!user ? (
-        <View style={styles.emptyCenter}>
-          <Icon name="person-outline" size={48} color={colors.mutedForeground} />
-          <Text style={[styles.emptyTitle, { color: colors.foreground }]}>سجّل دخولك</Text>
-          <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
-            سجّل دخولك لحفظ تحليلاتك ومراجعتها لاحقاً
-          </Text>
-          <TouchableOpacity
-            style={[styles.loginBtn, { backgroundColor: colors.primary }]}
-            onPress={() => router.push("/auth")}
-          >
-            <Text style={styles.loginBtnText}>تسجيل الدخول</Text>
-          </TouchableOpacity>
-        </View>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <PageHeader
+            title="سجل التحليلات"
+            subtitle="جميع عمليات التحقق السابقة"
+            badgeType="history"
+          />
+          <View style={styles.emptyCenter}>
+            <Icon name="person" size={48} color={colors.mutedForeground} />
+            <Text style={[styles.emptyTitle, { color: colors.foreground }]}>سجّل دخولك</Text>
+            <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
+              سجّل دخولك لحفظ تحليلاتك ومراجعتها لاحقاً
+            </Text>
+            <TouchableOpacity
+              style={[styles.loginBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/auth")}
+            >
+              <Text style={styles.loginBtnText}>تسجيل الدخول</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : (
         <FlatList
           data={items}
           keyExtractor={(item) => String(item.id)}
           renderItem={renderItem}
-          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 100 }}
+          ListHeaderComponent={
+            <View style={{ marginBottom: 14 }}>
+              <PageHeader
+                title="سجل التحليلات"
+                subtitle="جميع عمليات التحقق السابقة"
+                badgeType="history"
+              />
+            </View>
+          }
+          contentContainerStyle={{ paddingBottom: 100 }}
           refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} tintColor={colors.primary} />}
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             !isLoading ? (
-              <View style={styles.emptyCenter}>
+              <View style={[styles.emptyCenter, { marginTop: 40 }]}>
                 <Icon name="time-outline" size={48} color={colors.mutedForeground} />
                 <Text style={[styles.emptyTitle, { color: colors.foreground }]}>لا يوجد سجل</Text>
                 <Text style={[styles.emptyDesc, { color: colors.mutedForeground }]}>
@@ -170,20 +193,77 @@ export default function HistoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  header: {
-    paddingHorizontal: 16,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    gap: 4,
+  container: {
+    flex: 1,
+    backgroundColor: "#F8FEF9",
+  },
+  headerContainer: {
+    position: "relative",
+    backgroundColor: "#F8FEF9",
+    borderRadius: 0,
+    borderBottomWidth: 0,
+    overflow: "hidden",
+  },
+  posAbsolute: {
+    position: "absolute",
+  },
+  bgHaloLeft: {
+    position: "absolute",
+    left: -25,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "#EDFBF2",
+    opacity: 0.85,
+  },
+  bgHaloRight: {
+    position: "absolute",
+    right: -25,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    backgroundColor: "#EDFBF2",
+    opacity: 0.85,
+  },
+  backBtn: {
+    position: "absolute",
+    right: 18,
+    zIndex: 20,
+  },
+  headerCenterSection: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 75,
+    zIndex: 5,
+  },
+  headerCenterBadge: {
+    width: 82,
+    height: 82,
+    borderRadius: 41,
+    backgroundColor: "rgba(230, 247, 237, 0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "rgba(13, 118, 78, 0.12)",
+    shadowColor: "#0D764E",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
   },
   title: {
     fontSize: 26,
     fontFamily: "Tajawal_700Bold",
+    color: "#0C6246",
+    textAlign: "center",
+    marginTop: 12,
   },
   subtitle: {
-    fontSize: 15.5,
+    fontSize: 14,
     fontFamily: "Tajawal_500Medium",
+    color: "#64748B",
+    textAlign: "center",
+    marginTop: 5,
   },
   item: {
     alignItems: "center",

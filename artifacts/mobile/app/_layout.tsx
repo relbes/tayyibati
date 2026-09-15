@@ -7,10 +7,12 @@ import { useFonts } from "expo-font";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { I18nManager } from "react-native";
+import { I18nManager, LogBox } from "react-native";
+LogBox.ignoreAllLogs();
 import { isRTL } from "@/lib/i18n";
 
 // We disable native I18nManager RTL and handle layout manually via layoutDirection.ts
@@ -67,6 +69,7 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
+      <StatusBar style="dark" backgroundColor="#F8FEF9" translucent={false} />
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
           <SubscriptionProvider>

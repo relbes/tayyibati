@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
+import { PageHeader } from "@/components/PageHeader";
 import * as ImagePicker from "expo-image-picker";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -179,7 +180,7 @@ export default function CameraScreen() {
   const isAmbiguous = ir && (ir.status === "AMBIGUOUS" || ir.status === "UNKNOWN" || ir.status === "INSUFFICIENT_IMAGE");
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
       {isAnalyzing && <LoadingOverlay message="جاري تحليل الصورة..." />}
 
       <ScrollView
@@ -187,24 +188,12 @@ export default function CameraScreen() {
         contentContainerStyle={{ paddingBottom: 130 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header Section */}
-        <View
-          style={[
-            styles.header,
-            {
-              paddingTop: topPadding + 12,
-              backgroundColor: colors.card,
-              borderBottomColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.title, { color: colors.foreground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
-            تحليل بالصورة
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left", width: "100%" }]}>
-            صوّر الطعام لتحصل على تحليل فوري ودقيق
-          </Text>
-        </View>
+        {/* Standardized Botanical Header */}
+        <PageHeader
+          title="تحليل بالصورة"
+          subtitle="صوّر الطعام لتحصل على تحليل فوري ودقيق"
+          badgeType="camera"
+        />
 
         <View style={styles.content}>
           {/* Proactive usage warning */}
@@ -216,19 +205,19 @@ export default function CameraScreen() {
               style={[
                 styles.infoCard,
                 {
-                  backgroundColor: colors.primary + "12",
-                  borderColor: colors.primary + "30",
+                  backgroundColor: "#E6F6F0",
+                  borderColor: "#A3E2CB",
                   flexDirection: rtl ? "row-reverse" : "row",
                 },
               ]}
             >
-              <View style={[styles.infoIconBox, { backgroundColor: colors.primary + "20" }]}>
-                <Icon name="bulb" size={18} color={colors.primary} />
+              <View style={[styles.infoIconBox, { backgroundColor: "#C7EDE0" }]}>
+                <Icon name="bulb" size={22} color="#008C5A" />
               </View>
               <Text
                 style={[
                   styles.infoCardText,
-                  { color: colors.primary, textAlign: rtl ? "right" : "left", flex: 1 },
+                  { color: "#008C5A", textAlign: rtl ? "right" : "left", flex: 1 },
                 ]}
               >
                 للحصول على أفضل نتيجة، نظّف عدسة الكاميرا وتأكد من وضوح الصورة وقرب الملصق
@@ -247,8 +236,8 @@ export default function CameraScreen() {
                 },
               ]}
             >
-              <View style={[styles.mainIconContainer, { backgroundColor: colors.primary + "15" }]}>
-                <Icon name="camera" size={34} color={colors.primary} />
+              <View style={[styles.mainIconContainer, { backgroundColor: "#E6F6F0" }]}>
+                <Icon name="camera" size={42} color="#008C5A" />
               </View>
 
               <View style={styles.textStack}>
@@ -265,12 +254,12 @@ export default function CameraScreen() {
                 <TouchableOpacity
                   style={[
                     styles.primaryActionBtn,
-                    { backgroundColor: colors.primary, flexDirection: rtl ? "row-reverse" : "row" },
+                    { backgroundColor: "#008C5A", flexDirection: rtl ? "row-reverse" : "row" },
                   ]}
                   onPress={() => pickImage("camera")}
                   activeOpacity={0.85}
                 >
-                  <Icon name="camera" size={20} color="#ffffff" />
+                  <Icon name="camera" size={24} color="#ffffff" />
                   <Text style={styles.primaryActionBtnText}>التقاط صورة</Text>
                 </TouchableOpacity>
 
@@ -279,16 +268,16 @@ export default function CameraScreen() {
                   style={[
                     styles.secondaryActionBtn,
                     {
-                      backgroundColor: colors.primary + "12",
-                      borderColor: colors.primary + "30",
+                      backgroundColor: "#E6F6F0",
+                      borderColor: "#A3E2CB",
                       flexDirection: rtl ? "row-reverse" : "row",
                     },
                   ]}
                   onPress={() => pickImage("library")}
                   activeOpacity={0.85}
                 >
-                  <Icon name="images" size={20} color={colors.primary} />
-                  <Text style={[styles.secondaryActionBtnText, { color: colors.primary }]}>
+                  <Icon name="images" size={24} color="#008C5A" />
+                  <Text style={[styles.secondaryActionBtnText, { color: "#008C5A" }]}>
                     اختيار صورة من الجهاز
                   </Text>
                 </TouchableOpacity>
@@ -336,7 +325,7 @@ export default function CameraScreen() {
               <TouchableOpacity
                 style={[
                   styles.primaryActionBtn,
-                  { backgroundColor: colors.primary, flexDirection: rtl ? "row-reverse" : "row" },
+                  { backgroundColor: "#008C5A", flexDirection: rtl ? "row-reverse" : "row" },
                 ]}
                 onPress={handleAnalyzeConfirm}
                 activeOpacity={0.85}
@@ -419,13 +408,13 @@ export default function CameraScreen() {
                           paddingHorizontal: 12,
                           paddingVertical: 8,
                           borderRadius: 20,
-                          backgroundColor: colors.primary + "12",
+                          backgroundColor: "#E6F6F0",
                           borderWidth: 1,
-                          borderColor: colors.primary + "30",
+                          borderColor: "#A3E2CB",
                         }}
                         onPress={() => handleManualEntry(variant.nameAr)}
                       >
-                        <Text style={{ fontFamily: "Tajawal_500Medium", color: colors.primary, fontSize: 13 }}>
+                        <Text style={{ fontFamily: "Tajawal_500Medium", color: "#008C5A", fontSize: 13 }}>
                           {variant.nameAr}
                         </Text>
                       </TouchableOpacity>
@@ -441,7 +430,7 @@ export default function CameraScreen() {
                 </Text>
                 <View style={[styles.afterResultBtns, { flexDirection: rtl ? "row-reverse" : "row" }]}>
                   <TouchableOpacity
-                    style={[styles.afterBtn, { backgroundColor: colors.primary, flexDirection: rtl ? "row-reverse" : "row" }]}
+                    style={[styles.afterBtn, { backgroundColor: "#008C5A", flexDirection: rtl ? "row-reverse" : "row" }]}
                     onPress={() => pickImage("camera")}
                     activeOpacity={0.8}
                     disabled={isAnalyzing}
@@ -518,20 +507,20 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   infoIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
   infoCardText: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontFamily: "Tajawal_500Medium",
-    lineHeight: 20,
+    lineHeight: 22,
   },
   mainActionCard: {
-    padding: 20,
-    borderRadius: 20,
+    padding: 22,
+    borderRadius: 22,
     borderWidth: 1,
     alignItems: "center",
     gap: 16,
@@ -542,9 +531,9 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
   },
   mainIconContainer: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
@@ -554,46 +543,46 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   cardTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontFamily: "Tajawal_700Bold",
     width: "100%",
   },
   cardDesc: {
-    fontSize: 14,
+    fontSize: 15,
     fontFamily: "Tajawal_400Regular",
-    lineHeight: 22,
+    lineHeight: 23,
     width: "100%",
   },
   actionButtonsStack: {
     width: "100%",
     gap: 12,
-    marginTop: 4,
+    marginTop: 6,
   },
   primaryActionBtn: {
     width: "100%",
-    height: 54,
-    borderRadius: 14,
+    height: 56,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 10,
   },
   primaryActionBtnText: {
     color: "#ffffff",
     fontFamily: "Tajawal_700Bold",
-    fontSize: 15,
+    fontSize: 17,
   },
   secondaryActionBtn: {
     width: "100%",
-    height: 54,
-    borderRadius: 14,
-    borderWidth: 1,
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1.5,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 10,
   },
   secondaryActionBtnText: {
     fontFamily: "Tajawal_700Bold",
-    fontSize: 15,
+    fontSize: 17,
   },
   imageContainer: { gap: 10 },
   previewImage: {

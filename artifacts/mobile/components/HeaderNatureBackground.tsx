@@ -8,37 +8,61 @@ import { Icon } from "@/components/Icon";
  * Adds organic glowing rings, translucent leaf watermarks, depth gradients,
  * and warm gold nature sparkles to make headers feel vibrant and alive.
  */
-export const HeaderNatureBackground = React.memo(function HeaderNatureBackground() {
+export interface HeaderNatureBackgroundProps {
+  variant?: "dark" | "light";
+}
+
+export const HeaderNatureBackground = React.memo(function HeaderNatureBackground({
+  variant = "dark",
+}: HeaderNatureBackgroundProps) {
+  const isLight = variant === "light";
+
   return (
     <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
       {/* 1. Subtle Depth Gradient */}
       <LinearGradient
-        colors={["rgba(255, 255, 255, 0.12)", "rgba(0, 0, 0, 0.08)"]}
+        colors={
+          isLight
+            ? ["rgba(220, 252, 231, 0.3)", "rgba(248, 254, 249, 0)"]
+            : ["rgba(255, 255, 255, 0.12)", "rgba(0, 0, 0, 0.08)"]
+        }
         style={StyleSheet.absoluteFillObject}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
       />
 
       {/* 2. Top-Right Organic Sun Circle & Concentric Ring */}
-      <View style={styles.sunCircleRight} />
-      <View style={styles.sunCircleRingRight} />
+      <View style={[styles.sunCircleRight, isLight && styles.sunCircleRightLight]} />
+      <View style={[styles.sunCircleRingRight, isLight && styles.sunCircleRingRightLight]} />
 
-      {/* 3. Bottom-Left Soft Gold Meadow Circle */}
-      <View style={styles.meadowCircleLeft} />
+      {/* 3. Bottom-Left Soft Meadow Circle */}
+      <View style={[styles.meadowCircleLeft, isLight && styles.meadowCircleLeftLight]} />
 
       {/* 4. Translucent Botanical Leaf Watermark (Top Right) */}
       <View style={styles.leafWatermarkRight}>
-        <Icon name="leaf" size={74} color="rgba(255, 255, 255, 0.12)" />
+        <Icon
+          name="leaf"
+          size={74}
+          color={isLight ? "rgba(0, 140, 90, 0.08)" : "rgba(255, 255, 255, 0.12)"}
+        />
       </View>
 
       {/* 5. Translucent Botanical Leaf Watermark (Bottom Left) */}
       <View style={styles.leafWatermarkLeft}>
-        <Icon name="leaf-outline" size={48} color="rgba(255, 255, 255, 0.10)" />
+        <Icon
+          name="leaf-outline"
+          size={48}
+          color={isLight ? "rgba(22, 163, 74, 0.08)" : "rgba(255, 255, 255, 0.10)"}
+        />
       </View>
 
       {/* 6. Subtle Gold Nature Sparkle Accent */}
       <View style={styles.sparkleAccent}>
-        <Icon name="sparkles" size={18} color="rgba(245, 158, 11, 0.3)" />
+        <Icon
+          name="sparkles"
+          size={18}
+          color={isLight ? "rgba(245, 158, 11, 0.35)" : "rgba(245, 158, 11, 0.3)"}
+        />
       </View>
     </View>
   );
@@ -89,5 +113,14 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 14,
     left: "48%",
+  },
+  sunCircleRightLight: {
+    backgroundColor: "rgba(220, 252, 231, 0.45)",
+  },
+  sunCircleRingRightLight: {
+    borderColor: "rgba(187, 247, 208, 0.4)",
+  },
+  meadowCircleLeftLight: {
+    backgroundColor: "rgba(240, 253, 244, 0.6)",
   },
 });

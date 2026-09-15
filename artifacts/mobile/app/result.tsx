@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import { useColors } from "@/hooks/useColors";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { useAnalysis } from "@/context/AnalysisContext";
@@ -60,13 +61,13 @@ export default function ResultScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
-        <HeaderNatureBackground />
-        <BackButton />
-        <Text style={[styles.title, { color: "#f3f6f4" }]}>نتيجة التحليل</Text>
-        <View style={{ width: 36 }} />
-      </View>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
+      {/* Standardized Botanical Header */}
+      <PageHeader
+        title="نتيجة التحليل"
+        subtitle="تفاصيل تقييم المنتج ونظام الطيبات"
+        badgeType="result"
+      />
       <ScrollView
         contentContainerStyle={{ padding: 16, paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}

@@ -19,7 +19,7 @@ export function CameraQualityTips() {
     <View style={styles.container}>
       {/* Section Header */}
       <View style={[styles.headerRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-        <Icon name="information-circle-outline" size={18} color={colors.primary} />
+        <Icon name="information-circle-outline" size={22} color="#008C5A" strokeWidth={2.2} />
         <Text style={[styles.sectionTitle, { color: colors.foreground, textAlign: rtl ? "right" : "left" }]}>
           نصائح للحصول على نتيجة أدق
         </Text>
@@ -38,8 +38,8 @@ export function CameraQualityTips() {
               },
             ]}
           >
-            <View style={[styles.iconCircle, { backgroundColor: colors.primary + "12" }]}>
-              <Icon name={tip.icon} size={20} color={colors.primary} />
+            <View style={[styles.iconCircle, { backgroundColor: "#E6F6F0" }]}>
+              <Icon name={tip.icon} size={24} color="#008C5A" />
             </View>
             <Text
               style={[
@@ -65,11 +65,11 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     alignItems: "center",
-    gap: 6,
+    gap: 8,
     width: "100%",
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 17,
     fontFamily: "Tajawal_700Bold",
   },
   grid: {
@@ -80,24 +80,24 @@ const styles = StyleSheet.create({
   },
   tipCard: {
     width: "48%",
-    paddingVertical: 14,
+    paddingVertical: 16,
     paddingHorizontal: 10,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
+    gap: 10,
   },
   iconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },
   tipLabel: {
-    fontSize: 13,
-    fontFamily: "Tajawal_500Medium",
-    lineHeight: 18,
+    fontSize: 14.5,
+    fontFamily: "Tajawal_700Bold",
+    lineHeight: 20,
   },
 });

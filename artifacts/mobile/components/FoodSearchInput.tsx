@@ -47,28 +47,23 @@ export function FoodSearchInput({
           styles.searchRow,
           {
             flexDirection: "row",
-            backgroundColor: colors.card,
-            borderColor: showSuggestions ? colors.primary : colors.border,
+            backgroundColor: "#FFFFFF",
+            borderWidth: showSuggestions ? 1 : 0,
+            borderColor: showSuggestions ? "#16A34A" : "transparent",
           },
         ]}
       >
         {rtl ? (
-          /* Arabic Physical Order: LEFT edge -> Search | TextInput | Clear | Camera -> RIGHT edge */
+          /* Arabic Order: LEFT (Search) -> TextInput -> Clear -> RIGHT (Barcode/Scan) */
           <>
-            {/* Far LEFT edge: Search Button */}
+            {/* Far LEFT edge: Search Action Icon */}
             <TouchableOpacity
-              style={[
-                styles.searchBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: query.trim() ? 1 : 0.5,
-                },
-              ]}
+              style={styles.searchIconBtn}
               onPress={handleSearchSubmit}
               disabled={!query.trim() || isAnalyzing}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <Icon name="search" size={18} color="#fff" />
+              <Icon name="search" size={22} color="#008C5A" strokeWidth={2.4} />
             </TouchableOpacity>
 
             {/* Flexible Center: Arabic TextInput */}
@@ -77,50 +72,56 @@ export function FoodSearchInput({
               style={[
                 localizedInput(),
                 styles.searchInput,
-                { color: colors.foreground, flex: 1 },
+                { color: "#111827", flex: 1, textAlign: "right" },
               ]}
-              placeholder={t("home.searchPlaceholder")}
-              placeholderTextColor={colors.mutedForeground}
+              placeholder="ابحث عن طعام أو طبق ..."
+              placeholderTextColor="#6B7280"
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={handleSearchSubmit}
               returnKeyType="search"
-              selectionColor={colors.primary}
+              selectionColor="#16A34A"
             />
 
-            {/* Clear Button next to Camera */}
+            {/* Clear Button */}
             {query.trim().length > 0 && (
-              <TouchableOpacity 
-                style={styles.clearBtn} 
-                onPress={() => { setQuery(""); inputRef.current?.focus(); }}
+              <TouchableOpacity
+                style={styles.clearBtn}
+                onPress={() => {
+                  setQuery("");
+                  inputRef.current?.focus();
+                }}
                 activeOpacity={0.7}
               >
-                <Icon name="close-circle" size={20} color={colors.mutedForeground} />
+                <Icon name="close-circle" size={18} color="#9CA3AF" />
               </TouchableOpacity>
             )}
 
             {/* Far RIGHT edge: Camera Button */}
             {!hideCameraIcon && (
               <TouchableOpacity style={styles.camBtn} onPress={onCameraPress} activeOpacity={0.7}>
-                <Icon name="camera" size={20} color={colors.primary} />
+                <Icon name="camera" size={22} color="#008C5A" />
               </TouchableOpacity>
             )}
           </>
         ) : (
-          /* English Physical Order: LEFT edge -> Camera | Clear | TextInput | Search -> RIGHT edge */
+          /* English Order: LEFT (Camera) -> Clear -> TextInput -> RIGHT (Search) */
           <>
             {!hideCameraIcon && (
               <TouchableOpacity style={styles.camBtn} onPress={onCameraPress} activeOpacity={0.7}>
-                <Icon name="camera" size={20} color={colors.primary} />
+                <Icon name="camera" size={22} color="#008C5A" />
               </TouchableOpacity>
             )}
             {query.trim().length > 0 && (
-              <TouchableOpacity 
-                style={styles.clearBtn} 
-                onPress={() => { setQuery(""); inputRef.current?.focus(); }}
+              <TouchableOpacity
+                style={styles.clearBtn}
+                onPress={() => {
+                  setQuery("");
+                  inputRef.current?.focus();
+                }}
                 activeOpacity={0.7}
               >
-                <Icon name="close-circle" size={20} color={colors.mutedForeground} />
+                <Icon name="close-circle" size={18} color="#9CA3AF" />
               </TouchableOpacity>
             )}
             <TextInput
@@ -128,29 +129,23 @@ export function FoodSearchInput({
               style={[
                 localizedInput(),
                 styles.searchInput,
-                { color: colors.foreground, flex: 1 },
+                { color: "#111827", flex: 1, textAlign: "left" },
               ]}
-              placeholder={t("home.searchPlaceholder")}
-              placeholderTextColor={colors.mutedForeground}
+              placeholder="ابحث عن طعام أو طبق ..."
+              placeholderTextColor="#6B7280"
               value={query}
               onChangeText={setQuery}
               onSubmitEditing={handleSearchSubmit}
               returnKeyType="search"
-              selectionColor={colors.primary}
+              selectionColor="#16A34A"
             />
             <TouchableOpacity
-              style={[
-                styles.searchBtn,
-                {
-                  backgroundColor: colors.primary,
-                  opacity: query.trim() ? 1 : 0.5,
-                },
-              ]}
+              style={styles.searchIconBtn}
               onPress={handleSearchSubmit}
               disabled={!query.trim() || isAnalyzing}
-              activeOpacity={0.8}
+              activeOpacity={0.7}
             >
-              <Icon name="search" size={18} color="#fff" />
+              <Icon name="search" size={22} color="#008C5A" strokeWidth={2.4} />
             </TouchableOpacity>
           </>
         )}
@@ -174,28 +169,29 @@ const styles = StyleSheet.create({
   },
   searchRow: {
     paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
+    height: 54,
+    borderRadius: 27,
     alignItems: "center",
-    gap: 4,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: "Tajawal_500Medium",
-    paddingHorizontal: 8,
-    minHeight: 40,
+    paddingHorizontal: 10,
+    height: 48,
   },
-  searchBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+  searchIconBtn: {
+    padding: 8,
     alignItems: "center",
     justifyContent: "center",
   },
   clearBtn: {
-    padding: 8,
+    padding: 6,
     alignItems: "center",
     justifyContent: "center",
   },

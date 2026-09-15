@@ -17,6 +17,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import * as WebBrowser from "expo-web-browser";
@@ -203,15 +204,13 @@ export default function AuthScreen() {
   const showGoogleBtn = googleEnabled && !!GOOGLE_WEB_CLIENT_ID;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[styles.topBar, { paddingTop: topPadding + 10, backgroundColor: "#11674e", borderBottomColor: "#0D523E", borderBottomWidth: 1 }]}
-      >
-        <HeaderNatureBackground />
-        <View style={{ width: 40 }} />
-        <Text style={[styles.topTitle, { color: "#f3f6f4" }]}>طيباتي</Text>
-        <BackButton />
-      </View>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
+      {/* Standardized Botanical Header */}
+      <PageHeader
+        title={tab === "login" ? "تسجيل الدخول" : "إنشاء حساب"}
+        subtitle="سجّل دخولك للوصول إلى كافة الميزات"
+        badgeType="auth"
+      />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

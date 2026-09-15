@@ -15,6 +15,7 @@ import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -342,24 +343,13 @@ export default function PricingScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      {/* Header */}
-      <View
-        style={[
-          styles.header,
-          {
-            paddingTop: topPadding + 12,
-            backgroundColor: "#11674e",
-            borderBottomColor: "#0D523E",
-            flexDirection: rtl ? "row-reverse" : "row",
-          },
-        ]}
-      >
-        <HeaderNatureBackground />
-        <BackButton />
-        <Text style={[styles.title, { color: "#f3f6f4", textAlign: rtl ? "right" : "left", flex: 1 }]}>الباقات</Text>
-        <View style={{ width: 44 }} />
-      </View>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
+      {/* Standardized Botanical Header */}
+      <PageHeader
+        title="باقات الاشتراك"
+        subtitle="اختر الخطة المناسبة واستمتع بكافة المزايا"
+        badgeType="pricing"
+      />
 
       {isLoading || isPurchasing || isRestoring ? (
         <View style={styles.loadingCenter}>

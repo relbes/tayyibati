@@ -1,7 +1,8 @@
 import React from "react";
 import { TouchableOpacity, StyleProp, ViewStyle, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { Icon } from "./Icon";
+import Svg, { Path } from "react-native-svg";
+import { isRTL } from "@/lib/i18n";
 
 export interface BackButtonProps {
   onPress?: () => void;
@@ -12,16 +13,18 @@ export interface BackButtonProps {
 
 /**
  * Standardized BackButton for Tayyibati Arabic RTL app.
- * Renders in top-right position with unified arrow direction,
- * dimensions, touch target, and navigation behavior.
+ * Clean, solid dark emerald circular button with a crisp white arrow.
+ * Simple, elegant, and normal (without glass/gloss effects).
+ * Arrow direction automatically adapts to RTL (pointing right →) or LTR (pointing left ←).
  */
 export const BackButton = React.memo(function BackButton({
   onPress,
   style,
-  color = "#f3f6f4",
-  size = 20,
+  color = "#FFFFFF",
+  size = 42,
 }: BackButtonProps) {
   const router = useRouter();
+  const rtl = isRTL();
 
   const handlePress = () => {
     if (onPress) {
@@ -39,29 +42,57 @@ export const BackButton = React.memo(function BackButton({
     }
   };
 
+  const arrowPath = rtl
+    ? "M5 12h14M12 5l7 7-7 7" // RTL: Back goes Right (→)
+    : "M19 12H5M12 19l-7-7 7-7"; // LTR: Back goes Left (←)
+
   return (
     <TouchableOpacity
       onPress={handlePress}
-      style={[styles.button, style]}
+      style={[
+        styles.button,
+        {
+          width: size,
+          height: size,
+          borderRadius: 12,
+        },
+        style,
+      ]}
       activeOpacity={0.7}
-      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
       accessibilityRole="button"
       accessibilityLabel="رجوع"
     >
-      <Icon name="arrow-back" size={size} color={color} />
+      <Svg
+        width={Math.round(size * 0.52)}
+        height={Math.round(size * 0.52)}
+        viewBox="0 0 24 24"
+        fill="none"
+      >
+        <Path
+          d={arrowPath}
+          stroke={color}
+          strokeWidth={2.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </Svg>
     </TouchableOpacity>
   );
 });
 
 const styles = StyleSheet.create({
   button: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.15)",
-    borderColor: "rgba(243, 246, 244, 0.3)",
+    backgroundColor: "#008C5A",
+    borderColor: "#007A4E",
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
+    zIndex: 20,
+    shadowColor: "#022B1B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28,
+    shadowRadius: 5,
+    elevation: 4,
   },
 });

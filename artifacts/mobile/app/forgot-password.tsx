@@ -17,6 +17,7 @@ import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
@@ -87,15 +88,13 @@ export default function ForgotPasswordScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[styles.topBar, { paddingTop: topPadding + 10, backgroundColor: "#11674e", borderBottomColor: "#0D523E", borderBottomWidth: 1 }]}
-      >
-        <HeaderNatureBackground />
-        <View style={{ width: 40 }} />
-        <Text style={[styles.topTitle, { color: "#f3f6f4" }]}>استعادة كلمة المرور</Text>
-        <BackButton />
-      </View>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
+      {/* Standardized Botanical Header */}
+      <PageHeader
+        title="استعادة كلمة المرور"
+        subtitle="أدخل بريدك الإلكتروني لاستعادة حسابك"
+        badgeType="forgot-password"
+      />
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}

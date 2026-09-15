@@ -8,6 +8,7 @@ import {
   Platform,
   Animated,
   Alert,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -20,16 +21,15 @@ import { FoodSearchInput } from "@/components/FoodSearchInput";
 import { useFoodSearch } from "@/hooks/useFoodSearch";
 import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 import { RefinementSuggestions } from "@/components/RefinementSuggestions";
-import { LocalizedText } from "@/components/LocalizedText";
-import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
-import { t, isRTL } from "@/lib/i18n";
+import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 // Home Components
-import { HomeImageActions } from "@/components/HomeImageActions";
 import { HomeQuickActions } from "@/components/HomeQuickActions";
 import { HomePopularSearches } from "@/components/HomePopularSearches";
 import { HomeSearchEducation } from "@/components/HomeSearchEducation";
+import { HomeAboutSystemCard } from "@/components/HomeAboutSystemCard";
+import { HomeRecentVerifications } from "@/components/HomeRecentVerifications";
 import { HomeRecentAnalyses } from "@/components/HomeRecentAnalyses";
 
 export default function HomeScreen() {
@@ -38,7 +38,7 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const rtl = isRTL();
-  const topPadding = Platform.OS === "web" ? 18 : Math.max(insets.top + 6, 18);
+  const topPadding = Platform.OS === "web" ? 12 : Math.max(insets.top, 12);
 
   const {
     query,
@@ -112,77 +112,101 @@ export default function HomeScreen() {
     result.resultMode !== "MULTIPLE_DISHES" &&
     !result.requiresSelection;
 
+  // Dynamic time-based greeting calculation
+  const currentHour = new Date().getHours();
+  const isMorning = currentHour >= 4 && currentHour < 17;
+  const greetingText = isMorning ? "صباح الخير" : "مساء الخير";
+  const greetingIcon = isMorning ? "sun" : "moon";
+
   return (
-    <View style={[styles.container, { backgroundColor: TayyibatiTheme.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
       {isAnalyzing && <LoadingOverlay message="جاري التحليل..." />}
-
-      {/* 1. Light Premium Header / Tayyibati Branding */}
-      <View
-        style={[
-          styles.lightHeader,
-          {
-            paddingTop: topPadding + 10,
-            backgroundColor: "#11674e",
-            borderBottomColor: "#0D523E",
-          },
-        ]}
-      >
-        <HeaderNatureBackground />
-
-        <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.headerTop]}>
-          <TouchableOpacity
-            style={[
-              styles.profileBtn,
-              {
-                backgroundColor: "rgba(255, 255, 255, 0.15)",
-                borderColor: "rgba(243, 246, 244, 0.3)",
-              },
-            ]}
-            onPress={() => router.push("/(tabs)/profile")}
-            activeOpacity={0.8}
-          >
-            <Icon name={user ? "person" : "person-outline"} size={20} color="#f3f6f4" />
-          </TouchableOpacity>
-
-          <View style={styles.brandContainer}>
-            <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.brandTitleRow]}>
-              <LocalizedText style={styles.appName}>
-                {t("home.appName")}
-              </LocalizedText>
-              <View style={styles.leafDot}>
-                <Icon name="leaf" size={14} color="#f3f6f4" />
-              </View>
-            </View>
-
-            <LocalizedText style={styles.appSub}>
-              {t("home.appSub")}
-            </LocalizedText>
-          </View>
-
-          {/* Balance spacer for perfect centering */}
-          <View style={{ width: 42 }} />
-        </View>
-      </View>
 
       {/* Scrollable Content */}
       <Animated.ScrollView
         style={styles.content}
-        contentContainerStyle={{ paddingBottom: 120, paddingTop: 14 }}
+        contentContainerStyle={{ paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* 2. Main Search Input Area */}
-        <View style={{ zIndex: 999, width: "100%", paddingHorizontal: 16 }}>
-          <FoodSearchInput
-            query={query}
-            setQuery={setQuery}
-            onSearch={() => handleAnalyze()}
-            onCameraPress={handleImageSearch}
-            suggestions={suggestions}
-            showSuggestions={showSuggestions}
-            onSelectSuggestion={handleSelectSuggestion}
-            isAnalyzing={isAnalyzing}
-            hideCameraIcon={true}
-          />
+        {/* Unified Botanical Header Section with Food/Nature Accents */}
+        <View
+          style={[
+            styles.headerSection,
+            {
+              paddingTop: topPadding + 4,
+            },
+          ]}
+        >
+          {/* Decorative Food Assets (Salad left, Citrus/Avocado right) */}
+          <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+            <Image
+              source={require("@/assets/images/home_header_left.png")}
+              style={styles.leftFoodImage}
+              resizeMode="contain"
+            />
+            <Image
+              source={require("@/assets/images/home_header_right.png")}
+              style={styles.rightFoodImage}
+              resizeMode="contain"
+            />
+          </View>
+
+          {/* Top Bar: Profile, Official Tayyibati Logo, Notification */}
+          <View style={styles.headerTop}>
+            {/* Left: Profile Button */}
+            <TouchableOpacity
+              style={styles.profileBtn}
+              onPress={() => router.push("/(tabs)/profile")}
+              activeOpacity={0.8}
+            >
+              <Icon name="person" size={22} color="#ffffff" />
+            </TouchableOpacity>
+
+            {/* Center: Official Tayyibati Logo */}
+            <View style={styles.brandContainer}>
+              <Image
+                source={require("@/assets/images/home_logo.png")}
+                style={styles.headerLogo}
+                resizeMode="contain"
+              />
+            </View>
+
+            {/* Right: Notification Button with Dot */}
+            <TouchableOpacity
+              style={styles.notificationBtn}
+              activeOpacity={0.7}
+              onPress={() => {}}
+            >
+              <Icon name="notifications" size={22} color="#ffffff" />
+              <View style={styles.notificationDot} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Dynamic Greeting Section */}
+          <View style={styles.greetingContainer}>
+            <View style={styles.greetingTopRow}>
+              <Icon name={greetingIcon} size={26} color="#F59E0B" strokeWidth={2} />
+              <Text style={styles.greetingTitle}>{greetingText}</Text>
+            </View>
+            <Text style={styles.greetingSubtitle}>
+            خلّينا نتأكد من أكلك اليوم! 🌿</Text>
+          </View>
+
+          {/* Main Search Input Area */}
+          <View style={styles.searchWrapper}>
+            <FoodSearchInput
+              query={query}
+              setQuery={setQuery}
+              onSearch={() => handleAnalyze()}
+              onCameraPress={handleImageSearch}
+              suggestions={suggestions}
+              showSuggestions={showSuggestions}
+              onSelectSuggestion={handleSelectSuggestion}
+              isAnalyzing={isAnalyzing}
+              hideCameraIcon={false}
+            />
+          </View>
         </View>
 
         {/* Results area or Dashboard */}
@@ -226,51 +250,29 @@ export default function HomeScreen() {
           </View>
         ) : (
           /* Dashboard — shown only while no search result active */
-          <View style={{ paddingBottom: 60 }}>
-            {/* 3. Small Joyful & Lightweight Hero Card */}
+          <View style={{ paddingBottom: 30 }}>
+            {/* 4. Single Static Hero Banner */}
             <View style={styles.heroContainer}>
-              <View
-                style={[
-                  styles.heroCard,
-                  {
-                    backgroundColor: TayyibatiTheme.colors.heroCardBg,
-                    borderColor: TayyibatiTheme.colors.heroCardBorder,
-                    flexDirection: rtl ? "row-reverse" : "row",
-                  },
-                ]}
+              <TouchableOpacity
+                activeOpacity={0.92}
+                onPress={() => router.push("/(tabs)/browse")}
+                style={styles.heroBanner}
               >
-                {/* Decorative background shapes */}
-                <View style={styles.heroDecorCircle} />
-                <View style={styles.heroDecorCircleSmall} />
-
-                {/* Joyful Multi-Icon Visual Badge */}
-                <View style={styles.heroVisualCluster}>
-                  <View style={styles.heroIconBadge}>
-                    <Icon name="leaf" size={20} color={TayyibatiTheme.colors.primary} />
-                  </View>
-                  <View style={styles.heroHeartDot}>
-                    <Icon name="heart" size={10} color={TayyibatiTheme.colors.orange} />
-                  </View>
-                </View>
-
-                <View style={{ flex: 1, zIndex: 2 }}>
-                  <Text style={[styles.heroTitle, { textAlign: rtl ? "right" : "left" }]}>
-                    اختيارك اليوم يصنع فرقاً
-                  </Text>
-                  <Text style={[styles.heroSubtitle, { textAlign: rtl ? "right" : "left" }]}>
-                    تحقق من طعامك بسهولة قبل تناوله
-                  </Text>
-                </View>
-              </View>
+                <Image
+                  source={require("@/assets/images/home_hero.png")}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
             </View>
 
-            {/* 4. Colorful Quick Actions ("طرق سريعة للتحقق") */}
+            {/* 5 & 6. Two Quick Actions ("افحص طعامك", "امسح الباركود") & "تصفح الفئات" */}
             <HomeQuickActions focusSearch={() => inputRef.current?.focus()} />
 
-            {/* 5. Colorful Image Verification Card ("تحقق باستخدام صورة") */}
-            <HomeImageActions />
+            {/* 7. About Tayyibati System ("عن نظام الطيبات") */}
+            <HomeAboutSystemCard />
 
-            {/* 6. Popular Searches Pills */}
+            {/* 8. Most Searched ("الأكثر بحثاً") */}
             <HomePopularSearches
               onSelect={(q) => {
                 setQuery(q);
@@ -278,10 +280,13 @@ export default function HomeScreen() {
               }}
             />
 
-            {/* 7. Soft Search Education Card */}
+            {/* 9. Accuracy Information Card */}
             <HomeSearchEducation />
 
-            {/* 8. Recent Analysis History Rows */}
+            {/* 10. Recent Verifications ("آخر عمليات التحقق") */}
+            <HomeRecentVerifications />
+
+            {/* 11. Recent Analyses ("آخر عمليات البحث") */}
             <HomeRecentAnalyses />
           </View>
         )}
@@ -302,139 +307,124 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
   },
-  lightHeader: {
-    paddingHorizontal: 16,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
+  headerSection: {
+    backgroundColor: "#F8FEF9",
     position: "relative",
     overflow: "hidden",
+    paddingBottom: 6,
   },
-  headerDecorCircleRight: {
+  leftFoodImage: {
     position: "absolute",
-    right: -20,
-    top: -20,
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: TayyibatiTheme.colors.primary + "12",
+    left: -42,
+    top: 52,
+    width: 155,
+    height: 205,
+    zIndex: 0,
+    opacity: 0.55,
   },
-  headerDecorCircleLeft: {
+  rightFoodImage: {
     position: "absolute",
-    left: -15,
-    bottom: -15,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: TayyibatiTheme.colors.orange + "0F",
+    right: -32,
+    top: 46,
+    width: 145,
+    height: 205,
+    zIndex: 0,
+    opacity: 0.55,
   },
   headerTop: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    paddingHorizontal: 16,
     zIndex: 2,
   },
   profileBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#008C5A",
     alignItems: "center",
     justifyContent: "center",
-    ...TayyibatiTheme.shadows.card,
   },
   brandContainer: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
   },
-  brandTitleRow: {
+  headerLogo: {
+    width: 82,
+    height: 82,
+  },
+  notificationBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "#008C5A",
     alignItems: "center",
-    gap: 4,
+    justifyContent: "center",
+    position: "relative",
   },
-  leafDot: {
-    marginTop: 2,
+  notificationDot: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "#EF4444",
+    borderWidth: 1.5,
+    borderColor: "#DCFCE7",
   },
-  appName: {
-    fontSize: 32,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
-    color: "#f3f6f4",
+  greetingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+    marginBottom: 10,
+    zIndex: 2,
+  },
+  greetingTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  greetingTitle: {
+    fontSize: 26,
+    fontFamily: "Tajawal_700Bold",
+    color: "#11674E",
+  },
+  greetingSubtitle: {
+    fontSize: 15,
+    fontFamily: "Tajawal_500Medium",
+    color: "#4B5563",
+    marginTop: 3,
     textAlign: "center",
   },
-  appSub: {
-    fontSize: 15.5,
-    fontFamily: TayyibatiTheme.typography.fontFamily.medium,
-    color: "#E2E8F0",
-    textAlign: "center",
+  searchWrapper: {
+    zIndex: 999,
     width: "100%",
-    marginTop: 2,
+    paddingHorizontal: 16,
+    marginTop: 4,
+    marginBottom: 6,
   },
   heroContainer: {
     marginTop: 14,
     paddingHorizontal: 16,
   },
-  heroCard: {
-    paddingVertical: 13,
-    paddingHorizontal: 14,
-    borderRadius: 20,
-    borderWidth: 1,
-    alignItems: "center",
-    gap: 12,
-    position: "relative",
+  heroBanner: {
+    width: "100%",
+    aspectRatio: 992 / 488,
+    borderRadius: 18,
     overflow: "hidden",
-    ...TayyibatiTheme.shadows.card,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  heroDecorCircle: {
-    position: "absolute",
-    right: -25,
-    top: -25,
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: TayyibatiTheme.colors.orange + "14",
-  },
-  heroDecorCircleSmall: {
-    position: "absolute",
-    left: -15,
-    bottom: -20,
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: TayyibatiTheme.colors.primary + "10",
-  },
-  heroVisualCluster: {
-    position: "relative",
-    zIndex: 2,
-  },
-  heroIconBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: TayyibatiTheme.colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-    ...TayyibatiTheme.shadows.card,
-  },
-  heroHeartDot: {
-    position: "absolute",
-    top: -2,
-    right: -3,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#FFF3D6",
-    borderWidth: 1.5,
-    borderColor: TayyibatiTheme.colors.white,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  heroTitle: {
-    fontSize: TayyibatiTheme.typography.size.md,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
-    color: "#15803D",
-  },
-  heroSubtitle: {
-    fontSize: TayyibatiTheme.typography.size.sm - 1,
-    fontFamily: TayyibatiTheme.typography.fontFamily.regular,
-    color: "#4B5563",
-    marginTop: 5,
+  heroImage: {
+    width: "100%",
+    height: "100%",
   },
   resultHeader: {
     alignItems: "center",

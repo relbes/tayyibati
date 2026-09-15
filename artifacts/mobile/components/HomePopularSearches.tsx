@@ -1,88 +1,127 @@
-import React from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
-import { useColors } from "@/hooks/useColors";
-import { LocalizedText } from "./LocalizedText";
-import { isRTL, t } from "@/lib/i18n";
+import React, { useRef } from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
+import { isRTL } from "@/lib/i18n";
 import { Icon } from "@/components/Icon";
-import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
+import { useRouter } from "expo-router";
 
 export function HomePopularSearches({ onSelect }: { onSelect: (query: string) => void }) {
-  const colors = useColors();
+  const router = useRouter();
   const rtl = isRTL();
+  const scrollRef = useRef<ScrollView>(null);
 
   const popularItems = [
-    { term: "حليب", bg: TayyibatiTheme.colors.blueCard, text: TayyibatiTheme.colors.blue, border: "#C7E2FE" },
-    { term: "خبز", bg: TayyibatiTheme.colors.orangeCard, text: TayyibatiTheme.colors.orangeDark, border: "#FFE4A0" },
-    { term: "أرز", bg: TayyibatiTheme.colors.greenCard, text: TayyibatiTheme.colors.primary, border: "#C6EFD9" },
-    { term: "جبن", bg: TayyibatiTheme.colors.purpleCard, text: TayyibatiTheme.colors.purple, border: "#DDD0FF" },
-    { term: "شوكولاتة", bg: TayyibatiTheme.colors.pinkCard, text: TayyibatiTheme.colors.pink, border: "#FFD6DC" },
-    { term: "دجاج", bg: TayyibatiTheme.colors.tealCard, text: TayyibatiTheme.colors.teal, border: "#BFEADF" },
+    { term: "حليب", emoji: "🥛" },
+    { term: "بيض", emoji: "🥚" },
+    { term: "دجاج", emoji: "🍗" },
+    { term: "موز", emoji: "🍌" },
+    { term: "تفاح", emoji: "🍎" },
+    { term: "خبز", emoji: "🍞" },
+    { term: "أرز", emoji: "🍚" },
+    { term: "جبن", emoji: "🧀" },
   ];
 
   return (
     <View style={styles.container}>
-      <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.headerRow]}>
-        <Icon name="trending-up" size={18} color={TayyibatiTheme.colors.primary} />
-        <LocalizedText
-          style={[
-            styles.sectionTitle,
-            { color: colors.foreground, textAlign: rtl ? "right" : "left" },
-          ]}
-        >
-          {t("home.popularSearches")}
-        </LocalizedText>
+      {/* Header Row: الأكثر بحثاً 🔥 */}
+      <View style={[styles.headerRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+        <View style={[styles.titleContainer, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Text style={styles.flameEmoji}>🔥</Text>
+          <Text style={styles.sectionTitle}>الأكثر بحثاً</Text>
+        </View>
       </View>
 
-      <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.chipContainer]}>
+      {/* Horizontal Scrollable Chips */}
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onContentSizeChange={() => {
+          if (rtl) {
+            scrollRef.current?.scrollToEnd({ animated: false });
+          }
+        }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { flexDirection: rtl ? "row-reverse" : "row" },
+        ]}
+      >
         {popularItems.map((item, i) => (
           <TouchableOpacity
             key={i}
             style={[
               styles.chip,
-              {
-                backgroundColor: item.bg,
-                borderColor: item.border,
-              },
+              { flexDirection: rtl ? "row-reverse" : "row" },
             ]}
             onPress={() => onSelect(item.term)}
             activeOpacity={0.75}
           >
-            <LocalizedText style={[styles.chipText, { color: item.text }]}>
-              {item.term}
-            </LocalizedText>
+            <Text style={styles.emojiText}>{item.emoji}</Text>
+            <Text style={styles.chipText}>{item.term}</Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 22,
-    paddingHorizontal: 16,
+    marginTop: 16,
+    width: "100%",
   },
   headerRow: {
+    justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
-    gap: 8,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  titleContainer: {
+    alignItems: "center",
+    gap: 6,
+  },
+  flameEmoji: {
+    fontSize: 16,
   },
   sectionTitle: {
-    fontSize: TayyibatiTheme.typography.size.lg,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+    fontSize: 16.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#111827",
   },
-  chipContainer: {
-    flexWrap: "wrap",
+  viewAllBtn: {
+    alignItems: "center",
+    gap: 2,
+  },
+  viewAllText: {
+    fontSize: 13.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#15803D",
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
     gap: 8,
+    paddingVertical: 2,
   },
   chip: {
-    paddingHorizontal: 15,
-    paddingVertical: 8,
-    borderRadius: TayyibatiTheme.radius.pill,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     borderWidth: 1,
+    borderColor: "#DCFCE7",
+    paddingHorizontal: 15,
+    paddingVertical: 9,
+    alignItems: "center",
+    gap: 7,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   chipText: {
-    fontSize: TayyibatiTheme.typography.size.sm,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+    fontSize: 14.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#15803D",
+  },
+  emojiText: {
+    fontSize: 17,
   },
 });

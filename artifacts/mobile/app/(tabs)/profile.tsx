@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
+import { PageHeader } from "@/components/PageHeader";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useColors } from "@/hooks/useColors";
@@ -74,31 +75,34 @@ export default function ProfileScreen() {
 
   if (!user) {
     return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <View style={[styles.header, { paddingTop: topPadding + 12, backgroundColor: "#11674e", borderBottomColor: "#0D523E" }]}>
-          <HeaderNatureBackground />
-          <Text style={[styles.title, { color: "#f3f6f4", textAlign: rtl ? "right" : "left", width: "100%" }]}>الملف الشخصي</Text>
-        </View>
-        <View style={styles.guestCenter}>
-          <View style={{ position: "relative" }}>
-            <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#1B8A6B", borderWidth: 1.5 }]}>
-              <Icon name="person-outline" size={40} color="#11674e" />
+      <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+          <PageHeader
+            title="الملف الشخصي"
+            subtitle="إدارة حسابك وتفضيلاتك"
+            badgeType="profile"
+          />
+          <View style={styles.guestCenter}>
+            <View style={{ position: "relative" }}>
+              <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#1B8A6B", borderWidth: 1.5 }]}>
+                <Icon name="person" size={40} color="#11674e" />
+              </View>
+              <View style={{ position: "absolute", bottom: -2, right: -2, backgroundColor: "#16A34A", borderRadius: 10, width: 22, height: 22, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#FFFFFF" }}>
+                <Icon name="leaf" size={12} color="#FFFFFF" />
+              </View>
             </View>
-            <View style={{ position: "absolute", bottom: -2, right: -2, backgroundColor: "#16A34A", borderRadius: 10, width: 22, height: 22, alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: "#FFFFFF" }}>
-              <Icon name="leaf" size={12} color="#FFFFFF" />
-            </View>
+            <Text style={[styles.guestTitle, { color: colors.foreground }]}>مرحباً بك</Text>
+            <Text style={[styles.guestDesc, { color: colors.mutedForeground }]}>
+              سجّل دخولك لحفظ تحليلاتك والوصول لميزات أكثر
+            </Text>
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+              onPress={() => router.push("/auth")}
+            >
+              <Text style={styles.primaryBtnText}>تسجيل الدخول / إنشاء حساب</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={[styles.guestTitle, { color: colors.foreground }]}>مرحباً بك</Text>
-          <Text style={[styles.guestDesc, { color: colors.mutedForeground }]}>
-            سجّل دخولك لحفظ تحليلاتك والوصول لميزات أكثر
-          </Text>
-          <TouchableOpacity
-            style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-            onPress={() => router.push("/auth")}
-          >
-            <Text style={styles.primaryBtnText}>تسجيل الدخول / إنشاء حساب</Text>
-          </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
     );
   }
@@ -107,20 +111,37 @@ export default function ProfileScreen() {
   const imagePercent = usage && usage.imageLimit > 0 ? Math.min((usage.monthlyImageCount / usage.imageLimit) * 100, 100) : 0;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-        {/* Header */}
+        <PageHeader
+          title="الملف الشخصي"
+          subtitle="إدارة حسابك وتفضيلاتك"
+          badgeType="profile"
+        />
+        {/* User Profile Card */}
         <View
-          style={[styles.profileHeader, { paddingTop: topPadding + 14, paddingBottom: 24, backgroundColor: "#11674e", borderBottomColor: "#0D523E", borderBottomWidth: 1, position: "relative", overflow: "hidden" }]}
+          style={[
+            styles.profileCard,
+            {
+              backgroundColor: "#FFFFFF",
+              borderColor: "#E2F2E9",
+              borderWidth: 1,
+              borderRadius: 20,
+              marginHorizontal: 16,
+              marginTop: 12,
+              paddingVertical: 20,
+              alignItems: "center",
+              shadowColor: "#0D764E",
+              shadowOffset: { width: 0, height: 3 },
+              shadowOpacity: 0.05,
+              shadowRadius: 8,
+              elevation: 2,
+            },
+          ]}
         >
-          <HeaderNatureBackground />
-          {/* Decorative background shapes for richness */}
-          <View style={{ position: "absolute", top: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: "#FFFFFF12" }} />
-          <View style={{ position: "absolute", bottom: -30, right: -15, width: 130, height: 130, borderRadius: 65, backgroundColor: "#F59E0B12" }} />
-
           <View style={styles.avatarRow}>
             <View style={{ position: "relative" }}>
-              <View style={[styles.avatarLarge, { backgroundColor: "#FFFFFF", borderColor: "#1B8A6B", borderWidth: 1.5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }]}>
+              <View style={[styles.avatarLarge, { backgroundColor: "#EDFBF2", borderColor: "#1B8A6B", borderWidth: 1.5, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 3 }]}>
                 <Text style={[styles.avatarInitial, { color: "#11674e", fontSize: 36 }]}>{user.name.charAt(0)}</Text>
               </View>
               <View style={{ position: "absolute", bottom: 0, right: 0, backgroundColor: "#16A34A", borderRadius: 11, width: 24, height: 24, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#FFFFFF" }}>
@@ -128,10 +149,10 @@ export default function ProfileScreen() {
               </View>
             </View>
           </View>
-          <Text style={[styles.userName, { color: "#f3f6f4", fontSize: 28 }]}>{user.name}</Text>
-          <Text style={[styles.userEmail, { color: "#E2E8F0", fontSize: 16.5 }]}>{user.email}</Text>
+          <Text style={[styles.userName, { color: "#0C6246", fontSize: 24, marginTop: 10 }]}>{user.name}</Text>
+          <Text style={[styles.userEmail, { color: "#64748B", fontSize: 15 }]}>{user.email}</Text>
           {user.isPremium && (
-            <View style={[styles.premiumBadge, { backgroundColor: "#FFF3D6", borderColor: "#FFE4A0", borderWidth: 1, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginTop: 6 }]}>
+            <View style={[styles.premiumBadge, { backgroundColor: "#FFF3D6", borderColor: "#FFE4A0", borderWidth: 1, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, marginTop: 8 }]}>
               <Icon name="star" size={15} color="#F59E0B" />
               <Text style={[styles.premiumText, { color: "#D97706", fontFamily: "Tajawal_700Bold" }]}>Premium</Text>
             </View>
@@ -238,21 +259,30 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: "#F8FEF9",
+  },
   header: {
     paddingHorizontal: 16,
     paddingBottom: 14,
+    backgroundColor: "#F8FEF9",
     borderBottomWidth: 1,
+    borderBottomColor: "#F3F4F6",
   },
   title: {
     fontSize: 26,
     fontFamily: "Tajawal_700Bold",
+    color: "#11674E",
   },
   profileHeader: {
     paddingHorizontal: 20,
     paddingBottom: 28,
     alignItems: "center",
     gap: 6,
+  },
+  profileCard: {
+    borderRadius: 20,
   },
   avatarRow: { marginBottom: 4 },
   avatarLarge: {

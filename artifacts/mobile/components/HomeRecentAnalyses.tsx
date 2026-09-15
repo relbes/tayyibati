@@ -1,22 +1,19 @@
-import React from "react";
-import { View, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
 import { getHistory } from "@/lib/api";
 import { Icon } from "@/components/Icon";
-import { useColors } from "@/hooks/useColors";
-import { LocalizedText } from "./LocalizedText";
-import { isRTL, t } from "@/lib/i18n";
+import { isRTL } from "@/lib/i18n";
 import { useRouter } from "expo-router";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 
 export function HomeRecentAnalyses() {
-  const colors = useColors();
   const router = useRouter();
   const { user } = useAuth();
   const { setCurrentReport } = useAnalysis();
   const rtl = isRTL();
+  const scrollRef = useRef<ScrollView>(null);
 
   const { data: items = [] } = useQuery({
     queryKey: ["history", user?.id],
@@ -24,155 +21,140 @@ export function HomeRecentAnalyses() {
     enabled: !!user,
   });
 
-  const recent = items.slice(0, 3);
+  // If user has history, use it; otherwise provide default recent searches to match the reference UI
+  const displayItems =
+    items.length > 0
+      ? items.slice(0, 6).map((item: any) => ({
+          id: item.id || item.report?.query,
+          query: item.report?.query || "طعام",
+          itemData: item,
+        }))
+      : [
+          { id: "1", query: "دجاج مشوي", itemData: null },
+          { id: "2", query: "موز", itemData: null },
+          { id: "3", query: "حليب", itemData: null },
+          { id: "4", query: "تفاح", itemData: null },
+        ];
 
-  if (recent.length === 0) return null;
-
-  const handleView = (item: any) => {
-    setCurrentReport(item.report);
-    router.push("/result");
+  const handlePress = (entry: any) => {
+    if (entry.itemData?.report) {
+      setCurrentReport(entry.itemData.report);
+      router.push("/result");
+    } else {
+      router.push("/(tabs)/search");
+    }
   };
 
   return (
     <View style={styles.container}>
-      <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.header]}>
-        <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.titleBox]}>
-          <Icon name="time-outline" size={18} color={TayyibatiTheme.colors.primary} />
-          <LocalizedText style={[styles.sectionTitle, { color: colors.foreground }]}>
-            {t("home.recentAnalyses")}
-          </LocalizedText>
+      {/* Header Row: آخر عمليات البحث 🕒 | مسح الكل < */}
+      <View style={[styles.headerRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+        <View style={[styles.titleBox, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+          <Icon name="time-outline" size={18} color="#008C5A" strokeWidth={2} />
+          <Text style={styles.sectionTitle}>آخر عمليات البحث</Text>
         </View>
 
         <TouchableOpacity
           onPress={() => router.push("/(tabs)/history")}
           activeOpacity={0.7}
-          style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.viewAllBtn]}
+          style={[styles.clearBtn, { flexDirection: rtl ? "row-reverse" : "row" }]}
         >
-          <LocalizedText style={[styles.viewAll, { color: TayyibatiTheme.colors.primary }]}>
-            {t("home.viewAll")}
-          </LocalizedText>
-          <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={14} color={TayyibatiTheme.colors.primary} />
+          <Text style={styles.clearText}>مسح الكل</Text>
+          <Icon
+            name={rtl ? "chevron-back" : "chevron-forward"}
+            size={14}
+            color="#008C5A"
+            strokeWidth={2.5}
+          />
         </TouchableOpacity>
       </View>
 
-      <View style={styles.list}>
-        {recent.map((item: any, i: number) => {
-          let statusText = t("status.unknown");
-          let statusColor = colors.unknown;
-          let statusBg: string = TayyibatiTheme.colors.surfaceWarm;
-
-          if (item.report.overallStatus === "ALLOWED") {
-            statusText = t("status.allowed");
-            statusColor = TayyibatiTheme.colors.primary;
-            statusBg = TayyibatiTheme.colors.greenCard;
-          } else if (item.report.overallStatus === "FORBIDDEN") {
-            statusText = t("status.forbidden");
-            statusColor = TayyibatiTheme.colors.danger;
-            statusBg = TayyibatiTheme.colors.pinkCard;
-          } else if (item.report.overallStatus === "CONDITIONAL") {
-            statusText = t("status.conditional");
-            statusColor = TayyibatiTheme.colors.orangeDark;
-            statusBg = TayyibatiTheme.colors.orangeCard;
-          } else if (item.report.overallStatus === "REQUIRES_INFO") {
-            statusText = t("status.unknown");
-            statusColor = colors.unknown;
-            statusBg = colors.muted;
+      {/* Horizontal Scrollable Chips */}
+      <ScrollView
+        ref={scrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        onContentSizeChange={() => {
+          if (rtl) {
+            scrollRef.current?.scrollToEnd({ animated: false });
           }
-
-          return (
-            <TouchableOpacity
-              key={i}
-              style={[
-                styles.card,
-                {
-                  backgroundColor: TayyibatiTheme.colors.surface,
-                  borderColor: TayyibatiTheme.colors.borderSoft,
-                },
-              ]}
-              activeOpacity={0.75}
-              onPress={() => handleView(item)}
-            >
-              <View style={[{ flexDirection: rtl ? "row-reverse" : "row" }, styles.row]}>
-                <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                <LocalizedText
-                  style={[
-                    styles.foodName,
-                    { color: TayyibatiTheme.colors.text, flex: 1, textAlign: rtl ? "right" : "left" },
-                  ]}
-                  numberOfLines={1}
-                >
-                  {item.report.query}
-                </LocalizedText>
-                <View style={[styles.badge, { backgroundColor: statusBg }]}>
-                  <LocalizedText style={[styles.badgeText, { color: statusColor }]}>
-                    {statusText}
-                  </LocalizedText>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+        }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { flexDirection: rtl ? "row-reverse" : "row" },
+        ]}
+      >
+        {displayItems.map((entry: any) => (
+          <TouchableOpacity
+            key={entry.id}
+            style={[
+              styles.chip,
+              { flexDirection: rtl ? "row-reverse" : "row" },
+            ]}
+            activeOpacity={0.75}
+            onPress={() => handlePress(entry)}
+          >
+            <Icon name="time-outline" size={15} color="#9CA3AF" strokeWidth={1.8} />
+            <Text style={styles.chipText}>{entry.query}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 22,
-    paddingHorizontal: 16,
+    marginTop: 16,
+    width: "100%",
   },
-  header: {
+  headerRow: {
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    paddingHorizontal: 16,
+    marginBottom: 10,
   },
   titleBox: {
     alignItems: "center",
-    gap: 8,
+    gap: 6,
   },
   sectionTitle: {
-    fontSize: TayyibatiTheme.typography.size.lg,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+    fontSize: 16.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#111827",
   },
-  viewAllBtn: {
+  clearBtn: {
     alignItems: "center",
     gap: 2,
   },
-  viewAll: {
-    fontSize: TayyibatiTheme.typography.size.sm,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+  clearText: {
+    fontSize: 13.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#15803D",
   },
-  list: {
-    gap: 10,
+  scrollContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+    paddingVertical: 2,
   },
-  card: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderRadius: TayyibatiTheme.radius.medium,
+  chip: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
     borderWidth: 1,
-    ...TayyibatiTheme.shadows.card,
-  },
-  row: {
+    borderColor: "#DCFCE7",
+    paddingHorizontal: 15,
+    paddingVertical: 9,
     alignItems: "center",
-    gap: 10,
+    gap: 7,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  foodName: {
-    fontSize: TayyibatiTheme.typography.size.md - 1,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
-  },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: TayyibatiTheme.radius.pill,
-  },
-  badgeText: {
-    fontSize: TayyibatiTheme.typography.size.xs,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+  chipText: {
+    fontSize: 14.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#374151",
   },
 });

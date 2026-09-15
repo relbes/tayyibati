@@ -22,34 +22,34 @@ export function FoodAutocompleteDropdown({
   if (!showSuggestions || suggestions.length === 0) return null;
 
   return (
-    <View style={[styles.dropdown, { backgroundColor: colors.card, borderColor: colors.border, shadowColor: colors.foreground }]}>
+    <View style={[styles.dropdown, { backgroundColor: "#FFFFFF", borderColor: "#DCFCE7" }]}>
       {suggestions.map((food, idx) => (
         <React.Fragment key={idx}>
           {!!(food as any).sectionHeader && (
-            <View style={[styles.sectionHeader, { backgroundColor: colors.muted + "40", borderBottomWidth: 1, borderBottomColor: colors.border }]}>
-              <Text style={[styles.sectionHeaderText, { color: colors.primary }]}>{(food as any).sectionHeader}</Text>
+            <View style={[styles.sectionHeader, { backgroundColor: "#F0FDF4", borderBottomWidth: 1, borderBottomColor: "#DCFCE7" }]}>
+              <Text style={[styles.sectionHeaderText, { color: "#11674E" }]}>{(food as any).sectionHeader}</Text>
             </View>
           )}
           <TouchableOpacity
             style={[
               localizedRow(),
               styles.suggestionRow,
-              idx < suggestions.length - 1 && { borderBottomWidth: 1, borderBottomColor: colors.border },
+              idx < suggestions.length - 1 && { borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
             ]}
             onPress={() => onSelect(food)}
             activeOpacity={0.7}
           >
             <View style={[localizedRow(), styles.suggestionLeft]}>
-              <View style={[styles.iconWrapper, { backgroundColor: food.entityType === "dish" ? colors.primary + "15" : colors.muted + "40" }]}>
+              <View style={[styles.iconWrapper, { backgroundColor: "#DCFCE7" }]}>
                 <Icon
                   name={food.entityType === "dish" ? "utensils" : "leaf"}
                   size={16}
-                  color={food.entityType === "dish" ? colors.primary : colors.foreground}
+                  color="#008C5A"
                 />
               </View>
               <View style={styles.suggestionNames}>
-                <LocalizedText style={[styles.suggestionAr, { color: colors.foreground }]}>{food.labelAr}</LocalizedText>
-                {!!food.labelEn && <Text style={[ltrText(), styles.suggestionEn, { color: colors.mutedForeground }]}>{food.labelEn}</Text>}
+                <LocalizedText style={[styles.suggestionAr, { color: "#111827" }]}>{food.labelAr}</LocalizedText>
+                {!!food.labelEn && <Text style={[ltrText(), styles.suggestionEn, { color: "#6B7280" }]}>{food.labelEn}</Text>}
               </View>
             </View>
           </TouchableOpacity>
@@ -62,7 +62,7 @@ export function FoodAutocompleteDropdown({
 const styles = StyleSheet.create({
   sectionHeader: {
     paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 8,
   },
   sectionHeaderText: {
     fontSize: 12,
@@ -75,13 +75,15 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 999,
-    borderRadius: 8,
+    borderRadius: 18,
     borderWidth: 1,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    marginTop: 4,
+    overflow: "hidden",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 4,
+    marginTop: 6,
   },
   suggestionRow: {
     justifyContent: "space-between",
@@ -95,9 +97,9 @@ const styles = StyleSheet.create({
     marginEnd: 8,
   },
   iconWrapper: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
     marginEnd: 10,
@@ -113,6 +115,7 @@ const styles = StyleSheet.create({
   },
   suggestionEn: {
     fontSize: 12,
+    fontFamily: "Tajawal_500Medium",
     marginTop: 2,
     width: "100%",
   },

@@ -1,13 +1,9 @@
 import React from "react";
-import { View, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
-import { useColors } from "@/hooks/useColors";
-import { LocalizedText, LocalizedParagraph } from "./LocalizedText";
-import { isRTL, t } from "@/lib/i18n";
-import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
+import { isRTL } from "@/lib/i18n";
 
 export function HomeSearchEducation() {
-  const colors = useColors();
   const rtl = isRTL();
 
   return (
@@ -16,33 +12,33 @@ export function HomeSearchEducation() {
         style={[
           styles.banner,
           {
-            backgroundColor: TayyibatiTheme.colors.tealCard,
-            borderColor: "#BFEADF",
             flexDirection: rtl ? "row-reverse" : "row",
           },
         ]}
       >
-        <View style={styles.iconCircle}>
-          <Icon name="information-circle" size={20} color={TayyibatiTheme.colors.teal} />
+        {/* Right side in RTL: Accuracy & Precision Icon */}
+        <View style={styles.iconBox}>
+          <Icon name="accuracy" size={32} color="#008C5A" />
         </View>
 
+        {/* Text Container */}
         <View style={{ flex: 1 }}>
-          <LocalizedText
+          <Text
             style={[
               styles.title,
-              { color: TayyibatiTheme.colors.teal, textAlign: rtl ? "right" : "left" },
+              { textAlign: rtl ? "right" : "left" },
             ]}
           >
-            {t("home.betterResultTitle")}
-          </LocalizedText>
-          <LocalizedParagraph
+            للحصول على نتيجة أدق ...
+          </Text>
+          <Text
             style={[
               styles.desc,
-              { color: TayyibatiTheme.colors.textSecondary, textAlign: rtl ? "right" : "left" },
+              { textAlign: rtl ? "right" : "left" },
             ]}
           >
-            {t("home.betterResultDesc")}
-          </LocalizedParagraph>
+            ابحث باستخدام الاسم الدقيق للطعام، أو جرب تصويره أو مسح الباركود للتعرف على مكوناته.
+          </Text>
         </View>
       </View>
     </View>
@@ -51,33 +47,37 @@ export function HomeSearchEducation() {
 
 const styles = StyleSheet.create({
   container: {
-    marginTop: 22,
+    marginTop: 16,
     paddingHorizontal: 16,
+    width: "100%",
   },
   banner: {
     padding: 16,
-    borderRadius: TayyibatiTheme.radius.large,
+    borderRadius: 18,
     borderWidth: 1,
-    alignItems: "flex-start",
+    backgroundColor: "#F0FDF4",
+    borderColor: "#DCFCE7",
+    alignItems: "center",
     gap: 12,
   },
-  iconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: TayyibatiTheme.colors.white,
+  iconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#DCFCE7",
     alignItems: "center",
     justifyContent: "center",
-    ...TayyibatiTheme.shadows.card,
   },
   title: {
-    fontSize: TayyibatiTheme.typography.size.md,
-    fontFamily: TayyibatiTheme.typography.fontFamily.bold,
+    fontSize: 16.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#11674E",
     marginBottom: 4,
   },
   desc: {
-    fontSize: TayyibatiTheme.typography.size.sm,
-    fontFamily: TayyibatiTheme.typography.fontFamily.regular,
+    fontSize: 13.5,
+    fontFamily: "Tajawal_500Medium",
+    color: "#4B5563",
     lineHeight: 20,
   },
 });
