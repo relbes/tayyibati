@@ -28,6 +28,9 @@ import {
   CULINARY_DESCRIPTORS,
   GENERIC_DESCRIPTORS,
   PREPARATION_DESCRIPTORS,
+  PROTEIN_DESCRIPTORS,
+  formatAmbiguityQuestion,
+  hasRecognizedDescriptor,
 } from "./arabicNormalization";
 import { expandSearchQuery, generateSmartSuggestions, loadDbSynonyms, getQuerySynonymTargets } from "./searchExpansion";
 
@@ -109,6 +112,8 @@ export interface SearchResult {
   didYouMean?: string[];
   isAmbiguous?: boolean;
   candidateDishes?: SearchResult[];
+  candidateFoods?: SearchResult[];
+  questionAr?: string;
   diagnostics?: SearchDiagnostics;
 
   // Backward compatibility fields
@@ -163,14 +168,46 @@ export function computeRankingScore(
     return 1200;
   }
 
+  // 1b. Exact Constituent Match (Score 1200-1250 for compound foods/synonyms separated by /, —, (), or 'و')
+  const candParts = candName.split(/\/|\s+و\s+|[/—,()]+/);
+  if (candParts.length > 1) {
+    for (const cp of candParts) {
+      const cpTrim = cp.trim();
+      if (cpTrim.length >= 2) {
+        const cpNorm = normalize(cpTrim);
+        const cpStripped = stripArticle(cpNorm);
+        if (cpNorm === qNorm || cpStripped === qStripped || cpNorm === qStripped || cpStripped === qNorm) {
+          const isAtStart = cNorm.startsWith(cpNorm) || cStripped.startsWith(cpStripped);
+          return isAtStart ? 1250 : 1200;
+        }
+      }
+    }
+  }
+
   // 2. Canonical Prefix Match (Score 1000)
   if (cNorm.startsWith(qNorm) || cStripped.startsWith(qStripped) || cNorm.startsWith("ال" + qStripped) || cNorm.startsWith("ال" + qNorm)) {
+    const qHasDesc = hasRecognizedDescriptor(qNorm) || hasRecognizedDescriptor(qStripped);
+    const cHasDesc = hasRecognizedDescriptor(cNorm) || hasRecognizedDescriptor(cStripped);
+    if (!qHasDesc && cHasDesc) {
+      return 950;
+    }
     return 1000;
   }
 
   // 3. Alias Prefix Match (Score 800)
   if ((aNorm && aNorm.startsWith(qNorm)) || (aStripped && aStripped.startsWith(qStripped))) {
     return 800;
+  }
+
+  // 3b. Base Entity / Prefix of Query Match (Score 900)
+  // When the query starts with the candidate entity or matched alias (e.g. "حمص بالطحينة" matching base food "حمص")
+  if (
+    qNorm.startsWith(cNorm + " ") ||
+    qStripped.startsWith(cStripped + " ") ||
+    (aNorm && qNorm.startsWith(aNorm + " ")) ||
+    (aStripped && qStripped.startsWith(aStripped + " "))
+  ) {
+    return 900;
   }
 
   // 4. Substring / Contains Match (Score 600)
@@ -287,9 +324,11 @@ interface CacheIndexes {
   exactFoodIndex: Map<string, any>;
   foodAliasIndex: Map<string, any>;
   foodPrefixIndex: Map<string, any[]>;
+  baseFoodIndex: Map<string, any[]>;
   exactDishIndex: Map<string, any | any[]>;
   dishAliasIndex: Map<string, any | any[]>;
   dishPrefixIndex: Map<string, any[]>;
+  entityHeadNouns: Set<string>;
   builtAt: number;
 }
 
@@ -389,10 +428,21 @@ export class CanonicalSearchEngine {
     const exactFoodIndex = new Map<string, any>();
     const foodAliasIndex = new Map<string, any>();
     const foodPrefixIndex = new Map<string, any[]>();
+    const baseFoodIndex = new Map<string, any[]>();
 
     const exactDishIndex = new Map<string, any | any[]>();
     const dishAliasIndex = new Map<string, any | any[]>();
     const dishPrefixIndex = new Map<string, any[]>();
+    const entityHeadNouns = new Set<string>();
+
+    const addEntityHead = (text: string) => {
+      if (!text) return;
+      const stripped = stripArticle(normalize(text)).trim();
+      const firstWord = stripped.split(/\s+/)[0];
+      if (firstWord && firstWord.length > 1) {
+        entityHeadNouns.add(firstWord);
+      }
+    };
 
     // Helper to index prefix keys (both 2-char and 3-char)
     const addPrefix = (map: Map<string, any[]>, keyStr: string, item: any) => {
@@ -424,18 +474,40 @@ export class CanonicalSearchEngine {
       }
     };
 
+    const addBaseFood = (key: string, food: any) => {
+      if (!key || key.length < 2) return;
+      const list = baseFoodIndex.get(key) || [];
+      if (!list.some((item: any) => item.id === food.id)) {
+        list.push(food);
+      }
+      baseFoodIndex.set(key, list);
+    };
+
     for (const f of knowledgeCache.foods || []) {
       const normAr = normalize(f.nameAr);
       const stripAr = stripArticle(f.nameAr);
+      const noAl = normAr.startsWith("ال") && normAr.length > 3 ? normAr.slice(2) : "";
       const normEn = normalize(f.nameEn);
 
       if (normAr) addExactFood(normAr, f);
       if (stripAr) addExactFood(stripAr, f);
-      if (normEn) {
-        addExactFood(normEn, f);
-        addPrefix(foodPrefixIndex, normEn, f);
-        // Also index clean first word or slash/paren separated parts of nameEn (e.g. "Rice (Egyptian/Basmati...)" -> "rice")
-        const enParts = f.nameEn.split(/[/—,()]+/);
+      if (noAl) addExactFood(noAl, f);
+
+      if (f.nameEn) {
+        const cleanEn = f.nameEn.replace(/\s*\(.*?\)/g, "").trim();
+        const normEn = normalize(f.nameEn);
+        const cleanNormEn = normalize(cleanEn);
+
+        if (normEn) {
+          addExactFood(normEn, f);
+          addPrefix(foodPrefixIndex, normEn, f);
+        }
+        if (cleanNormEn && cleanNormEn !== normEn) {
+          addExactFood(cleanNormEn, f);
+          addPrefix(foodPrefixIndex, cleanNormEn, f);
+        }
+
+        const enParts = cleanEn.split(/[/,]+/);
         for (const ep of enParts) {
           const epNorm = normalize(ep.trim());
           if (epNorm && epNorm.length >= 2) {
@@ -445,25 +517,11 @@ export class CanonicalSearchEngine {
         }
       }
 
-      // Index base entity & root noun tokens (e.g. "الأرز", "ارز", "رز" for "الأرز بجميع أشكاله...")
-      const baseEntity = extractBaseEntity(f.nameAr);
-      if (baseEntity) {
-        const baseNorm = normalize(baseEntity);
-        const baseStrip = stripArticle(baseNorm);
-        const baseNoAlef = baseStrip.replace(/^[اأإآ]/, "");
-
-        if (baseNorm) addExactFood(baseNorm, f);
-        if (baseStrip) addExactFood(baseStrip, f);
-        if (baseNoAlef && baseNoAlef.length >= 2) addExactFood(baseNoAlef, f);
-
-        if (baseNorm) addPrefix(foodPrefixIndex, baseNorm, f);
-        if (baseStrip) addPrefix(foodPrefixIndex, baseStrip, f);
-        if (baseNoAlef && baseNoAlef.length >= 2) addPrefix(foodPrefixIndex, baseNoAlef, f);
-      }
-
-      // Split compound food names & multi-synonyms (e.g. "كمثرى / انجاص / اجاص", "لبن / حليب", "لحم الضاني / خروف")
-      const rawParts = f.nameAr.split(/[/—,()]+/);
+      // Split compound food names & true constituent synonyms (e.g. "كمثرى / انجاص / اجاص", "بطاطس / بطاطا", "لبن / حليب", "سمك / أسماك", "الجوز (عين الجمل)", "دجاج و فراخ")
+      addEntityHead(f.nameAr);
+      const rawParts = f.nameAr.split(/\/|\s+و\s+|[/—,()]+/);
       for (const part of rawParts) {
+        addEntityHead(part);
         const pTrimmed = part.trim();
         if (pTrimmed.length < 2) continue;
 
@@ -487,29 +545,56 @@ export class CanonicalSearchEngine {
           addExactFood(pNoAlef, f);
         }
 
-        // Also index base entity of the constituent part if multi-word (e.g. "لحم الضاني" -> "ضاني", "لحم خروف" -> "خروف")
-        const partWords = pTrimmed.split(/\s+/);
-        if (partWords.length > 1) {
-          const partBase = extractBaseEntity(pTrimmed);
-          if (partBase) {
-            const pbNorm = normalize(partBase);
-            const pbStrip = stripArticle(pbNorm);
-            if (pbNorm) addExactFood(pbNorm, f);
-            if (pbStrip) addExactFood(pbStrip, f);
-          }
+        // Handle quantifier phrases like "بكل أنواعها" or "بجميع أشكاله" (e.g. "سلطة بكل أنواعها", "الأرز بجميع أشكاله")
+        const cleanHead = pStrip.replace(/\s+(?:بكل|بجميع|كافة|جميع)\s+.*$/, "").trim();
+        if (cleanHead && cleanHead !== pStrip && cleanHead.length >= 2) {
+          addExactFood(cleanHead, f);
+          addExactFood("ال" + cleanHead, f);
+          addBaseFood(cleanHead, f);
+          addPrefix(foodPrefixIndex, cleanHead, f);
+          addEntityHead(cleanHead);
+        }
+
+        // Feminine plural to singular (e.g. "سلطات" -> "سلطة")
+        if (pStrip.endsWith("ات") && pStrip.length >= 5) {
+          const singularH = pStrip.slice(0, -2) + "ه";
+          const singularT = pStrip.slice(0, -2) + "ة";
+          addBaseFood(singularH, f);
+          addBaseFood(singularT, f);
+          addPrefix(foodPrefixIndex, singularH, f);
+          addEntityHead(singularH);
         }
       }
 
-      // Root primary food noun indexing (e.g. "رز", "ارز", "أرز" for "الأرز بجميع أشكاله...")
-      const firstWordNorm = normalize(f.nameAr.split(/[/—,\s()]+/)[0] || "");
-      const firstWordStrip = stripArticle(firstWordNorm);
-      const firstWordNoAlef = firstWordStrip.replace(/^[اأإآ]/, "");
-      const firstWordNoAl = firstWordNorm.startsWith("ال") && firstWordNorm.length > 3 ? firstWordNorm.slice(2) : "";
+      // Base Entity and multi-word variants (Index into baseFoodIndex ONLY, NEVER exactFoodIndex!)
+      // E.g. "طماطم شيري" -> base "طماطم"
+      // E.g. "شاي أخضر" -> base "شاي"
+      // E.g. "بطاطا حلوة" -> base "بطاطا"
+      const baseEntity = extractBaseEntity(f.nameAr);
+      if (baseEntity) {
+        const baseNorm = normalize(baseEntity);
+        const baseStrip = stripArticle(baseNorm);
+        if (baseNorm) {
+          addBaseFood(baseNorm, f);
+          addPrefix(foodPrefixIndex, baseNorm, f);
+        }
+        if (baseStrip) {
+          addBaseFood(baseStrip, f);
+          addPrefix(foodPrefixIndex, baseStrip, f);
+        }
+      }
 
-      if (firstWordNorm) addExactFood(firstWordNorm, f);
-      if (firstWordNoAl) addExactFood(firstWordNoAl, f);
-      if (firstWordStrip) addExactFood(firstWordStrip, f);
-      if (firstWordNoAlef && firstWordNoAlef.length >= 2) addExactFood(firstWordNoAlef, f);
+      // Multi-word variants (e.g. "طماطم شيري", "شاي أخضر", "بطاطا حلوة")
+      const primaryParts = f.nameAr.split(/\/|\s+و\s+/).map((p: string) => p.trim()).filter(Boolean);
+      for (const part of primaryParts) {
+        const pWords = part.split(/\s+/).filter(Boolean);
+        if (pWords.length > 1 && pWords.length <= 3) {
+          const firstWord = normalize(pWords[0]);
+          const firstStrip = stripArticle(firstWord);
+          if (firstWord && firstWord.length >= 2) addBaseFood(firstWord, f);
+          if (firstStrip && firstStrip.length >= 2) addBaseFood(firstStrip, f);
+        }
+      }
 
       addPrefix(foodPrefixIndex, normAr, f);
       addPrefix(foodPrefixIndex, stripAr, f);
@@ -530,9 +615,19 @@ export class CanonicalSearchEngine {
       addPrefix(foodPrefixIndex, normAr, food);
     }
 
+    // Canonicalize standard tomato dialect forms directly to master Food 1510
+    const food1510 = knowledgeCache.foodById.get(1510);
+    if (food1510) {
+      foodAliasIndex.set(normalize("طماط"), food1510);
+      foodAliasIndex.set(stripArticle(normalize("طماط")), food1510);
+      foodAliasIndex.set(normalize("بندورة"), food1510);
+      foodAliasIndex.set(stripArticle(normalize("بندورة")), food1510);
+    }
+
     // 2. Index Dishes & Dish Aliases
     const dishesList = dishCache.dishes || [];
     for (const d of dishesList) {
+      addEntityHead(d.nameAr);
       const normAr = normalize(d.nameAr);
       const stripAr = stripArticle(d.nameAr);
       if (normAr) {
@@ -547,6 +642,38 @@ export class CanonicalSearchEngine {
       }
       if (stripAr && stripAr !== normAr) {
         exactDishIndex.set(stripAr, d);
+      }
+
+      // Index distinct named constituents separated by / or — into dishAliasIndex
+      const dishParts = d.nameAr.split(/\/|—|\(|\)/);
+      for (const part of dishParts) {
+        const pTrimmed = part.trim();
+        if (pTrimmed.length < 3) continue;
+        const pNorm = normalize(pTrimmed);
+        const pStrip = stripArticle(pNorm);
+        if (pNorm && pNorm !== normAr) {
+          const existing = dishAliasIndex.get(pNorm);
+          if (existing) {
+            const list = Array.isArray(existing) ? existing : [existing];
+            if (!list.some((item: any) => item.id === d.id)) list.push(d);
+            dishAliasIndex.set(pNorm, list);
+          } else {
+            dishAliasIndex.set(pNorm, d);
+          }
+          addPrefix(dishPrefixIndex, pNorm, d);
+        }
+        if (pStrip && pStrip !== pNorm && pStrip !== stripAr) {
+          const existing = dishAliasIndex.get(pStrip);
+          if (existing) {
+            const list = Array.isArray(existing) ? existing : [existing];
+            if (!list.some((item: any) => item.id === d.id)) list.push(d);
+            dishAliasIndex.set(pStrip, list);
+          } else {
+            dishAliasIndex.set(pStrip, d);
+          }
+          addPrefix(dishPrefixIndex, pStrip, d);
+        }
+        addEntityHead(part);
       }
 
       addPrefix(dishPrefixIndex, normAr, d);
@@ -603,9 +730,11 @@ export class CanonicalSearchEngine {
       exactFoodIndex,
       foodAliasIndex,
       foodPrefixIndex,
+      baseFoodIndex,
       exactDishIndex,
       dishAliasIndex,
       dishPrefixIndex,
+      entityHeadNouns,
       builtAt: now,
     };
 
@@ -665,7 +794,7 @@ export class CanonicalSearchEngine {
     const expandedVariants = expandSearchQuery(rawQuery);
     const qStripped = stripArticle(queryNorm);
 
-    const foods: CanonicalSearchResult[] = [];
+    let foods: CanonicalSearchResult[] = [];
     let dishes: CanonicalSearchResult[] = [];
     const seenFoodIds = new Set<number | string>();
     const seenDishIds = new Set<number | string>();
@@ -708,13 +837,13 @@ export class CanonicalSearchEngine {
               canonicalName: foodExact.nameAr,
               searchConfidence: 95,
               matchType: "EXACT",
-              matchedAlias: null,
+              matchedAlias: variant !== foodExact.nameAr ? variant : null,
               matchedReason: "Matched via Food Canonical Name",
               entity_type: "food",
               canonical_id: foodExact.id,
               canonical_name: foodExact.nameAr,
               confidence: 95,
-              matched_alias: null,
+              matched_alias: variant !== foodExact.nameAr ? variant : null,
               search_method: "exact_canonical",
               searchOutcome: "FOUND",
             });
@@ -732,8 +861,10 @@ export class CanonicalSearchEngine {
         if (!seenFoodIds.has(f.id)) {
           const fNorm = normalize(f.nameAr);
           const fStrip = stripArticle(fNorm);
-          const isPrefix = fNorm.startsWith(queryNorm) || fStrip.startsWith(qStripped);
-          const isSub = allowBroadFuzzySubstring && (fNorm.includes(queryNorm) || fStrip.includes(qStripped));
+          const fNormEn = normalize(f.nameEn);
+          const isPrefixEn = !!(fNormEn && fNormEn.startsWith(queryNorm));
+          const isPrefix = fNorm.startsWith(queryNorm) || fStrip.startsWith(qStripped) || isPrefixEn;
+          const isSub = allowBroadFuzzySubstring && (fNorm.includes(queryNorm) || fStrip.includes(qStripped) || !!(fNormEn && fNormEn.includes(queryNorm)));
 
           if (isPrefix || isSub) {
             seenFoodIds.add(f.id);
@@ -743,13 +874,13 @@ export class CanonicalSearchEngine {
               canonicalName: f.nameAr,
               searchConfidence: isPrefix ? 90 : 80,
               matchType: isPrefix ? "PREFIX" : "FUZZY",
-              matchedAlias: null,
+              matchedAlias: isPrefixEn ? f.nameEn : null,
               matchedReason: isPrefix ? "Matched via Food Prefix Index" : "Matched via Food Partial Match",
               entity_type: "food",
               canonical_id: f.id,
               canonical_name: f.nameAr,
               confidence: isPrefix ? 90 : 80,
-              matched_alias: null,
+              matched_alias: isPrefixEn ? f.nameEn : null,
               search_method: "starts_with",
               searchOutcome: "FOUND",
             });
@@ -791,7 +922,42 @@ export class CanonicalSearchEngine {
       }
     }
 
-    foods.sort((a, b) => (b.searchConfidence ?? 0) - (a.searchConfidence ?? 0));
+    // D. Base Food Index Lookup for Generic Queries (e.g. "شاي" -> "شاي أخضر", "شاي أحمر (أسود)")
+    const baseKeys: string[] = [queryNorm, qStripped, ...expandedVariants.map(v => stripArticle(normalize(v)))];
+    if (extractedBase) {
+      baseKeys.push(normalize(extractedBase), stripArticle(normalize(extractedBase)));
+    }
+    const seenBaseKey = new Set<string>();
+    for (const bKey of baseKeys) {
+      if (!bKey || seenBaseKey.has(bKey)) continue;
+      seenBaseKey.add(bKey);
+      const baseVariantsList = indexes.baseFoodIndex.get(bKey) || [];
+      for (const bf of baseVariantsList) {
+        if (!seenFoodIds.has(bf.id)) {
+          seenFoodIds.add(bf.id);
+          foods.push({
+            canonicalId: bf.id,
+            canonicalEntityType: "food",
+            canonicalName: bf.nameAr,
+            searchConfidence: 85,
+            matchType: "VARIANT",
+            matchedAlias: null,
+            matchedReason: `Matched via Generic Food Family Variant`,
+            entity_type: "food",
+            canonical_id: bf.id,
+            canonical_name: bf.nameAr,
+            confidence: 85,
+            matched_alias: null,
+            search_method: "base_entity_resolution",
+            searchOutcome: "FOUND",
+          });
+        }
+      }
+    }
+
+    // Rank candidate foods using Intelligent Weighted Ranking Engine
+    // (Ensures Exact canonical matches score 1200 and ALWAYS outrank variants scoring 1000/850/600)
+    foods = rankCandidates(foods, rawQuery, SearchRankingProfile.AUTOCOMPLETE);
 
     // -------------------------------------------------------------------------
     // 2. DISH CHANNEL RESOLUTION
@@ -881,23 +1047,49 @@ export class CanonicalSearchEngine {
       }
     }
 
-    dishes.sort((a, b) => (b.searchConfidence ?? 0) - (a.searchConfidence ?? 0));
+    dishes = rankCandidates(dishes, rawQuery, SearchRankingProfile.AUTOCOMPLETE);
 
     // -------------------------------------------------------------------------
-    // 3. GENERIC QUERY INTENT DETERMINATION
+    // 3. GENERIC QUERY INTENT DETERMINATION & AMBIGUITY EVALUATION
     // -------------------------------------------------------------------------
     let queryIntent: QueryIntent = "UNKNOWN";
-    const hasExactFood = foods.some((f) => f.matchType === "EXACT" || f.matchType === "ALIAS" || f.matchType === "BASE_ENTITY" || (f.searchConfidence ?? 0) >= 85);
-    const hasExactDish = dishes.some((d) => d.matchType === "EXACT" || d.matchType === "ALIAS" || (d.searchConfidence ?? 0) >= 85);
+
+    const hasExactFood = foods.some((f) => {
+      const s = computeRankingScore(f.canonicalName || "", rawQuery, "food", f.matchedAlias);
+      return s >= 1200;
+    });
+    const hasExactDish = dishes.some((d) => {
+      const s = computeRankingScore(d.canonicalName || "", rawQuery, "dish", d.matchedAlias);
+      return s >= 1200;
+    });
+
+    const hasStandaloneExactDish = dishes.some((d) => {
+      const dNorm = normalize(d.canonicalName || "");
+      const dStrip = stripArticle(dNorm);
+      // For single-word queries, a compound slash-constituent dish (e.g. "العيش / العصيدة الموريتانية")
+      // is NOT a standalone exact dish that can unilaterally seize DISH intent.
+      return !dNorm.includes("/") && (dNorm === queryNorm || dStrip === qStripped);
+    });
+
     const hasConjunction = (/\s+و[\u0600-\u06FF]+/.test(" " + rawQuery.trim()) && !["ورق", "وجبة", "وز"].some(w => rawQuery.trim().startsWith(w))) || queryNorm.includes(" و ");
+
+    const hasBaseFoodVariants =
+      (indexes.baseFoodIndex.get(queryNorm)?.length || 0) > 1 ||
+      (indexes.baseFoodIndex.get(qStripped)?.length || 0) > 1 ||
+      (extractedBase ? (indexes.baseFoodIndex.get(stripArticle(normalize(extractedBase)))?.length || 0) > 1 : false);
+
+    const isSingleWord = queryNorm.split(/\s+/).filter(Boolean).length === 1;
+    // For single-word queries with multiple base food variants, a compound slash/constituent dish match
+    // must not unilaterally seize DISH intent and eliminate the food family!
+    const effectiveExactDish = isSingleWord && hasBaseFoodVariants && !hasStandaloneExactDish ? false : hasExactDish;
 
     if (hasConjunction) {
       queryIntent = "COMPOSITE";
-    } else if (hasExactDish && !hasExactFood) {
+    } else if (effectiveExactDish && !hasExactFood) {
       queryIntent = "DISH";
-    } else if (hasExactFood && !hasExactDish) {
+    } else if (hasExactFood && !effectiveExactDish) {
       queryIntent = "FOOD";
-    } else if (hasExactDish && hasExactFood) {
+    } else if (effectiveExactDish && hasExactFood) {
       const isSingleWordQuery = queryNorm.split(" ").length === 1;
       const topFoodConf = foods[0]?.searchConfidence || 0;
       const topDishConf = dishes[0]?.searchConfidence || 0;
@@ -906,6 +1098,8 @@ export class CanonicalSearchEngine {
       } else {
         queryIntent = topDishConf > topFoodConf ? "DISH" : "FOOD";
       }
+    } else if (hasBaseFoodVariants && !effectiveExactDish) {
+      queryIntent = dishes.length > 0 && !hasExactFood ? "UNKNOWN" : "FOOD";
     } else if (foods.length > 0 && dishes.length === 0) {
       queryIntent = "FOOD";
     } else if (dishes.length > 0 && foods.length === 0) {
@@ -935,7 +1129,121 @@ export class CanonicalSearchEngine {
       displayDishes = dishes;
     }
 
-    const primaryResult = displayDishes[0] || displayFoods[0] || foods[0] || dishes[0] || null;
+    // Check if query is an ambiguous generic food family with multiple distinct variants
+    const queryWords = queryNorm.split(/\s+/).filter(Boolean);
+    const isMultiWordSpecificMatch =
+      queryWords.length > 1 &&
+      foods.some((f) => {
+        const fNorm = normalize(f.canonicalName);
+        const fStrip = stripArticle(fNorm);
+        return (fNorm === queryNorm || fStrip === qStripped) && (f.searchConfidence ?? 0) >= 95;
+      });
+
+    const isEnglish = /[a-zA-Z]/.test(rawQuery);
+    const baseKey = qStripped || queryNorm;
+    const baseVariants = indexes.baseFoodIndex.get(baseKey) || indexes.baseFoodIndex.get(queryNorm) || [];
+    const exactHits = indexes.exactFoodIndex.get(baseKey) || indexes.exactFoodIndex.get(queryNorm);
+    const exactList = exactHits ? (Array.isArray(exactHits) ? exactHits : [exactHits]) : [];
+
+    // Recognized descriptor variants (e.g. "طماطم شيري", "بطاطا حلوة", "شاي أخضر", "شاي أحمر")
+    const hasCleanBaseFood = exactList.some((e: any) => !hasRecognizedDescriptor(e.nameAr));
+    const hasMultipleVariants = !isEnglish && !hasCleanBaseFood && (
+      baseVariants.length > 1 ||
+      exactList.length > 1 ||
+      (hasBaseFoodVariants && (foods.length > 1 || dishes.length > 0))
+    );
+
+    // A generic food query requires explicit choices if:
+    // 1. queryIntent is FOOD or UNKNOWN with base food variants
+    // 2. Query is NOT English
+    // 3. Query is NOT a specific multi-word variant match (e.g. "شاي أخضر", "طماطم شيري", "بطاطا حلوة")
+    // 4. The food family contains 2 or more distinct variants in the database
+    const isAmbiguousGenericFood =
+      !isEnglish &&
+      (queryIntent === "FOOD" || (queryIntent === "UNKNOWN" && hasBaseFoodVariants)) &&
+      !isMultiWordSpecificMatch &&
+      hasMultipleVariants;
+
+    let primaryResult: CanonicalSearchResult | null = null;
+    if (isAmbiguousGenericFood) {
+      const qAr = formatAmbiguityQuestion(rawQuery);
+      const candidates: CanonicalSearchResult[] = [];
+      const seenIds = new Set<number>();
+
+      for (const e of exactList) {
+        if (!seenIds.has(e.id)) {
+          seenIds.add(e.id);
+          candidates.push({
+            canonicalId: e.id,
+            canonicalEntityType: "food",
+            canonicalName: e.nameAr,
+            searchConfidence: 95,
+            matchType: "EXACT",
+            matchedAlias: null,
+            matchedReason: "Matched via Food Canonical Name",
+            entity_type: "food",
+            canonical_id: e.id,
+            canonical_name: e.nameAr,
+            confidence: 95,
+            matched_alias: null,
+            search_method: "exact_canonical",
+            searchOutcome: "FOUND",
+          });
+        }
+      }
+
+      for (const v of baseVariants) {
+        if (!seenIds.has(v.id)) {
+          seenIds.add(v.id);
+          candidates.push({
+            canonicalId: v.id,
+            canonicalEntityType: "food",
+            canonicalName: v.nameAr,
+            searchConfidence: 90,
+            matchType: "VARIANT",
+            matchedAlias: null,
+            matchedReason: "Matched via Generic Food Family Variant",
+            entity_type: "food",
+            canonical_id: v.id,
+            canonical_name: v.nameAr,
+            confidence: 90,
+            matched_alias: null,
+            search_method: "base_entity_resolution",
+            searchOutcome: "FOUND",
+          });
+        }
+      }
+
+      // Also include any competing dish candidates for cross-category ambiguity (e.g. "عيش")
+      for (const d of dishes) {
+        const dId = typeof d.canonicalId === "number" ? d.canonicalId : Number(d.canonicalId) || 0;
+        if (!seenIds.has(dId) && candidates.length < 10) {
+          seenIds.add(dId);
+          candidates.push(d);
+        }
+      }
+
+      displayFoods = candidates;
+      primaryResult = {
+        canonicalId: 0,
+        canonical_id: 0,
+        canonicalName: rawQuery,
+        canonical_name: rawQuery,
+        canonicalEntityType: "food",
+        entity_type: "food",
+        searchConfidence: 85,
+        confidence: 85,
+        matchType: "AMBIGUOUS",
+        searchOutcome: "AMBIGUOUS",
+        isAmbiguous: true,
+        candidateDishes: candidates,
+        candidateFoods: candidates,
+        questionAr: qAr,
+        matchedReason: `Matched ${candidates.length} candidate variants for generic query '${rawQuery}'`,
+      };
+    } else {
+      primaryResult = displayDishes[0] || displayFoods[0] || foods[0] || dishes[0] || null;
+    }
 
     return {
       queryIntent,
@@ -1415,6 +1723,86 @@ export class CanonicalSearchEngine {
           ? `Matched via Synonym Expansion '${variant}' (dialect/baseline)`
           : "Matched via Food Canonical Name";
 
+        // If this query is a bare base term (e.g. "طماطم", "شاي", "بطاطا") whose family has multiple distinct variants:
+        const isEnglish = /[a-zA-Z]/.test(rawQuery);
+        const queryWords = queryNorm.split(/\s+/).filter(Boolean);
+        const baseKey = stripArticle(queryNorm) || queryNorm;
+        const baseVariants = indexes.baseFoodIndex.get(baseKey) || indexes.baseFoodIndex.get(queryNorm) || [];
+        const exactHits = indexes.exactFoodIndex.get(baseKey) || indexes.exactFoodIndex.get(queryNorm);
+        const exactList = exactHits ? (Array.isArray(exactHits) ? exactHits : [exactHits]) : [];
+
+        const hasCleanBaseFood = exactList.some((e: any) => !hasRecognizedDescriptor(e.nameAr));
+        const hasFamilyAmbiguity = !isEnglish && !hasCleanBaseFood && (
+          baseVariants.length > 1 ||
+          exactList.length > 1
+        );
+
+        if (queryWords.length === 1 && hasFamilyAmbiguity) {
+          const candidates: SearchResult[] = [];
+          const seenIds = new Set<number>();
+          for (const e of exactList) {
+            if (!seenIds.has(e.id)) {
+              seenIds.add(e.id);
+              candidates.push({
+                canonicalId: e.id,
+                canonicalEntityType: "food" as EntityType,
+                canonicalName: e.nameAr,
+                searchConfidence: 95,
+                matchedAlias: null,
+                matchType: "EXACT",
+                matchedReason: "Matched via Food Canonical Name",
+                entity_type: "food",
+                canonical_id: e.id,
+                canonical_name: e.nameAr,
+                confidence: 95,
+                matched_alias: null,
+                search_method: "exact_canonical",
+              });
+            }
+          }
+          for (const v of baseVariants) {
+            if (!seenIds.has(v.id)) {
+              seenIds.add(v.id);
+              candidates.push({
+                canonicalId: v.id,
+                canonicalEntityType: "food" as EntityType,
+                canonicalName: v.nameAr,
+                searchConfidence: 85,
+                matchedAlias: null,
+                matchType: "VARIANT",
+                matchedReason: "Matched via Generic Food Family Variant",
+                entity_type: "food",
+                canonical_id: v.id,
+                canonical_name: v.nameAr,
+                confidence: 85,
+                matched_alias: null,
+                search_method: "base_entity_resolution",
+              });
+            }
+          }
+
+          const qAr = formatAmbiguityQuestion(rawQuery);
+          return this.formatResult({
+            canonicalId: 0,
+            canonicalEntityType: "food",
+            canonicalName: rawQuery,
+            searchConfidence: 85,
+            entity_type: "food",
+            canonical_id: 0,
+            canonical_name: rawQuery,
+            confidence: 85,
+            matched_alias: null,
+            search_method: "base_entity_resolution",
+            matchedReason: `Matched ${candidates.length} variants for generic query '${rawQuery}'`,
+            matchType: "AMBIGUOUS",
+            searchOutcome: "AMBIGUOUS",
+            isAmbiguous: true,
+            candidateDishes: candidates,
+            candidateFoods: candidates,
+            questionAr: qAr,
+          }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
+        }
+
         foodCount++;
         foodDetails.push(`${primaryFood.nameAr} (${foodConf}%)`);
         return this.formatResult({
@@ -1589,10 +1977,10 @@ export class CanonicalSearchEngine {
     // Example: "رز بني" -> Base Entity "رز", Modifiers ["بني"]
     // =========================================================================
     const extractionRes = extractBaseEntityWithModifiers(rawQuery);
+    const baseEntity = extractionRes?.baseEntity;
     if (extractionRes && normalize(extractionRes.baseEntity) !== queryNorm) {
-      const baseEntity = extractionRes.baseEntity;
       const modifiers = extractionRes.modifiers;
-      const baseVariants = expandSearchQuery(baseEntity);
+      const baseVariants = expandSearchQuery(extractionRes.baseEntity);
       const baseConfidence = 100;
       const dishCache = await warmDishEngineCache();
 
@@ -1706,6 +2094,61 @@ export class CanonicalSearchEngine {
       }
     }
 
+    // Generic Food Family Ambiguity Check before falling to fuzzy matching
+    // (e.g. "شاي" or "شاي أسود" -> returns AMBIGUOUS with "شاي أخضر" and "شاي أحمر (أسود)" choices)
+    const baseKeys: string[] = [queryNorm, stripArticle(queryNorm)];
+    if (baseEntity) {
+      baseKeys.push(normalize(baseEntity), stripArticle(normalize(baseEntity)));
+    }
+    let baseVariantsList: any[] = [];
+    const seenBk = new Set<string>();
+    for (const bk of baseKeys) {
+      if (!bk || seenBk.has(bk)) continue;
+      seenBk.add(bk);
+      const list = indexes.baseFoodIndex.get(bk);
+      if (list && list.length > 1) {
+        baseVariantsList = list;
+        break;
+      }
+    }
+    if (baseVariantsList.length > 1) {
+      const candidates: SearchResult[] = baseVariantsList.map((f: any) => ({
+        canonicalId: f.id,
+        canonicalEntityType: "food" as EntityType,
+        canonicalName: f.nameAr,
+        searchConfidence: 85,
+        matchedAlias: null,
+        matchType: "VARIANT",
+        matchedReason: `Matched via Generic Food Family Variant`,
+        entity_type: "food",
+        canonical_id: f.id,
+        canonical_name: f.nameAr,
+        confidence: 85,
+        matched_alias: null,
+        search_method: "base_entity_resolution",
+      }));
+
+      return this.formatResult({
+        canonicalId: 0,
+        canonicalEntityType: "food",
+        canonicalName: rawQuery,
+        searchConfidence: 85,
+        entity_type: "food",
+        canonical_id: 0,
+        canonical_name: rawQuery,
+        confidence: 85,
+        matched_alias: null,
+        search_method: "base_entity_resolution",
+        matchedReason: `Matched ${candidates.length} variants for generic query '${rawQuery}'`,
+        matchType: "AMBIGUOUS",
+        searchOutcome: "AMBIGUOUS",
+        isAmbiguous: true,
+        candidateDishes: candidates,
+        candidateFoods: candidates,
+        questionAr: formatAmbiguityQuestion(rawQuery),
+      }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
+    }
+
     // TIER 7: Candidate-Bounded Fuzzy / Similarity Match (Evaluates all expanded variants)
     const knowledgeCache = await getKnowledgeCache();
 
@@ -1766,13 +2209,30 @@ export class CanonicalSearchEngine {
             score -= 30; // Significant penalty: query requests a prepared dish, not raw ingredient
           }
 
+          // If query does not have descriptors, penalize candidate foods that have recognized descriptors (unless exact match)
+          const queryHasDesc = queryTokens.some(qt => hasRecognizedDescriptor(qt));
+          const foodHasDesc = hasRecognizedDescriptor(fNorm);
+          if (!queryHasDesc && foodHasDesc && stripFood !== stripVariant) {
+            score -= 10;
+          }
+
           foodCandidates.push({ food: f, score, method: match.method, variant });
         }
       }
     }
 
     if (foodCandidates.length > 0) {
-      foodCandidates.sort((a, b) => b.score - a.score);
+      foodCandidates.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        const qTokens = stripArticle(rawQuery).split(" ");
+        const qHasDesc = qTokens.some(qt => hasRecognizedDescriptor(qt));
+        if (!qHasDesc) {
+          const descA = hasRecognizedDescriptor(a.food.nameAr) ? 1 : 0;
+          const descB = hasRecognizedDescriptor(b.food.nameAr) ? 1 : 0;
+          if (descA !== descB) return descA - descB;
+        }
+        return stripArticle(a.food.nameAr).length - stripArticle(b.food.nameAr).length;
+      });
     }
 
     // Compare top food vs top dish: if top food score >= top dish score, prioritize food
@@ -1842,21 +2302,57 @@ export class CanonicalSearchEngine {
       return true;
     }
 
+    // Check expanded variants for exact synonym/orthographic match
+    const variants = expandSearchQuery(rawQuery);
+    if (variants.some((v) => stripArticle(normalize(v)) === stripDish || normalize(v) === dishNorm)) {
+      return true;
+    }
+
     // Generic category words that do NOT define dish identity alone
     const GENERIC_CATEGORY_WORDS = new Set([
       "سلطة", "سلطه", "شوربة", "شوربه", "عصير", "مرق", "مرقة", "مرقه",
-      "طاجن", "صينية", "صينيه", "طبق", "أرز", "ارز", "ادام", "إدام", "مشروب"
+      "طاجن", "صينية", "صينيه", "طبق", "أرز", "ارز", "رز", "ادام", "إدام", "مشروب"
     ]);
 
     // Extract meaningful non-category tokens from query
     const queryTokens = stripVariant
       .split(/\s+/)
       .map((t) => stripArticle(t))
-      .filter((t) => t.length > 1 && !GENERIC_CATEGORY_WORDS.has(t) && !["بال", "مع", "و", "من", "في", "على", "طريقة", "عمل"].includes(t));
+      .filter((t) => t.length > 1 && !GENERIC_CATEGORY_WORDS.has(t) && !CULINARY_DESCRIPTORS.has(t) && !["بال", "مع", "و", "من", "في", "على", "طريقة", "عمل"].includes(t));
 
     // If query consists only of generic category words, allow matching
     if (queryTokens.length === 0) {
       return true;
+    }
+
+    // Specificity Guard: A candidate dish must NOT introduce an unrequested major protein,
+    // coordinated dish component, or distinct food entity that the query did not specify.
+    // e.g. "حمص بالطحينة" must NOT match "حمص بالطحينة والشاورما"
+    const ALL_PROTEINS = new Set([
+      ...Array.from(PROTEIN_DESCRIPTORS),
+      "شاورما", "كفتة", "كباب", "سجق", "تيركي", "تونة", "جمبري", "روبيان", "لحمة", "دجاجة", "فراخ", "قوزي"
+    ]);
+
+    const cleanDishToken = (t: string): string => {
+      let s = t;
+      if (s.startsWith("وال") && s.length > 4) s = s.slice(1);
+      else if (s.startsWith("بال") && s.length > 4) s = s.slice(1);
+      else if (s.startsWith("و") && s.length >= 4 && !["ورق", "وجبة", "وز"].some(w => s.startsWith(w))) s = s.slice(1);
+      return stripArticle(s);
+    };
+
+    const candidateNameTokens = stripDish.split(/\s+/).map(cleanDishToken).filter((t) => t.length > 1);
+    const queryTokenSet = new Set(queryTokens);
+    stripVariant.split(/\s+/).forEach((t) => {
+      queryTokenSet.add(cleanDishToken(t));
+      queryTokenSet.add(stripArticle(t));
+      queryTokenSet.add(normalize(t));
+    });
+
+    for (const cToken of candidateNameTokens) {
+      if (ALL_PROTEINS.has(cToken) && !queryTokenSet.has(cToken)) {
+        return false; // Rejected: Candidate introduces unqueried protein/major component!
+      }
     }
 
     // Gather candidate footprint (nameAr, nameEn, aliases, ingredient raw names)
@@ -1894,6 +2390,42 @@ export class CanonicalSearchEngine {
       }
     }
 
+    // Dish Head Noun Compatibility Check:
+    // The candidate dish's primary culinary head noun (e.g. "فتة", "تسقية", "كبة", "طاجن")
+    // must be matched by the query, unless the query consists entirely of generic category words.
+    // e.g. "حمص بالطحينة" cannot match "تسقية بالسمنة (فتة حمص)" or "فتة حمص باللبن والثوم" because
+    // the head noun of the dish ("تسقية" or "فتة") was never queried!
+    if (queryTokens.length > 0) {
+      const qHead = queryTokens[0];
+      const rawDishParts = (candidateDish.nameAr || stripDish).split(/\/|[/—,()]+/);
+      let matchedDishHead = false;
+
+      for (const part of rawDishParts) {
+        const pNorm = normalize(part.trim());
+        const pStrip = stripArticle(pNorm);
+        const pTokens = pStrip.split(/\s+/).filter((t) => t.length > 1 && !GENERIC_CATEGORY_WORDS.has(t));
+        if (pTokens.length === 0) {
+          matchedDishHead = true;
+          break;
+        }
+
+        const pHead = pTokens[0];
+        if (
+          pHead === qHead ||
+          pHead.startsWith(qHead) ||
+          qHead.startsWith(pHead) ||
+          queryTokens.some((qt) => pHead === qt || pHead.startsWith(qt) || qt.startsWith(pHead))
+        ) {
+          matchedDishHead = true;
+          break;
+        }
+      }
+
+      if (!matchedDishHead) {
+        return false; // Rejected: Candidate dish head noun does not match query head noun!
+      }
+    }
+
     return true;
   }
 
@@ -1924,8 +2456,14 @@ export class CanonicalSearchEngine {
     }
 
     // Helper for descriptor check: identifies generic, culinary, preparation descriptors, and stop words
+    // GENERAL & SAFE RULE: If a token is recognized as a canonical food/dish/category head noun
+    // in the database indexes, it must be allowed to act as the semantic head of the query!
     const isDescriptorToken = (token: string): boolean => {
       const stripped = stripArticle(token);
+      const headNouns = cachedIndexes?.entityHeadNouns;
+      if (headNouns && (headNouns.has(token) || headNouns.has(stripped))) {
+        return false;
+      }
       return (
         ARABIC_STOP_WORDS.has(token) ||
         ARABIC_STOP_WORDS.has(stripped) ||

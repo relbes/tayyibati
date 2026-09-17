@@ -38,6 +38,7 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
   ضان: ["ضأن", "لحم ضأن", "لحم ضان"],
   شاورمه: ["شاورما", "الشاورما"],
   كبسه: ["كبسة", "الكبسة"],
+  رز: ["أرز", "الأرز", "ارز"],
 };
 
 /**
@@ -54,6 +55,10 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
  * Ranking: above FUZZY/TYPO, below exact canonical/alias.
  */
 export const DIALECT_REGIONAL_SYNONYMS: Record<string, string> = {
+  // ─── Grains / Staples ───────────────────────────────────────────────────
+  // Common colloquial / dialect form: رز = rice (أرز, Food 1364)
+  رز: "أرز",
+
   // ─── Vegetables / Legumes ───────────────────────────────────────────────
   // Egyptian: بسلة = green peas (بازيلاء, Food 1604) — unambiguous, uncontested
   بسلة: "بازيلاء",
@@ -65,11 +70,15 @@ export const DIALECT_REGIONAL_SYNONYMS: Record<string, string> = {
   حبحب: "بطيخ",
   // Levantine: بندورة = tomato (طماطم, Food 1510) — unambiguous Levantine dialect, also in DB synonyms
   بندورة: "طماطم",
+  // Gulf/Informal: طماط = tomato (طماطم, Food 1510) — common truncation / dialect form
+  طماط: "طماطم",
   // ─── Meat / Protein ─────────────────────────────────────────────────────
   // Egyptian: فراخ = chicken (دجاج, Food 1410) — unambiguous, فراخ even appears in Food 1410 name
   فراخ: "دجاج",
   // Egyptian: فرخة = chicken singular (دجاج) — same referent as فراخ, no DB conflict
   فرخة: "دجاج",
+  // Gulf: برقر = burger (برجر, Food 1404) — widely used phonetic spelling in Gulf & Saudi Arabia
+  برقر: "برجر",
 
   // ─── REMOVED after audit ─────────────────────────────────────────────────
   // طرشي → مخلل  REMOVED: مخلل resolves to 2 foods (ID:1326, ID:1599); no single canonical target
@@ -217,20 +226,45 @@ export function expandSearchQuery(query: string): string[] {
   }
 
   // ── Synonym Dictionary Expansion ──────────────────────────────────────────
-  // Check the full normalized query AND each whitespace token individually.
-  // This ensures dialect multi-word queries like "بسلة مسلوقة" expand correctly.
-  const queryTokens = [normQ, strippedQ, ...normQ.split(/\s+/)].filter(Boolean);
-  for (const token of queryTokens) {
+  // Check the full normalized query (and stripped article).
+  const checkFullTokens = [normQ, strippedQ].filter(Boolean);
+  const words = normQ.split(/\s+/).filter(Boolean);
+  if (words.length === 1) {
+    checkFullTokens.push(...words);
+  }
+
+  for (const token of checkFullTokens) {
     const synonymTargets = SYNONYM_DICTIONARY.get(token);
     if (synonymTargets) {
       for (const target of synonymTargets) {
         if (target && !variants.has(target)) {
-          // Add the synonym target and its orthographic variants
           variants.add(target);
           const strippedTarget = stripArticle(target);
           if (strippedTarget && strippedTarget !== target) {
             variants.add(strippedTarget);
             variants.add(`ال${strippedTarget}`);
+          }
+        }
+      }
+    }
+  }
+
+  // For multi-word queries, substitute tokens within the phrase (e.g. "طماطم شيري" -> "بندورة شيري")
+  if (words.length > 1) {
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const wTargets = SYNONYM_DICTIONARY.get(w) || SYNONYM_DICTIONARY.get(stripArticle(w));
+      if (wTargets) {
+        for (const wt of wTargets) {
+          const replacedWords = [...words];
+          replacedWords[i] = wt;
+          const phrase = replacedWords.join(" ");
+          if (!variants.has(phrase)) {
+            variants.add(phrase);
+            const strippedPhrase = stripArticle(phrase);
+            if (strippedPhrase && strippedPhrase !== phrase) {
+              variants.add(strippedPhrase);
+            }
           }
         }
       }
@@ -283,7 +317,12 @@ export function getQuerySynonymTargets(query: string): Set<string> {
   const strippedQ = stripArticle(normQ);
   const targets = new Set<string>();
 
-  const checkTokens = [normQ, strippedQ, ...normQ.split(/\s+/).filter(Boolean)];
+  const checkTokens = [normQ, strippedQ].filter(Boolean);
+  const words = normQ.split(/\s+/).filter(Boolean);
+  if (words.length === 1) {
+    checkTokens.push(...words);
+  }
+
   for (const token of checkTokens) {
     const synonymTargets = SYNONYM_DICTIONARY.get(token);
     if (synonymTargets) {
@@ -292,6 +331,23 @@ export function getQuerySynonymTargets(query: string): Set<string> {
           targets.add(target);
           const strippedTarget = stripArticle(target);
           if (strippedTarget) targets.add(strippedTarget);
+        }
+      }
+    }
+  }
+
+  if (words.length > 1) {
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i];
+      const wTargets = SYNONYM_DICTIONARY.get(w) || SYNONYM_DICTIONARY.get(stripArticle(w));
+      if (wTargets) {
+        for (const wt of wTargets) {
+          const replacedWords = [...words];
+          replacedWords[i] = wt;
+          const phrase = replacedWords.join(" ");
+          targets.add(phrase);
+          const strippedPhrase = stripArticle(phrase);
+          if (strippedPhrase) targets.add(strippedPhrase);
         }
       }
     }
