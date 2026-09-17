@@ -10,6 +10,7 @@
 import { db, foodsTable, foodAliases } from "@workspace/db";
 import { normalizeName, normalize, stripArticle, norm, stripAlefLam, extractBaseEntity } from "./arabicNormalization";
 import { expandSearchQuery } from "./searchExpansion";
+import { trackAIUsageNonBlocking } from "./ai/aiUsageTracker";
 
 export { normalizeName, normalize, stripArticle, norm, stripAlefLam };
 
@@ -693,6 +694,8 @@ export interface ResolvedFoodIdentity {
   confidence: "HIGH" | "MEDIUM" | "LOW";
   originalInput: string;
   matchedTerm?: string;
+  isAmbiguous?: boolean;
+  candidates?: any[];
 }
 
 const STOP_WORDS = new Set(["غير", "بدون", "مع", "من", "عن", "علي", "على", "في", "او", "أم", "معا", "جدا", "حتى", "طازج", "نيء", "مطبوخ"]);
@@ -730,7 +733,72 @@ export function resolveFoodIdentity(
     }
   }
 
-  // Stage 2b: Base Entity match (e.g. "لحم" -> matches "لحم بقري", "خبز" -> matches bread family, "رز" / "ارز" / "أرز" / "أَرُز" -> matches rice family)
+  // Stage 3: Article-stripped exact match on food name (evaluating raw and all expanded variants)
+  // EXACT CANONICAL ENTITY PRECEDENCE (e.g. "طماطم" -> "الطماطم", "عنب" -> "العنب", "تفاح" -> "التفاح")
+  const directMatches: any[] = [];
+  for (const f of foods) {
+    const { sAr } = foodNormMap.get(f.id)!;
+    if (sAr && sAr === strippedQ) {
+      directMatches.push(f);
+    }
+  }
+  if (directMatches.length > 0) {
+    // Sort: Root Category/Canonical base food first, shorter name first
+    directMatches.sort((a, b) => {
+      const aRoot = a.foodType === "general_category" || a.parentFoodId === null ? 1 : 0;
+      const bRoot = b.foodType === "general_category" || b.parentFoodId === null ? 1 : 0;
+      if (bRoot !== aRoot) return bRoot - aRoot;
+      return a.nameAr.length - b.nameAr.length;
+    });
+    const best = directMatches[0];
+    return { food: best, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: best.nameAr };
+  }
+
+  const expandedVariants = expandSearchQuery(rawInput);
+  for (const variant of expandedVariants) {
+    const vNorm = normalizeName(variant);
+    const vStrip = stripArticle(vNorm);
+    for (const f of foods) {
+      const { sAr, nAr } = foodNormMap.get(f.id)!;
+      if (sAr && (sAr === vStrip || sAr === vNorm || nAr === vNorm)) {
+        return { food: f, matchType: "NORMALIZED", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+      }
+    }
+  }
+
+  // Stage 4: Constituent Synonym Match (split by /, —, (), or 'و' where each part is an alternate canonical name)
+  // E.g. "بطاطس / بطاطا" contains constituent synonym "بطاطا"
+  // E.g. "لبن / حليب" contains constituent synonym "حليب"
+  // E.g. "سمك / أسماك" contains constituent synonym "سمك"
+  // E.g. "الجوز (عين الجمل)" contains constituent synonym "عين الجمل"
+  for (const f of foods) {
+    const { nAr } = foodNormMap.get(f.id)!;
+    const parts = nAr.split(/[/—,()]+/).map((c) => stripArticle(normalizeName(c.trim()))).filter((c) => c.length >= 2);
+    for (const part of parts) {
+      if (part === strippedQ || part === normQ) {
+        return { food: f, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+      }
+      for (const variant of expandedVariants) {
+        const vNorm = normalizeName(variant);
+        const vStrip = stripArticle(vNorm);
+        if (part === vStrip || part === vNorm) {
+          return { food: f, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+        }
+      }
+    }
+  }
+
+  // Stage 5: DB Alias / Entity resolution (food_aliases & food_entities)
+  const resolvedEntity = resolveEntity(rawInput, entities, aliases);
+  if (resolvedEntity?.foodId) {
+    const food = foods.find((f) => f.id === resolvedEntity.foodId);
+    if (food) {
+      return { food, matchType: "ALIAS", confidence: "HIGH", originalInput: rawInput, matchedTerm: resolvedEntity.nameAr };
+    }
+  }
+
+  // Stage 6: Base Entity & Variant Resolution (ONLY when Stages 1-5 did not match!)
+  // E.g. "شاي" -> no exact canonical entity exists, but variants "شاي أخضر", "شاي أحمر (أسود)" exist.
   const noAlefQ = strippedQ.replace(/^[اأإآ]/, "");
   const baseMatches: any[] = [];
   for (const f of foods) {
@@ -750,58 +818,31 @@ export function resolveFoodIdentity(
   }
 
   if (baseMatches.length > 0) {
-    // Sort baseMatches: prefer Root Family Food (general_category || parentFoodId === null) over specific variants
-    baseMatches.sort((a, b) => {
-      const aIsRoot = a.foodType === "general_category" || a.parentFoodId === null ? 1 : 0;
-      const bIsRoot = b.foodType === "general_category" || b.parentFoodId === null ? 1 : 0;
-      if (bIsRoot !== aIsRoot) return bIsRoot - aIsRoot;
-      return a.id - b.id;
-    });
+    // If multiple distinct variants exist and no root entity exists, flag as ambiguous!
+    if (baseMatches.length > 1) {
+      const hasExactRoot = baseMatches.find(
+        (f) => stripArticle(normalizeName(f.nameAr)) === strippedQ
+      );
+      if (hasExactRoot) {
+        return { food: hasExactRoot, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: hasExactRoot.nameAr };
+      }
+
+      return {
+        food: baseMatches[0],
+        matchType: "BASE_ENTITY",
+        confidence: "MEDIUM",
+        originalInput: rawInput,
+        matchedTerm: rawInput,
+        isAmbiguous: true,
+        candidates: baseMatches,
+      };
+    }
 
     const chosenFood = baseMatches[0];
     return { food: chosenFood, matchType: "BASE_ENTITY", confidence: "HIGH", originalInput: rawInput, matchedTerm: chosenFood.nameAr };
   }
 
-  // Stage 3: Article-stripped exact match on food name (evaluating all expanded variants)
-  const expandedVariants = expandSearchQuery(rawInput);
-  for (const variant of expandedVariants) {
-    const vNorm = normalizeName(variant);
-    const vStrip = stripArticle(vNorm);
-    for (const f of foods) {
-      const { sAr, nAr } = foodNormMap.get(f.id)!;
-      if (sAr && (sAr === vStrip || sAr === vNorm || nAr === vNorm)) {
-        return { food: f, matchType: "NORMALIZED", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
-      }
-    }
-  }
-
-  // Stage 4: DB Alias / Entity resolution (food_aliases & food_entities)
-  const resolvedEntity = resolveEntity(rawInput, entities, aliases);
-  if (resolvedEntity?.foodId) {
-    const food = foods.find((f) => f.id === resolvedEntity.foodId);
-    if (food) {
-      return { food, matchType: "ALIAS", confidence: "HIGH", originalInput: rawInput, matchedTerm: resolvedEntity.nameAr };
-    }
-  }
-
-  // Stage 5: Multi-name Concept / Constituent Word Match (evaluating expanded variants)
-  // E.g. "الدجاج والفراخ" contains constituent concept words ["دجاج", "فراخ"]
-  // E.g. "الشمام / الكنتالوب" contains constituent concept words ["شمام", "كنتالوب"]
-  for (const f of foods) {
-    const { nAr } = foodNormMap.get(f.id)!;
-    const concepts = nAr.split(/[/—,\s]+و?\s*/).map((c) => stripArticle(normalizeName(c))).filter((c) => c.length >= 2);
-    for (const concept of concepts) {
-      for (const variant of expandedVariants) {
-        const vNorm = normalizeName(variant);
-        const vStrip = stripArticle(vNorm);
-        if (concept === vStrip || concept === vNorm) {
-          return { food: f, matchType: "WORD_BOUNDARY", confidence: "HIGH", originalInput: rawInput, matchedTerm: concept };
-        }
-      }
-    }
-  }
-
-  // Stage 5b: Token match for multi-word phrases (e.g. "صدور دجاج" -> matches "الدجاج والفراخ")
+  // Stage 7: Multi-word Token Match / Word boundary (e.g. "صدور دجاج" -> matches "الدجاج والفراخ")
   if (strippedQ.length >= 3) {
     for (const f of foods) {
       const { sAr } = foodNormMap.get(f.id)!;
@@ -838,6 +879,7 @@ export async function resolveUnresolvedTermsWithAI(
   const uniqueInputs = Array.from(new Set(unresolvedInputs.filter((s) => s && s.trim())));
   if (uniqueInputs.length === 0) return results;
 
+  const startTime = Date.now();
   try {
     const openai = await getOpenAIClient();
     const prompt = `أنت مترجم ومحلل لأسماء الأطعمة والمكونات.
@@ -868,6 +910,23 @@ export async function resolveUnresolvedTermsWithAI(
       temperature: 0,
     });
 
+    const latencyMs = Date.now() - startTime;
+    const promptTokens = completion.usage?.prompt_tokens;
+    const completionTokens = completion.usage?.completion_tokens;
+
+    trackAIUsageNonBlocking({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      feature: "INGREDIENT_ANALYSIS",
+      requestStatus: "SUCCESS",
+      httpStatus: 200,
+      latencyMs,
+      inputTokens: promptTokens || 0,
+      outputTokens: completionTokens || 0,
+      cachedTokens: 0,
+      tokensAvailable: typeof promptTokens === "number",
+    });
+
     const parsed = JSON.parse(completion.choices[0]?.message?.content || "{}");
     const resolutions = parsed.resolutions || [];
 
@@ -890,6 +949,16 @@ export async function resolveUnresolvedTermsWithAI(
       }
     }
   } catch (err) {
+    const latencyMs = Date.now() - startTime;
+    trackAIUsageNonBlocking({
+      provider: "openai",
+      model: "gpt-4o-mini",
+      feature: "INGREDIENT_ANALYSIS",
+      requestStatus: "FAILED",
+      httpStatus: (err as any)?.status || 500,
+      error: err,
+      latencyMs,
+    });
     console.error("[KNOWLEDGE] AI identity interpretation failed:", err);
   }
 

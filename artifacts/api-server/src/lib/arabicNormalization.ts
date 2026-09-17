@@ -105,6 +105,8 @@ export const GENERIC_DESCRIPTORS = new Set([
   "طازج", "طازجه", "مجفف", "مجففه", "عضوي", "عضويه", "مطحون", "مطحونه", "مفروم", "مفرومه",
   "مبشور", "مبشوره", "معلب", "معلبه", "طبيعي", "طبيعيه", "محمص", "محمصه", "مسلوق", "مسلوقه",
   "مشوي", "مشويه", "مقلي", "مقليه", "خام", "ناعم", "ناعمه", "خشن", "خشنه", "كامل", "كامله",
+  // Cultivars, Varieties & Taste
+  "شيري", "شيرى", "حلو", "حلوه", "حلوة", "مر", "مره", "حامض", "حامضه", "بري", "بريه",
   // Sizes & Grains
   "كبير", "كبيره", "صغير", "صغيره", "متوسط", "متوسطه", "طويل", "طويله", "قصير", "قصيره", "حبه", "حبة", "حبوب",
   // General Category Modifiers & Quantifiers
@@ -206,6 +208,18 @@ export function extractBaseEntity(query: string | null | undefined): string | nu
   return res ? res.baseEntity : null;
 }
 
+/**
+ * Checks if a food phrase or query contains a recognized culinary, cultivar, color, or processing descriptor.
+ */
+export function hasRecognizedDescriptor(query: string | null | undefined): boolean {
+  if (!query) return false;
+  const words = normalize(query).split(/\s+/).filter(Boolean);
+  return words.some((w) => {
+    const stripped = stripArticle(w);
+    return GENERIC_DESCRIPTORS.has(w) || GENERIC_DESCRIPTORS.has(stripped);
+  });
+}
+
 export interface QueryValidationResult {
   isValid: boolean;
   cleanedQuery: string;
@@ -242,4 +256,24 @@ export function isMeaningfulQuery(input: string | null | undefined): QueryValida
   }
 
   return { isValid: true, cleanedQuery: alphaContent };
+}
+
+/**
+ * Generates a dynamic, grammatically natural Arabic ambiguity question for a base-food family or dish.
+ * E.g. "شاي" -> "أي نوع من الشاي تقصد؟"
+ * E.g. "طماطم" -> "أي نوع من الطماطم تقصد؟"
+ * E.g. "بطاطا" -> "أي نوع من البطاطا تقصد؟"
+ * E.g. "أرز" -> "أي نوع من الأرز تقصد؟"
+ */
+export function formatAmbiguityQuestion(baseTerm: string | null | undefined): string {
+  if (!baseTerm || typeof baseTerm !== "string") return "اختر الخيار الذي تقصده:";
+  const clean = baseTerm.trim().replace(/^[\s"'#]+|[\s"'#]+$/g, "");
+  if (!clean) return "اختر الخيار الذي تقصده:";
+
+  // Get first core base word if compound
+  const firstWord = clean.split(/[\s/—,()]+/)[0].trim();
+  const stripped = stripArticle(firstWord) || firstWord;
+  const definite = stripped.startsWith("ال") ? stripped : `ال${stripped}`;
+
+  return `أي نوع من ${definite} تقصد؟`;
 }

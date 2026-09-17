@@ -792,6 +792,7 @@ export class CanonicalSearchEngine {
     const indexes = await this.buildIndexes();
     const dishCache = await warmDishEngineCache();
     const expandedVariants = expandSearchQuery(rawQuery);
+    const synonymTargetVariants = getQuerySynonymTargets(rawQuery);
     const qStripped = stripArticle(queryNorm);
 
     let foods: CanonicalSearchResult[] = [];
@@ -806,19 +807,34 @@ export class CanonicalSearchEngine {
     for (const variant of expandedVariants) {
       const foodAlias = indexes.foodAliasIndex.get(variant);
       if (foodAlias && !seenFoodIds.has(foodAlias.id)) {
+        // CANONICAL ENTITY PRECEDENCE CHECK:
+        // If this alias hit was reached via synonym expansion (e.g. بندورة→طماطم),
+        // verify the original query is NOT itself a canonical food entity.
+        // If it is (e.g. البندورة = Food 1586 exists as a canonical name), let exact match handle it.
+        const isSynonymHit = synonymTargetVariants.has(variant) && stripArticle(variant) !== stripArticle(queryNorm);
+        if (isSynonymHit) {
+          const origExact = indexes.exactFoodIndex.get(queryNorm) || indexes.exactFoodIndex.get(qStripped);
+          if (origExact) {
+            continue;
+          }
+        }
+
         seenFoodIds.add(foodAlias.id);
+        const aliasConf = isSynonymHit ? 90 : 100;
         foods.push({
           canonicalId: foodAlias.id,
           canonicalEntityType: "food",
           canonicalName: foodAlias.nameAr,
-          searchConfidence: 100,
-          matchType: "ALIAS",
+          searchConfidence: aliasConf,
+          matchType: isSynonymHit ? "SYNONYM" : "ALIAS",
           matchedAlias: variant,
-          matchedReason: `Matched via Food Alias '${variant}'`,
+          matchedReason: isSynonymHit
+            ? `Matched via Synonym Expansion '${variant}' (dialect/baseline)`
+            : `Matched via Food Alias '${variant}'`,
           entity_type: "food",
           canonical_id: foodAlias.id,
           canonical_name: foodAlias.nameAr,
-          confidence: 100,
+          confidence: aliasConf,
           matched_alias: variant,
           search_method: "exact_alias",
           searchOutcome: "FOUND",
@@ -1661,10 +1677,23 @@ export class CanonicalSearchEngine {
     for (const variant of expandedVariants) {
       const foodHit = indexes.foodAliasIndex.get(variant);
       if (foodHit) {
+        // CANONICAL ENTITY PRECEDENCE CHECK:
+        // If this alias hit was reached via synonym expansion (e.g. بندورة→طماطم),
+        // verify the original query is NOT itself a canonical food entity.
+        // If it is (e.g. البندورة = Food 1586 exists as a canonical name), let Tier 3 handle it.
+        const isSynonymHit = synonymTargetVariants.has(variant) && stripArticle(variant) !== stripArticle(queryNorm);
+        if (isSynonymHit) {
+          // Check if original query maps directly to a canonical food
+          const origExact = indexes.exactFoodIndex.get(queryNorm) || indexes.exactFoodIndex.get(stripArticle(queryNorm));
+          if (origExact) {
+            // Original query IS a canonical food — skip alias and let Tier 3 resolve it correctly
+            continue;
+          }
+        }
+
         foodAliasCount++;
         // Determine if this hit was reached via synonym expansion (baseline or dialect).
         // Synonym-derived matches are labeled SYNONYM at 90% confidence, not EXACT at 100%.
-        const isSynonymHit = synonymTargetVariants.has(variant) && stripArticle(variant) !== stripArticle(queryNorm);
         const aliasConf = isSynonymHit ? 90 : 100;
         const aliasMethod: SearchMethod = "exact_alias";
         const aliasMatchReason = isSynonymHit
@@ -1683,6 +1712,7 @@ export class CanonicalSearchEngine {
         }, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
       }
     }
+
 
     // TIER 3: Foods Exact Match (Evaluates all expanded variants)
     searchedIndexes.push("exactFoodIndex");

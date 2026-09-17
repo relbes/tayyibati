@@ -83,6 +83,21 @@ export class FoodResolutionEngine {
     // 1.5 CANONICAL FOOD ENTITY DIRECT RESOLUTION (e.g. "أرز", "رز", "خبز", "جبن", "زيت")
     const identityMatch = resolveFoodIdentity(query, foodCache);
     if (identityMatch && identityMatch.food) {
+      if (identityMatch.isAmbiguous && identityMatch.candidates && identityMatch.candidates.length > 1) {
+        return {
+          state: "AMBIGUOUS",
+          clarificationType: "FOOD_IDENTIFICATION",
+          questionAr: "يرجى تحديد النوع المطلوب:",
+          suggestions: identityMatch.candidates.map((c: any) => ({
+            label: c.nameAr,
+            query: c.nameAr,
+          })),
+          candidates: identityMatch.candidates,
+          needsClarification: true,
+          proteinCategory: queryProtein.proteinCategory,
+          proteinSpecificity: queryProtein.proteinSpecificity,
+        };
+      }
       return {
         state: "CONFIDENT",
         selectedCandidate: { ...identityMatch.food, type: "food" },

@@ -17,7 +17,7 @@ import { CanonicalSearchEngine, printStructuredSearchDebugLog } from "./canonica
 import { getAIProvider } from "./ai/aiProvider";
 import { captureUnknownIngredient } from "./ai/knowledgeReviewService";
 import type { AnalysisReport, IngredientResult } from "../routes/analysis";
-import { extractBaseEntity, isMeaningfulQuery } from "./arabicNormalization";
+import { extractBaseEntity, isMeaningfulQuery, formatAmbiguityQuestion } from "./arabicNormalization";
 import { FoodResolutionEngine } from "./foodResolutionEngine";
 import { SmartFallbackEngine } from "./smartFallbackEngine";
 
@@ -102,6 +102,112 @@ export class UnifiedAnalysisEngine {
     const stage1Start = performance.now();
     const queryText = (input.query || input.rawOcrText || "").trim();
     recordStage("input_gateway", performance.now() - stage1Start, { inputType: input.inputType, queryLength: queryText.length, dishId: input.dishId });
+
+    // Fast Path: Direct Food ID Analysis (No Search Engine, No Ambiguity)
+    let targetFoodId: number | null = input.foodId ? Number(input.foodId) : (input.entityType === "food" && input.canonicalId ? Number(input.canonicalId) : null);
+    if (!targetFoodId && input.dishId && typeof input.dishId === "number") {
+      const dishCache = getDishEngineCache();
+      if (!dishCache.dishesById.has(input.dishId)) {
+        const foodCache = await getKnowledgeCache();
+        if (foodCache.foodById.has(input.dishId)) {
+          targetFoodId = input.dishId;
+        }
+      }
+    }
+
+    if (targetFoodId && !isNaN(targetFoodId)) {
+      const foodEngineStart = performance.now();
+      const foodCache = await getKnowledgeCache();
+      const targetFood = foodCache.foodById.get(targetFoodId);
+
+      if (targetFood) {
+        const proteinInfo = getProteinFields(targetFood.nameAr);
+        const itemResult: IngredientResult = {
+          name: targetFood.nameEn || targetFood.nameAr,
+          nameAr: targetFood.nameAr,
+          nameEn: targetFood.nameEn || targetFood.nameAr,
+          status: (targetFood.status as any) || "allowed",
+          frequency: null,
+          reason: targetFood.reason,
+          notes: targetFood.notes,
+          proteinCategory: proteinInfo.proteinCategory,
+          proteinSpecificity: proteinInfo.proteinSpecificity,
+          priority: targetFood.priority !== "none" ? targetFood.priority : undefined,
+        };
+
+        const allowed = targetFood.status === "allowed" ? [itemResult] : [];
+        const forbidden = targetFood.status === "forbidden" ? [itemResult] : [];
+        const conditional = targetFood.status === "conditional" ? [itemResult] : [];
+        const unknown: IngredientResult[] = [];
+
+        const { compatibilityScore: score, ingredientConfidence, scoreAvailable } = DecisionEngine.computeScores(
+          allowed.length, forbidden.length, conditional.length, unknown.length
+        );
+
+        let explanation = targetFood.reason || "";
+        if (!explanation) {
+          explanation = targetFood.status === "allowed"
+            ? "مسموح حسب قواعد البرنامج"
+            : targetFood.status === "forbidden"
+            ? "محظور حسب قواعد البرنامج"
+            : "مشروط حسب قواعد البرنامج";
+        }
+
+        const directFoodReport: AnalysisReport = {
+          query: targetFood.nameAr,
+          displayQuery: input.displayQuery || targetFood.nameAr,
+          dish: targetFood.nameAr,
+          proteinCategory: proteinInfo.proteinCategory,
+          proteinSpecificity: proteinInfo.proteinSpecificity,
+          resultMode: "EXACT_FOOD",
+          primaryRuling: {
+            status: targetFood.status as any,
+            nameAr: targetFood.nameAr,
+            nameEn: targetFood.nameEn || targetFood.nameAr,
+            dbReason: targetFood.reason,
+            dbNotes: targetFood.notes,
+            isInherited: false,
+          },
+          allowed,
+          forbidden,
+          conditional,
+          unknown,
+          compatibilityScore: score,
+          ingredientConfidence,
+          scoreAvailable,
+          explanation,
+          suggestions: [],
+          analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
+          notFound: false,
+        };
+
+        const endTime = performance.now();
+        recordStage("direct_food_lookup", endTime - foodEngineStart, { foodId: targetFoodId, nameAr: targetFood.nameAr });
+
+        const finalizedDirectReport = finalizeReport(directFoodReport, {
+          canonicalId: targetFood.id,
+          canonical_id: targetFood.id,
+          canonicalName: targetFood.nameAr,
+          canonical_name: targetFood.nameAr,
+          canonicalEntityType: "food",
+          entity_type: "food",
+          searchConfidence: 100,
+          confidence: 100,
+          matchType: "EXACT",
+          searchOutcome: "FOUND",
+        } as any, null);
+
+        return {
+          report: finalizedDirectReport,
+          executionTrace: {
+            totalDurationMs: Math.round(endTime - startTime),
+            orchestrationOverheadMs: 2,
+            stagesExecuted,
+            traces,
+          },
+        };
+      }
+    }
 
     // Fast Path: Direct Dish ID Analysis (No Search Engine, No Ambiguity)
     if (input.dishId && typeof input.dishId === "number") {
@@ -348,7 +454,12 @@ export class UnifiedAnalysisEngine {
     let canonicalSearchRes = structuredSearch.primaryResult || await CanonicalSearchEngine.search(queryText, { debug: true });
 
     // If explicit food entity selection or queryIntent is FOOD, force food primary result
-    if (input.entityType === "food" || structuredSearch.queryIntent === "FOOD") {
+    // MANDATE: NEVER overwrite AMBIGUOUS search outcome!
+    if (
+      (input.entityType === "food" || structuredSearch.queryIntent === "FOOD") &&
+      canonicalSearchRes?.searchOutcome !== "AMBIGUOUS" &&
+      structuredSearch.primaryResult?.searchOutcome !== "AMBIGUOUS"
+    ) {
       if (structuredSearch.displayFoods && structuredSearch.displayFoods.length > 0) {
         canonicalSearchRes = structuredSearch.displayFoods[0];
       }
@@ -381,26 +492,53 @@ export class UnifiedAnalysisEngine {
     // Stage 2.5: Search Outcome Single Source of Truth Routing
     const searchOutcome = (canonicalSearchRes as any)?.searchOutcome || (canonicalSearchRes ? "FOUND" : "NOT_FOUND");
 
-    // ROUTING RULE 1: AMBIGUOUS -> Return Candidate Dishes Immediately without calling AI or DecisionEngine
+    // ROUTING RULE 1: AMBIGUOUS -> Return Candidate Items Immediately without calling AI or DecisionEngine
     if (searchOutcome === "AMBIGUOUS") {
-      const candDishes = ((canonicalSearchRes as any)?.candidateDishes || []) as any[];
+      const candList = ((canonicalSearchRes as any)?.candidateDishes || (canonicalSearchRes as any)?.candidateFoods || structuredSearch.displayFoods || structuredSearch.foods || []) as any[];
       const dishCache = getDishEngineCache();
-      const rawMatches = candDishes.map((cand) => {
-        const dishId = cand.canonicalId || cand.canonical_id;
-        const dishObj = dishCache.dishesById.get(dishId);
+      const foodCache = await getKnowledgeCache();
+
+      const rawMatches = candList.map((cand) => {
+        const entId = cand.canonicalId || cand.canonical_id || cand.id;
+        const entType = cand.canonicalEntityType || cand.entity_type || (cand.foodType ? "food" : "dish");
+
+        if (entType === "food") {
+          const foodObj = foodCache.foodById.get(Number(entId));
+          const nameAr = cand.canonicalName || cand.canonical_name || cand.nameAr || foodObj?.nameAr || queryText;
+          const nameEn = cand.nameEn || foodObj?.nameEn || nameAr;
+          const statusText = foodObj?.status === "allowed" ? "مسموح" : foodObj?.status === "forbidden" ? "ممنوع" : "غير محدد";
+          return {
+            id: entId,
+            canonicalId: entId,
+            entityType: "food",
+            canonicalEntityType: "food",
+            nameAr,
+            nameEn,
+            category: "طعام",
+            description: `طعام (${statusText})`,
+            mainProtein: null,
+            ingredientCount: 1,
+            searchConfidence: cand.searchConfidence || cand.confidence || 90,
+          };
+        }
+
+        const dishObj = dishCache.dishesById.get(entId);
         const nameAr = cand.canonicalName || cand.canonical_name || dishObj?.nameAr || queryText;
         const nameEn = dishObj?.nameEn || nameAr;
         const category = dishObj?.category || "طبق رئيسي";
         const description = (dishObj as any)?.description || `طبق تقليدي يعتمد على المكونات الطبيعية.`;
         
-        const recipeIngredients = dishCache.ingredientsByDishId.get(dishId) || [];
+        const recipeIngredients = dishCache.ingredientsByDishId.get(entId) || [];
         const rawIngs = recipeIngredients.map((r) => r.rawIngredientName);
         const mainProtein = detectMainProtein(nameAr, rawIngs);
         const ingredientCount = recipeIngredients.length;
         const searchConfidence = cand.searchConfidence || cand.confidence || 90;
 
         return {
-          id: dishId,
+          id: entId,
+          canonicalId: entId,
+          entityType: "dish",
+          canonicalEntityType: "dish",
           nameAr,
           nameEn,
           category,
@@ -411,8 +549,8 @@ export class UnifiedAnalysisEngine {
         };
       });
 
-      // Deduplicate matches by dish ID
-      const uniqueMatchesMap = new Map<number, typeof rawMatches[0]>();
+      // Deduplicate matches by ID
+      const uniqueMatchesMap = new Map<number | string, typeof rawMatches[0]>();
       for (const m of rawMatches) {
         if (!uniqueMatchesMap.has(m.id)) {
           uniqueMatchesMap.set(m.id, m);
@@ -430,10 +568,12 @@ export class UnifiedAnalysisEngine {
         return a.nameAr.localeCompare(b.nameAr, "ar");
       });
 
-      const dishNames = pureMatches.map((m) => m.nameAr);
+      const candNames = pureMatches.map((m) => m.nameAr);
+      const qAr = (canonicalSearchRes as any)?.questionAr || formatAmbiguityQuestion(queryText);
 
       const multiReport: AnalysisReport = {
         query: queryText,
+        questionAr: qAr,
         resultMode: "MULTIPLE_DISHES" as any,
         allowed: [],
         forbidden: [],
@@ -441,18 +581,20 @@ export class UnifiedAnalysisEngine {
         unknown: [],
         compatibilityScore: null,
         scoreAvailable: false,
-        explanation: "يرجى تحديد الطبق المطلوب لعرض نتائج التوافق التفصيلية.",
-        suggestions: dishNames,
+        explanation: qAr,
+        suggestions: candNames,
         analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
         notFound: false,
       };
 
+      (multiReport as any).questionAr = qAr;
       (multiReport as any).requiresSelection = true;
       (multiReport as any).matches = pureMatches;
       (multiReport as any).isAmbiguous = true;
       (multiReport as any).candidateDishes = pureMatches;
-      (multiReport as any).refinementSuggestions = dishNames;
-      (multiReport as any).relevantVariants = dishNames;
+      (multiReport as any).candidateFoods = pureMatches;
+      (multiReport as any).refinementSuggestions = candNames;
+      (multiReport as any).relevantVariants = candNames;
 
       const finalizedMultiReport = finalizeReport(multiReport, canonicalSearchRes, null);
 

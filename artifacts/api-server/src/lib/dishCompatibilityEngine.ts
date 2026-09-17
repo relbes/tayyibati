@@ -1124,8 +1124,12 @@ function hasProteinKeyword(text: string, keywords: string[]): boolean {
     const nKw = norm(kw);
     const sKw = stripAlefLam(nKw);
     return (
+      // Exact token match (standalone keyword)
       rawTokens.some(t => t === nKw || t === sKw) ||
-      strippedTokens.some(st => st === nKw || st === sKw)
+      strippedTokens.some(st => st === nKw || st === sKw) ||
+      // Prepositional compound forms: "باللحم" (ب+ال+لحم), "بدجاج" (ب+دجاج), "بلحم" etc.
+      // Detect when a token ENDS with the stripped protein keyword and is longer (prefix attached).
+      rawTokens.some(t => t.length > sKw.length && (t.endsWith(nKw) || t.endsWith(sKw)))
     );
   });
 }

@@ -39,6 +39,10 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
   شاورمه: ["شاورما", "الشاورما"],
   كبسه: ["كبسة", "الكبسة"],
   رز: ["أرز", "الأرز", "ارز"],
+  // Common Arabic orthographic variant of بيتزا (pizza): dropping the ي is a recognised alternate spelling
+  بتزا: ["بيتزا", "البيتزا"],
+  // Colloquial/childspeak alternate for طماطم (tomato) widely used across Arabic dialects
+  طمطم: ["طماطم", "الطماطم"],
 };
 
 /**
@@ -268,6 +272,28 @@ export function expandSearchQuery(query: string): string[] {
           }
         }
       }
+    }
+  }
+
+  // ── Arabic Typo-Tolerance: Repeated Character Deduplication ──────────────
+  // Common Arabic typing error: doubling a letter (خييار → خيار, جززر → جزر, etc.).
+  // Generate a "deduplicated" variant by collapsing all consecutive repeated characters.
+  // This is strictly generic — no entity-specific hardcoding.
+  const deduped = normQ.replace(/(.)\1+/gu, "$1");
+  if (deduped && deduped !== normQ && deduped.length >= 2) {
+    variants.add(deduped);
+    const strippedDeduped = stripArticle(deduped);
+    if (strippedDeduped && strippedDeduped !== deduped) {
+      variants.add(strippedDeduped);
+      variants.add(`ال${strippedDeduped}`);
+    }
+  }
+  // Also try deduplication on the stripped form (in case article was already stripped)
+  if (strippedQ) {
+    const dedupedStripped = strippedQ.replace(/(.)\1+/gu, "$1");
+    if (dedupedStripped && dedupedStripped !== strippedQ && dedupedStripped.length >= 2) {
+      variants.add(dedupedStripped);
+      variants.add(`ال${dedupedStripped}`);
     }
   }
 
