@@ -79,11 +79,46 @@ router.get("/providers", async (_req: Request, res: Response) => {
           .from(aiApiUsageTable)
           .where(eq(aiApiUsageTable.provider, providerKey));
 
+        const [latestCall] = await db
+          .select({
+            requestStatus: aiApiUsageTable.requestStatus,
+            errorCode: aiApiUsageTable.errorCode,
+            timestamp: aiApiUsageTable.timestamp,
+          })
+          .from(aiApiUsageTable)
+          .where(eq(aiApiUsageTable.provider, providerKey))
+          .orderBy(desc(aiApiUsageTable.timestamp))
+          .limit(1);
+
+        const todayCost = Number(todayStats?.todayCost || 0);
+        const monthCost = Number(monthStats?.monthCost || 0);
+        const dailyLimit = row?.dailySpendLimit || 10.0;
+        const monthlyLimit = row?.monthlySpendLimit || 100.0;
+
+        let operationalStatus: "HEALTHY" | "LOW" | "CRITICAL" | "EXHAUSTED" | "ERROR" =
+          (row?.operationalStatus as any) || "HEALTHY";
+
+        if (todayCost >= dailyLimit || monthCost >= monthlyLimit) {
+          operationalStatus = "CRITICAL";
+        } else if (todayCost >= dailyLimit * 0.5 || monthCost >= monthlyLimit * 0.5) {
+          operationalStatus = "LOW";
+        } else if (latestCall?.requestStatus === "SUCCESS") {
+          // If the most recent real call was successful, the provider is currently healthy
+          operationalStatus = "HEALTHY";
+        } else if (latestCall?.requestStatus === "FAILED" && latestCall?.errorCode === "QUOTA_EXHAUSTED") {
+          operationalStatus = "EXHAUSTED";
+        } else if (row?.consecutiveFailures && row.consecutiveFailures >= 3) {
+          operationalStatus = "ERROR";
+        } else if (operationalStatus === "EXHAUSTED" && (!latestCall || latestCall.errorCode !== "QUOTA_EXHAUSTED")) {
+          // Clear stale quota exhaustion if the latest call was not a quota error
+          operationalStatus = "HEALTHY";
+        }
+
         return {
           provider: providerKey,
           displayName: providerKey === "openai" ? "OpenAI" : "Google Gemini",
           isConfigured: row?.isConfigured ?? false,
-          operationalStatus: row?.operationalStatus || "HEALTHY",
+          operationalStatus,
           connectivityStatus: row?.connectivityStatus || "UNCHECKED",
           connectivityLatencyMs: row?.connectivityLatencyMs ?? null,
           connectivityLastCheckedAt: row?.connectivityLastCheckedAt ?? null,

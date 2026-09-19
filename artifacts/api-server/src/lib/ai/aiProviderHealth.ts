@@ -219,21 +219,31 @@ async function updateConnectivityStatus(
       .from(aiProviderStatusTable)
       .where(eq(aiProviderStatusTable.provider, provider));
 
+    const updateFields: any = {
+      connectivityStatus: status,
+      connectivityLatencyMs: latencyMs,
+      connectivityLastCheckedAt: now,
+      isConfigured,
+      updatedAt: now,
+    };
+
+    if (status === "CONNECTED") {
+      updateFields.consecutiveFailures = 0;
+      if (existing?.operationalStatus === "EXHAUSTED" || existing?.operationalStatus === "ERROR") {
+        updateFields.operationalStatus = "HEALTHY";
+      }
+    }
+
     if (existing) {
       await db
         .update(aiProviderStatusTable)
-        .set({
-          connectivityStatus: status,
-          connectivityLatencyMs: latencyMs,
-          connectivityLastCheckedAt: now,
-          isConfigured,
-          updatedAt: now,
-        })
+        .set(updateFields)
         .where(eq(aiProviderStatusTable.provider, provider));
     } else {
       await db.insert(aiProviderStatusTable).values({
         provider,
         isConfigured,
+        operationalStatus: status === "CONNECTED" ? "HEALTHY" : "ERROR",
         connectivityStatus: status,
         connectivityLatencyMs: latencyMs,
         connectivityLastCheckedAt: now,

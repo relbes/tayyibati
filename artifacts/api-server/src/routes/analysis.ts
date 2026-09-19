@@ -20,6 +20,7 @@ import { normalize } from "../lib/arabicNormalization";
 import { callGeminiVision } from "../lib/ai/geminiProvider";
 import crypto from "crypto";
 import { trackAIUsageNonBlocking } from "../lib/ai/aiUsageTracker";
+import { isFallbackEligibleError } from "../lib/ai/aiProvider";
 
 const router = Router();
 
@@ -1274,10 +1275,10 @@ async function callVisionAIWithFallback(
     hasOpenAIKey: !!openaiKey,
   }, "Processing vision analysis request");
 
-  // Determine provider sequence: Gemini preferred if available, or OpenAI
-  const providersToTry: Array<"gemini" | "openai"> = [];
-  if (geminiKey) providersToTry.push("gemini");
+  // Required architecture: OpenAI is PRIMARY, Gemini is FALLBACK
+  const providersToTry: Array<"openai" | "gemini"> = [];
   if (openaiKey) providersToTry.push("openai");
+  if (geminiKey) providersToTry.push("gemini");
 
   if (providersToTry.length === 0) {
     logger.error({
@@ -1454,6 +1455,17 @@ async function callVisionAIWithFallback(
         allExhausted = false;
       }
       lastError = err;
+
+      // Check fallback eligibility: strictly exclude 401/403 and non-eligible errors
+      if (!isFallback && !isFallbackEligibleError(err)) {
+        logger.warn({
+          provider,
+          status: err?.status,
+          code: err?.code,
+          message: err?.message,
+        }, "Primary provider failed with non-fallback-eligible error, skipping fallback");
+        throw err;
+      }
 
       // Update correlation pointers for next fallback attempt
       parentRequestId = requestId;

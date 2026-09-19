@@ -13,67 +13,20 @@
 import OpenAI from "openai";
 import { db, appConfigTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import crypto from "crypto";
 import {
   AIProvider,
   FoodKnowledgeRequest,
   FoodKnowledgeResponse,
   FoodKnowledgeIngredient,
   IngredientSource,
+  normalizeAndDeduplicateIngredients,
 } from "./aiProvider";
 import { SYSTEM_FOOD_KNOWLEDGE_PROMPT, buildFoodKnowledgePrompt, FoodKnowledgeResponseSchema } from "./prompts";
 import { aiCacheGetOrFetch } from "./aiCache";
 import { AI_CONFIG } from "../config";
 import { norm } from "../arabicNormalization";
 import { trackAIUsageNonBlocking } from "./aiUsageTracker";
-
-function normalizeAndDeduplicateIngredients(
-  items: Array<{ name: string; certainty: number; isOptional: boolean; preparation?: string; ingredientRole?: any }>
-): FoodKnowledgeIngredient[] {
-  const result: FoodKnowledgeIngredient[] = [];
-  const seenNames = new Set<string>();
-
-  for (const item of items) {
-    if (!item.name) continue;
-    const cleanPrep = item.preparation?.trim() || "غير معروف";
-
-    const itemObj: FoodKnowledgeIngredient = {
-      name: item.name.trim(),
-      certainty: item.certainty,
-      isOptional: Boolean(item.isOptional),
-      preparation: cleanPrep,
-      ingredientRole: item.ingredientRole || "secondary",
-    };
-
-    if (!itemObj.name) continue;
-
-    let isRedundant = false;
-    for (let i = 0; i < result.length; i++) {
-      const existing = result[i].name;
-      if (existing === itemObj.name) {
-        isRedundant = true;
-        break;
-      }
-      if (existing.includes(itemObj.name) && existing.length > itemObj.name.length) {
-        isRedundant = true;
-        break;
-      }
-      if (itemObj.name.includes(existing) && itemObj.name.length > existing.length) {
-        result[i] = { ...itemObj };
-        seenNames.delete(existing);
-        seenNames.add(itemObj.name);
-        isRedundant = true;
-        break;
-      }
-    }
-
-    if (!isRedundant && !seenNames.has(itemObj.name)) {
-      seenNames.add(itemObj.name);
-      result.push(itemObj);
-    }
-  }
-
-  return result;
-}
 
 async function getOpenAIClient(): Promise<OpenAI> {
   try {
@@ -90,12 +43,22 @@ async function getOpenAIClient(): Promise<OpenAI> {
 }
 
 export class OpenAIProvider implements AIProvider {
-  public async extractFoodKnowledge(request: FoodKnowledgeRequest): Promise<FoodKnowledgeResponse> {
-    return aiCacheGetOrFetch(request.query, request.inputType, async () => {
+  public async extractFoodKnowledge(
+    request: FoodKnowledgeRequest,
+    options?: {
+      throwOnError?: boolean;
+      chainId?: string;
+      requestId?: string;
+      skipCache?: boolean;
+    }
+  ): Promise<FoodKnowledgeResponse> {
+    const execute = async () => {
       const startTime = performance.now();
       const providerName = "openai";
       const modelName = AI_CONFIG.model;
       const isDebug = process.env.SEARCH_DEBUG === "true";
+      const requestId = options?.requestId || `req_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+      const chainId = options?.chainId || `chain_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
       let attempts = 0;
       const maxAttempts = 1 + Math.max(0, AI_CONFIG.retryCount);
       let lastError: Error | null = null;
@@ -143,6 +106,8 @@ export class OpenAIProvider implements AIProvider {
 
           // Centralized AI Usage Tracking (Non-blocking)
           trackAIUsageNonBlocking({
+            requestId,
+            chainId,
             provider: "openai",
             model: modelName,
             feature: request.inputType === "camera" ? "IMAGE_ANALYSIS" : "FOOD_SEARCH",
@@ -153,6 +118,8 @@ export class OpenAIProvider implements AIProvider {
             outputTokens: completion.usage?.completion_tokens || 0,
             cachedTokens: (completion.usage as any)?.prompt_tokens_details?.cached_tokens || 0,
             tokensAvailable: typeof completion.usage?.prompt_tokens === "number",
+            isFallback: false,
+            chainFinalStatus: "SUCCESS",
           });
 
           // Strict Zod Validation
@@ -198,6 +165,8 @@ export class OpenAIProvider implements AIProvider {
       const durationMs = Math.round(performance.now() - startTime);
 
       trackAIUsageNonBlocking({
+        requestId,
+        chainId,
         provider: "openai",
         model: modelName,
         feature: request.inputType === "camera" ? "IMAGE_ANALYSIS" : "FOOD_SEARCH",
@@ -205,7 +174,13 @@ export class OpenAIProvider implements AIProvider {
         httpStatus: (lastError as any)?.status || 500,
         error: lastError,
         latencyMs: durationMs,
+        isFallback: false,
+        chainFinalStatus: "FAILED",
       });
+
+      if (options?.throwOnError) {
+        throw lastError;
+      }
 
       const failureResponse: FoodKnowledgeResponse = {
         entityType: "food",
@@ -234,6 +209,11 @@ export class OpenAIProvider implements AIProvider {
       }
 
       return failureResponse;
-    });
+    };
+
+    if (options?.skipCache) {
+      return execute();
+    }
+    return aiCacheGetOrFetch(request.query, request.inputType, execute);
   }
 }

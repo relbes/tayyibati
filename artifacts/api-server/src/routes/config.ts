@@ -1,6 +1,5 @@
 import { Router } from "express";
-import { db } from "@workspace/db";
-import { appConfigTable } from "@workspace/db";
+import { db, appConfigTable, aiProviderStatusTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAdmin } from "./admin";
 
@@ -109,6 +108,44 @@ router.patch("/config/:key", requireAdmin, async (req, res) => {
       recordId = created.id;
       finalDescription = created.description;
       finalPublic = created.isPublic;
+    }
+
+    // When an AI key is updated with a non-empty value, reset any stale provider errors
+    if (key === "openai_api_key" || key === "gemini_api_key") {
+      const providerKey = key === "openai_api_key" ? "openai" : "gemini";
+      const hasKey = Boolean(String(value).trim().length > 10);
+      try {
+        const [existingStatus] = await db
+          .select()
+          .from(aiProviderStatusTable)
+          .where(eq(aiProviderStatusTable.provider, providerKey));
+
+        if (existingStatus) {
+          await db
+            .update(aiProviderStatusTable)
+            .set({
+              isConfigured: hasKey,
+              operationalStatus: hasKey ? "HEALTHY" : "ERROR",
+              consecutiveFailures: 0,
+              connectivityStatus: "UNCHECKED",
+              updatedAt: new Date(),
+            })
+            .where(eq(aiProviderStatusTable.provider, providerKey));
+        } else if (hasKey) {
+          await db.insert(aiProviderStatusTable).values({
+            provider: providerKey,
+            isConfigured: true,
+            operationalStatus: "HEALTHY",
+            connectivityStatus: "UNCHECKED",
+            billingDashboardUrl:
+              providerKey === "openai"
+                ? "https://platform.openai.com/usage"
+                : "https://console.cloud.google.com/billing",
+          });
+        }
+      } catch {
+        // Non-fatal if table not yet migrated
+      }
     }
 
     // Return sanitized response — never echo raw secret keys back
