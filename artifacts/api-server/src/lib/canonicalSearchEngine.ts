@@ -184,6 +184,32 @@ export function computeRankingScore(
     }
   }
 
+  // 1c. Generic Repeated-Character Typo Match (Score 1150-1175)
+  // When a query contains doubled/repeated typing errors (e.g. بطاطاا -> بطاطا, خييار -> خيار, جززر -> جزر),
+  // reward exact matches on the deduplicated base form above generic prefix matches.
+  const qDedup = qNorm.replace(/(.)\1+/gu, "$1");
+  const qDedupStripped = stripArticle(qDedup);
+  const isDeduped = qDedup !== qNorm && qDedup.length >= 2;
+
+  if (isDeduped) {
+    if (cNorm === qDedup || cStripped === qDedupStripped || aNorm === qDedup || aStripped === qDedupStripped) {
+      return 1150;
+    }
+    if (candParts.length > 1) {
+      for (const cp of candParts) {
+        const cpTrim = cp.trim();
+        if (cpTrim.length >= 2) {
+          const cpNorm = normalize(cpTrim);
+          const cpStripped = stripArticle(cpNorm);
+          if (cpNorm === qDedup || cpStripped === qDedupStripped || cpNorm === qDedupStripped || cpStripped === qDedup) {
+            const isAtStart = cNorm.startsWith(cpNorm) || cStripped.startsWith(cpStripped);
+            return isAtStart ? 1175 : 1150;
+          }
+        }
+      }
+    }
+  }
+
   // 2. Canonical Prefix Match (Score 1000)
   if (cNorm.startsWith(qNorm) || cStripped.startsWith(qStripped) || cNorm.startsWith("ال" + qStripped) || cNorm.startsWith("ال" + qNorm)) {
     const qHasDesc = hasRecognizedDescriptor(qNorm) || hasRecognizedDescriptor(qStripped);
@@ -192,6 +218,16 @@ export function computeRankingScore(
       return 950;
     }
     return 1000;
+  }
+
+  // 2b. Deduplicated Prefix Match (Score 900-950)
+  if (isDeduped && (cNorm.startsWith(qDedup) || cStripped.startsWith(qDedupStripped) || cNorm.startsWith("ال" + qDedupStripped) || cNorm.startsWith("ال" + qDedup))) {
+    const qHasDesc = hasRecognizedDescriptor(qNorm) || hasRecognizedDescriptor(qStripped);
+    const cHasDesc = hasRecognizedDescriptor(cNorm) || hasRecognizedDescriptor(cStripped);
+    if (!qHasDesc && cHasDesc) {
+      return 900;
+    }
+    return 950;
   }
 
   // 3. Alias Prefix Match (Score 800)
@@ -246,6 +282,16 @@ export function rankCandidates(
     const wB = typeWeight[b.candidate.canonicalEntityType || "food"] || 0;
     if (wB !== wA) {
       return wB - wA;
+    }
+    // 2b. Descriptor Penalty: When query lacks descriptors, prefer clean base entities over descriptor-laden candidates
+    const qTokens = stripArticle(rawQuery).split(/\s+/);
+    const qHasDesc = qTokens.some((qt) => hasRecognizedDescriptor(qt));
+    if (!qHasDesc) {
+      const descA = hasRecognizedDescriptor(a.candidate.canonicalName) ? 1 : 0;
+      const descB = hasRecognizedDescriptor(b.candidate.canonicalName) ? 1 : 0;
+      if (descA !== descB) {
+        return descA - descB;
+      }
     }
     // 3. Tertiary: Shorter canonical name length
     const lenA = (a.candidate.canonicalName || "").length;
