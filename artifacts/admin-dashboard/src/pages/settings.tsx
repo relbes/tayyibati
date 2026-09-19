@@ -17,10 +17,18 @@ const STORAGE_KEY = "tayyibati_api_url";
 
 const API_BASE = () => getApiBaseUrl();
 
-interface ConfigRow { id: number; key: string; value: string; description: string | null; isPublic: string; }
+interface ConfigRow {
+  id: number;
+  key: string;
+  value: string;
+  description: string | null;
+  isPublic: string;
+  isConfigured?: boolean;
+}
 
 async function fetchConfig(): Promise<ConfigRow[]> {
-  const res = await adminFetch(`${API_BASE()}/api/config`);
+  const base = API_BASE().replace(/\/+$/, "").replace(/\/api$/, "");
+  const res = await adminFetch(`${base}/api/config`);
 
   if (!res.ok) {
     throw new Error("Failed to fetch config");
@@ -30,7 +38,8 @@ async function fetchConfig(): Promise<ConfigRow[]> {
 }
 
 async function patchConfig(key: string, value: string): Promise<ConfigRow> {
-  const res = await adminFetch(`${API_BASE()}/api/config/${key}`, {
+  const base = API_BASE().replace(/\/+$/, "").replace(/\/api$/, "");
+  const res = await adminFetch(`${base}/api/config/${key}`, {
     method: "PATCH",
     body: JSON.stringify({ value }),
   });
@@ -467,6 +476,10 @@ export default function Settings() {
   });
 
   const getConfig = (key: string) => configRows.find((r) => r.key === key)?.value ?? "";
+  const isKeyConfigured = (key: string) => {
+    const row = configRows.find((r) => r.key === key);
+    return Boolean(row && (row.isConfigured ?? (row.value && row.value.trim().length > 0)));
+  };
   const setConfig = (key: string, value: string) => patchMut.mutate({ key, value });
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
@@ -497,10 +510,15 @@ export default function Settings() {
   const [apiKeyVisible, setApiKeyVisible] = useState(false);
   const [apiKeySaved, setApiKeySaved] = useState(false);
 
-  const storedApiKey = getConfig("openai_api_key");
-  const apiKeyMasked = storedApiKey
-    ? storedApiKey.slice(0, 7) + "••••••••••••••••••" + storedApiKey.slice(-4)
-    : "";
+  const storedApiKey = isKeyConfigured("openai_api_key");
+  const apiKeyMasked = storedApiKey ? "••••••••••••••••••••••••" : "";
+
+  const [geminiKeyInput, setGeminiKeyInput] = useState("");
+  const [geminiKeyVisible, setGeminiKeyVisible] = useState(false);
+  const [geminiKeySaved, setGeminiKeySaved] = useState(false);
+
+  const storedGeminiKey = isKeyConfigured("gemini_api_key");
+  const geminiKeyMasked = storedGeminiKey ? "••••••••••••••••••••••••" : "";
 
   function handleApiKeySave() {
     if (!apiKeyInput.trim()) return;
@@ -520,6 +538,26 @@ export default function Settings() {
   function handleApiKeyClear() {
     patchMut.mutate({ key: "openai_api_key", value: "" });
     setApiKeyInput("");
+  }
+
+  function handleGeminiKeySave() {
+    if (!geminiKeyInput.trim()) return;
+    patchMut.mutate(
+      { key: "gemini_api_key", value: geminiKeyInput.trim() },
+      {
+        onSuccess: () => {
+          setGeminiKeyInput("");
+          setGeminiKeyVisible(false);
+          setGeminiKeySaved(true);
+          setTimeout(() => setGeminiKeySaved(false), 3000);
+        },
+      },
+    );
+  }
+
+  function handleGeminiKeyClear() {
+    patchMut.mutate({ key: "gemini_api_key", value: "" });
+    setGeminiKeyInput("");
   }
 
   function handleSave() {
@@ -723,6 +761,82 @@ export default function Settings() {
               The key is stored in the database and never exposed via the public API. Get yours at{" "}
               <a href="https://platform.openai.com/api-keys" target="_blank" rel="noopener noreferrer" className="underline">
                 platform.openai.com/api-keys
+              </a>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Google Gemini API Key */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4 text-blue-500" />
+            Google Gemini API Key (Vision & Fallback)
+          </CardTitle>
+          <CardDescription>
+            Google Gemini (1.5 Flash / 2.5 Flash) provides fast, generous free-tier image analysis and serves as automatic fallback if OpenAI credits are exhausted.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {storedGeminiKey ? (
+            <div className="flex items-center gap-3 rounded-lg border p-3 bg-muted/30">
+              <Key className="h-4 w-4 text-green-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-muted-foreground mb-0.5">Current Gemini key</p>
+                <p className="font-mono text-sm truncate">{geminiKeyMasked}</p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-destructive hover:text-destructive shrink-0"
+                onClick={handleGeminiKeyClear}
+                disabled={patchMut.isPending}
+              >
+                <Trash2 className="h-3.5 w-3.5 mr-1" />
+                Remove
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-muted-foreground text-sm">
+              <Info className="h-4 w-4 shrink-0" />
+              No Gemini key stored — using <code className="bg-muted px-1 rounded text-xs">GEMINI_API_KEY</code> environment variable if present
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <Label htmlFor="gemini-key">{storedGeminiKey ? "Replace Gemini key" : "Set Gemini key"}</Label>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Input
+                  id="gemini-key"
+                  type={geminiKeyVisible ? "text" : "password"}
+                  placeholder="AIzaSy..."
+                  value={geminiKeyInput}
+                  onChange={(e) => setGeminiKeyInput(e.target.value)}
+                  className="font-mono text-sm pr-10"
+                  onKeyDown={(e) => e.key === "Enter" && handleGeminiKeySave()}
+                />
+                <button
+                  type="button"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  onClick={() => setGeminiKeyVisible((v) => !v)}
+                  tabIndex={-1}
+                >
+                  {geminiKeyVisible ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+              <Button
+                onClick={handleGeminiKeySave}
+                disabled={!geminiKeyInput.trim() || patchMut.isPending}
+              >
+                {geminiKeySaved ? <><CheckCircle className="h-3.5 w-3.5 mr-1.5 text-green-400" />Saved</> : "Save"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Get a free Gemini API key at{" "}
+              <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="underline text-primary">
+                aistudio.google.com/app/apikey
               </a>
             </p>
           </div>

@@ -52,7 +52,7 @@ export async function seedInitialAdmin(): Promise<void> {
 /**
  * Creates a server-side session and sets HttpOnly cookie.
  */
-export async function createAdminSession(adminUserId: string, res: Response): Promise<string> {
+export async function createAdminSession(adminUserId: string, res: Response, req?: Request): Promise<string> {
   const sessionId = "sess_" + crypto.randomBytes(32).toString("hex");
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
 
@@ -62,11 +62,12 @@ export async function createAdminSession(adminUserId: string, res: Response): Pr
     expiresAt,
   });
 
-  const isProd = process.env.NODE_ENV === "production";
+  // Determine if connection is HTTPS (direct or forwarded by reverse proxy)
+  const isHttps = req ? (req.secure || req.headers["x-forwarded-proto"] === "https") : false;
   res.cookie(COOKIE_NAME, sessionId, {
     httpOnly: true,
-    secure: isProd,
-    sameSite: "lax",
+    secure: isHttps,
+    sameSite: isHttps ? "none" : "lax",
     path: "/",
     expires: expiresAt,
   });
@@ -96,8 +97,17 @@ export async function invalidateAllAdminSessions(adminUserId: string, res?: Resp
 }
 
 function getSessionIdFromRequest(req: Request): string | null {
+  // 1. Check HTTP Cookie
   if (req.cookies && req.cookies[COOKIE_NAME]) {
     return req.cookies[COOKIE_NAME];
+  }
+  // 2. Check Authorization Bearer header fallback
+  const authHeader = req.headers["authorization"];
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.slice(7).trim();
+    if (token.startsWith("sess_")) {
+      return token;
+    }
   }
   return null;
 }

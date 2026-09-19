@@ -63,10 +63,11 @@ router.post("/admin/login", async (req, res) => {
       .set({ lastLoginAt: new Date(), updatedAt: new Date() })
       .where(eq(adminUsersTable.id, admin.id));
 
-    await createAdminSession(admin.id, res);
+    const sessionId = await createAdminSession(admin.id, res, req);
 
     res.json({
       success: true,
+      sessionId,
       admin: {
         id: admin.id,
         username: admin.username,
@@ -303,7 +304,7 @@ router.get("/admin/dashboard", requireAdmin, async (req, res) => {
     const [[userCount], [newUsersCount], [premiumUserCount], [totals], [todayCount], [foodCount], [dishCount]] = await Promise.all([
       db.select({ c: count() }).from(usersTable),
       db.select({ c: count() }).from(usersTable).where(sql`${usersTable.createdAt} >= ${startDateStr}`),
-      db.select({ c: count() }).from(usersTable).where(eq(usersTable.isPremium, true)),
+      db.select({ c: count() }).from(usersTable).where(eq(usersTable.isPremium, "true")),
       db.select({
         totalAnalyses: count(analysisHistoryTable.id),
         avgScore: avg(analysisHistoryTable.compatibilityScore),

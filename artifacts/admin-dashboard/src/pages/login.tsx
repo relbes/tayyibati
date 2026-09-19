@@ -38,6 +38,10 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
+      if (body.sessionId) {
+        localStorage.setItem("tayyibati_admin_session_id", body.sessionId);
+      }
+
       onLoginSuccess(body.admin);
     } catch (err) {
       console.error("Login error:", err);

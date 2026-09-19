@@ -30,6 +30,11 @@ if (!process.env.DATABASE_URL || !process.env.OPENAI_API_KEY) {
 
 import app from "./app";
 import { logger } from "./lib/logger";
+import { runAiMonitoringMigration } from "./lib/ai/aiMonitoringMigration";
+
+runAiMonitoringMigration().catch((err) => {
+  logger.warn({ err }, "Initial AI Monitoring migration check warning");
+});
 
 const rawPort = process.env["PORT"] || "5000";
 const port = Number(rawPort);

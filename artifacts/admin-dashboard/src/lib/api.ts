@@ -1,16 +1,25 @@
+export const normalizeApiBaseUrl = (url: string): string => {
+  return url.replace(/\/+$/, "").replace(/\/api$/, "");
+};
+
 export const getApiBaseUrl = (): string => {
   const customUrl = localStorage.getItem("tayyibati_api_url");
-  if (customUrl) return customUrl;
-  if (import.meta.env.VITE_API_URL) return import.meta.env.VITE_API_URL;
+  if (customUrl) return normalizeApiBaseUrl(customUrl);
+  if (import.meta.env.VITE_API_URL) return normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
   return import.meta.env.DEV ? "http://localhost:5000" : "https://api.tayyibati.xyz";
 };
 
 export const API_BASE = getApiBaseUrl();
 
 export function adminHeaders(): Record<string, string> {
-  return {
+  const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
+  const token = localStorage.getItem("tayyibati_admin_session_id");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 export function adminFetch(url: string, options: RequestInit = {}): Promise<Response> {

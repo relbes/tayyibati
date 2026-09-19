@@ -185,7 +185,8 @@ router.get("/api/admin/leads", requireAdmin, async (req: Request, res: Response)
 // ---------------------------------------------------------------------------
 router.patch("/api/admin/leads/:id", requireAdmin, async (req: Request, res: Response) => {
   try {
-    const leadId = parseInt(req.params.id, 10);
+    const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    const leadId = parseInt(rawId, 10);
     if (isNaN(leadId)) {
       return void res.status(400).json({ error: "معرّف الطلب غير صحيح" });
     }

@@ -11,6 +11,7 @@ import dishesRouter from "./dishes";
 import { adminKnowledgeReviewRouter } from "./adminKnowledgeReview";
 import { adminAiCacheRouter } from "./adminAiCache";
 import leadsRouter from "./leads";
+import adminAiMonitoringRouter from "./adminAiMonitoring";
 
 const router: IRouter = Router();
 
@@ -26,6 +27,7 @@ router.use(adminRouter);
 router.use(leadsRouter);
 router.use("/admin/knowledge-review", adminKnowledgeReviewRouter);
 router.use("/admin/ai-cache", adminAiCacheRouter);
-
+router.use("/api/admin/ai-monitoring", adminAiMonitoringRouter);
+router.use("/admin/ai-monitoring", adminAiMonitoringRouter);
 
 export default router;

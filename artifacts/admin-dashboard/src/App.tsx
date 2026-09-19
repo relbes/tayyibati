@@ -9,6 +9,7 @@ import Foods from "@/pages/foods";
 import Dishes from "@/pages/dishes";
 import KnowledgeReview from "@/pages/knowledge-review";
 import AiReview from "@/pages/ai-review";
+import AiMonitoring from "@/pages/ai-monitoring";
 import History from "@/pages/history";
 import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
@@ -24,6 +25,7 @@ import {
   Utensils,
   CheckSquare,
   Bot,
+  Activity,
   History as HistoryIcon,
   Settings as SettingsIcon,
   Star,
@@ -63,6 +65,7 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
     { path: "/dishes", label: lang === "ar" ? "الأطباق" : "Dishes", icon: Utensils },
     { path: "/knowledge-review", label: lang === "ar" ? "مراجعة المعرفة" : "Knowledge Review", icon: CheckSquare },
     { path: "/ai-review", label: lang === "ar" ? "مراجعة الذكاء الاصطناعي" : "AI Review", icon: Bot },
+    { path: "/ai-monitoring", label: lang === "ar" ? "مراقبة الذكاء الاصطناعي" : "AI Monitoring", icon: Activity },
     { path: "/contact-requests", label: lang === "ar" ? "طلبات التواصل" : "Contact Requests", icon: MessageSquare, badge: newLeadsCount },
     { path: "/history", label: lang === "ar" ? "سجل البحث" : "Search History", icon: HistoryIcon },
     { path: "/users", label: tr(lang, "users"), icon: UsersIcon },
@@ -179,6 +182,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
             <Route path="/dishes" component={Dishes} />
             <Route path="/knowledge-review" component={KnowledgeReview} />
             <Route path="/ai-review" component={AiReview} />
+            <Route path="/ai-monitoring" component={AiMonitoring} />
             <Route path="/contact-requests" component={ContactRequests} />
             <Route path="/history" component={History} />
             <Route path="/users" component={Users} />
@@ -231,6 +235,7 @@ function App() {
     } catch (err) {
       console.error("Logout error:", err);
     } finally {
+      localStorage.removeItem("tayyibati_admin_session_id");
       if (window.location.pathname !== "/login") {
         window.history.replaceState(null, "", "/login");
       }

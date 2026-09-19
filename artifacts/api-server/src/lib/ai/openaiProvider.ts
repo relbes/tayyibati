@@ -24,6 +24,7 @@ import { SYSTEM_FOOD_KNOWLEDGE_PROMPT, buildFoodKnowledgePrompt, FoodKnowledgeRe
 import { aiCacheGetOrFetch } from "./aiCache";
 import { AI_CONFIG } from "../config";
 import { norm } from "../arabicNormalization";
+import { trackAIUsageNonBlocking } from "./aiUsageTracker";
 
 function normalizeAndDeduplicateIngredients(
   items: Array<{ name: string; certainty: number; isOptional: boolean; preparation?: string; ingredientRole?: any }>
@@ -140,6 +141,20 @@ export class OpenAIProvider implements AIProvider {
           const rawContent = completion.choices[0]?.message?.content || "{}";
           const rawParsed = JSON.parse(rawContent);
 
+          // Centralized AI Usage Tracking (Non-blocking)
+          trackAIUsageNonBlocking({
+            provider: "openai",
+            model: modelName,
+            feature: request.inputType === "camera" ? "IMAGE_ANALYSIS" : "FOOD_SEARCH",
+            requestStatus: "SUCCESS",
+            httpStatus: 200,
+            latencyMs: durationMs,
+            inputTokens: completion.usage?.prompt_tokens || 0,
+            outputTokens: completion.usage?.completion_tokens || 0,
+            cachedTokens: (completion.usage as any)?.prompt_tokens_details?.cached_tokens || 0,
+            tokensAvailable: typeof completion.usage?.prompt_tokens === "number",
+          });
+
           // Strict Zod Validation
           const validated = FoodKnowledgeResponseSchema.parse(rawParsed);
           const normalizedIngredients = normalizeAndDeduplicateIngredients(validated.ingredients);
@@ -181,6 +196,17 @@ export class OpenAIProvider implements AIProvider {
       }
 
       const durationMs = Math.round(performance.now() - startTime);
+
+      trackAIUsageNonBlocking({
+        provider: "openai",
+        model: modelName,
+        feature: request.inputType === "camera" ? "IMAGE_ANALYSIS" : "FOOD_SEARCH",
+        requestStatus: "FAILED",
+        httpStatus: (lastError as any)?.status || 500,
+        error: lastError,
+        latencyMs: durationMs,
+      });
+
       const failureResponse: FoodKnowledgeResponse = {
         entityType: "food",
         canonicalNameAr: request.query || "طعام غير معروف",

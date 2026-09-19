@@ -12,6 +12,7 @@ export * from "./knowledgeReview";
 export * from "./aiCache";
 export * from "./adminUsers";
 export * from "./leads";
+export * from "./aiMonitoring";
 
 
 

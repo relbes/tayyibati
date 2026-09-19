@@ -250,7 +250,7 @@ router.post("/users/me/sync-premium", requireAuth, async (req, res) => {
           },
         });
         if (projRes.ok) {
-          const data = await projRes.json();
+          const data: any = await projRes.json();
           if (Array.isArray(data.items) && data.items.length > 0) {
             cachedV2ProjectId = String(data.items[0].id);
             req.log.info({ projectId: cachedV2ProjectId }, "[SyncPremium] Automatically resolved RevenueCat v2 Project ID");

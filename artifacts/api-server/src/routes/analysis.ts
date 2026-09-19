@@ -10,12 +10,16 @@ import { Router } from "express";
 import OpenAI from "openai";
 import { db } from "@workspace/db";
 import { foodsTable, analysisHistoryTable, userUsageTable, appConfigTable, usersTable, subscriptionPlansTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
 import { getFreeMonthlyLimit } from "../lib/config";
 import { UnifiedAnalysisEngine } from "../lib/unifiedAnalysisEngine";
 import { analyzeDishCompatibility } from "../lib/dishCompatibilityEngine";
 import { CanonicalSearchEngine, MatchType } from "../lib/canonicalSearchEngine";
+import { normalize } from "../lib/arabicNormalization";
+import { callGeminiVision } from "../lib/ai/geminiProvider";
+import crypto from "crypto";
+import { trackAIUsageNonBlocking } from "../lib/ai/aiUsageTracker";
 
 const router = Router();
 
@@ -154,6 +158,31 @@ async function checkAndIncrementUsage(
     .set({ count: newCount, textCount: newTextCount, imageCount: newImageCount })
     .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
   return { allowed: true, monthlyCount: newCount, textCount: newTextCount, imageCount: newImageCount, count: newCount, limit: typeLimit, remaining: rem };
+}
+
+/**
+ * Decrements the usage count if an analysis operation fails unexpectedly (e.g. AI provider outage)
+ * to ensure users are never unfairly charged against their monthly quota.
+ */
+export async function rollbackUsage(userId: string, type: "text" | "image"): Promise<void> {
+  try {
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const [existing] = await db
+      .select()
+      .from(userUsageTable)
+      .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
+    if (existing) {
+      const newTextCount = Math.max(0, (existing.textCount ?? 0) - (type === "text" ? 1 : 0));
+      const newImageCount = Math.max(0, (existing.imageCount ?? 0) - (type === "image" ? 1 : 0));
+      const newCount = Math.max(0, (existing.count ?? 0) - 1);
+      await db
+        .update(userUsageTable)
+        .set({ count: newCount, textCount: newTextCount, imageCount: newImageCount })
+        .where(and(eq(userUsageTable.userId, userId), eq(userUsageTable.date, currentMonth)));
+    }
+  } catch {
+    // Non-blocking rollback
+  }
 }
 
 export type IngredientStatus = "allowed" | "forbidden" | "conditional" | "unknown";
@@ -954,6 +983,8 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
       userId,
       entityType: entityType as any,
       canonicalId,
+      foodId: entityType === "food" && canonicalId ? Number(canonicalId) : undefined,
+      dishId: entityType === "dish" && canonicalId ? Number(canonicalId) : undefined,
     });
 
     const report = unifiedResult.report;
@@ -1046,10 +1077,10 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
 router.post("/analysis/dish", requireAuth, async (req, res) => {
   const tStart = performance.now();
   try {
-    const { dishId } = req.body as { dishId: number };
-    const idNum = Number(dishId);
-    if (!idNum || isNaN(idNum)) {
-      return void res.status(400).json({ error: "dishId is required and must be a number" });
+    const { dishId, foodId, entityType, id } = req.body as any;
+    const targetId = Number(dishId || foodId || id);
+    if (!targetId || isNaN(targetId)) {
+      return void res.status(400).json({ error: "dishId or foodId is required and must be a number" });
     }
 
     const userId = req.userId!;
@@ -1064,7 +1095,10 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
     }
 
     const unifiedResult = await UnifiedAnalysisEngine.analyze({
-      dishId: idNum,
+      dishId: entityType === "food" ? undefined : targetId,
+      foodId: entityType === "food" ? targetId : undefined,
+      canonicalId: targetId,
+      entityType: entityType as any,
       inputType: "text",
       userId,
     });
@@ -1158,25 +1192,309 @@ function evaluateImageRecognition(ir: NonNullable<ExtractionResult["imageRecogni
   return "AMBIGUOUS";
 }
 
+interface VisionAIResult {
+  content: string;
+  provider: "gemini" | "openai";
+  model: string;
+  durationMs: number;
+}
+
+export class AIQuotaExhaustedError extends Error {
+  code = "AI_QUOTA_EXHAUSTED";
+  constructor(message: string) {
+    super(message);
+    this.name = "AIQuotaExhaustedError";
+  }
+}
+
+async function getVisionKeys(): Promise<{ openaiKey?: string; geminiKey?: string }> {
+  let openaiKey: string | undefined;
+  let geminiKey: string | undefined;
+
+  // 1. Check environment variables first (highest priority for production deployments)
+  if (process.env.OPENAI_API_KEY?.trim() && process.env.OPENAI_API_KEY.trim().length > 10) {
+    openaiKey = process.env.OPENAI_API_KEY.trim();
+  }
+  const envGemini = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (envGemini?.trim() && envGemini.trim().length > 10) {
+    geminiKey = envGemini.trim();
+  }
+
+  // 2. Fall back to database app_config if not present in environment
+  if (!openaiKey || !geminiKey) {
+    try {
+      const rows = await db
+        .select()
+        .from(appConfigTable)
+        .where(or(eq(appConfigTable.key, "openai_api_key"), eq(appConfigTable.key, "gemini_api_key")));
+      for (const r of rows) {
+        if (!openaiKey && r.key === "openai_api_key" && r.value?.trim().length > 10) {
+          openaiKey = r.value.trim();
+        }
+        if (!geminiKey && r.key === "gemini_api_key" && r.value?.trim().length > 10) {
+          geminiKey = r.value.trim();
+        }
+      }
+    } catch {
+      // fall through
+    }
+  }
+
+  return { openaiKey, geminiKey };
+}
+
+async function callVisionAIWithFallback(
+  imageBase64: string,
+  mimeType: string,
+  promptText: string,
+  userInstruction: string,
+  logger: any
+): Promise<VisionAIResult> {
+  const { openaiKey, geminiKey } = await getVisionKeys();
+
+  // Normalize image data
+  let cleanBase64 = imageBase64;
+  if (cleanBase64.includes(",")) {
+    cleanBase64 = cleanBase64.split(",")[1];
+  }
+  cleanBase64 = cleanBase64.replace(/\s+/g, "");
+
+  let cleanMime = (mimeType || "image/jpeg").toLowerCase().trim();
+  if (cleanMime === "image/jpg") cleanMime = "image/jpeg";
+
+  const approxBytes = Math.round(cleanBase64.length * 0.75);
+
+  logger.info({
+    endpoint: "/api/analysis/image",
+    requestReachedBackend: true,
+    imageReceived: true,
+    mimeType: cleanMime,
+    byteSize: approxBytes,
+    hasGeminiKey: !!geminiKey,
+    hasOpenAIKey: !!openaiKey,
+  }, "Processing vision analysis request");
+
+  // Determine provider sequence: Gemini preferred if available, or OpenAI
+  const providersToTry: Array<"gemini" | "openai"> = [];
+  if (geminiKey) providersToTry.push("gemini");
+  if (openaiKey) providersToTry.push("openai");
+
+  if (providersToTry.length === 0) {
+    logger.error({
+      endpoint: "/api/analysis/image",
+      error: "No AI vision provider keys configured",
+    }, "AI provider keys missing");
+    throw new AIQuotaExhaustedError("لم يتم تكوين مفتاح مزود الذكاء الاصطناعي (OpenAI أو Gemini). يرجى إضافته في إعدادات لوحة التحكم.");
+  }
+
+  let lastError: any = null;
+  let allExhausted = true;
+
+  const chainId = `chain_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+  let parentRequestId: string | undefined;
+  let fallbackReason: string | undefined;
+  let isFallback = false;
+
+  for (const provider of providersToTry) {
+    const startTime = Date.now();
+    const requestId = `req_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`;
+
+    logger.info({
+      provider,
+      endpoint: "/api/analysis/image",
+      startedAt: new Date().toISOString(),
+      chainId,
+      requestId,
+      isFallback,
+    }, `Starting ${provider} vision request`);
+
+    try {
+      if (provider === "gemini" && geminiKey) {
+        const result = await callGeminiVision({
+          imageBase64: cleanBase64,
+          mimeType: cleanMime,
+          promptText: `${promptText}\n\n${userInstruction}`,
+          apiKey: geminiKey,
+        });
+
+        logger.info({
+          provider: "gemini",
+          model: result.model,
+          durationMs: result.durationMs,
+          status: 200,
+          chainId,
+          requestId,
+        }, "Gemini vision analysis succeeded");
+
+        trackAIUsageNonBlocking({
+          requestId,
+          chainId,
+          parentRequestId,
+          provider: "gemini",
+          model: result.model,
+          feature: isFallback ? "AI_FALLBACK" : "IMAGE_ANALYSIS",
+          requestStatus: "SUCCESS",
+          httpStatus: 200,
+          latencyMs: result.durationMs,
+          inputTokens: result.promptTokens || 0,
+          outputTokens: result.completionTokens || 0,
+          cachedTokens: result.cachedTokens || 0,
+          tokensAvailable: typeof result.promptTokens === "number",
+          isFallback,
+          fallbackReason,
+          chainFinalStatus: "SUCCESS",
+        });
+
+        return {
+          content: result.content,
+          provider: "gemini",
+          model: result.model,
+          durationMs: result.durationMs,
+        };
+      }
+
+      if (provider === "openai" && openaiKey) {
+        const openai = new OpenAI({ apiKey: openaiKey });
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: promptText },
+            {
+              role: "user",
+              content: [
+                { type: "image_url", image_url: { url: `data:${cleanMime};base64,${cleanBase64}` } },
+                { type: "text", text: userInstruction },
+              ],
+            },
+          ],
+          response_format: { type: "json_object" },
+          max_tokens: 1000,
+          temperature: 0,
+        });
+
+        const durationMs = Date.now() - startTime;
+        logger.info({
+          provider: "openai",
+          model: "gpt-4o-mini",
+          durationMs,
+          status: 200,
+          chainId,
+          requestId,
+        }, "OpenAI vision analysis succeeded");
+
+        const promptTokens = completion.usage?.prompt_tokens;
+        const completionTokens = completion.usage?.completion_tokens;
+
+        trackAIUsageNonBlocking({
+          requestId,
+          chainId,
+          parentRequestId,
+          provider: "openai",
+          model: "gpt-4o-mini",
+          feature: isFallback ? "AI_FALLBACK" : "IMAGE_ANALYSIS",
+          requestStatus: "SUCCESS",
+          httpStatus: 200,
+          latencyMs: durationMs,
+          inputTokens: promptTokens || 0,
+          outputTokens: completionTokens || 0,
+          cachedTokens: 0,
+          tokensAvailable: typeof promptTokens === "number",
+          isFallback,
+          fallbackReason,
+          chainFinalStatus: "SUCCESS",
+        });
+
+        return {
+          content: completion.choices[0]?.message?.content || "{}",
+          provider: "openai",
+          model: "gpt-4o-mini",
+          durationMs,
+        };
+      }
+    } catch (err: any) {
+      const durationMs = Date.now() - startTime;
+      const isQuota = err?.status === 429 ||
+        err?.code === "insufficient_quota" ||
+        err?.type === "insufficient_quota" ||
+        (typeof err?.message === "string" && (
+          err.message.includes("quota") ||
+          err.message.includes("credit_balance_exhausted") ||
+          err.message.includes("credits") ||
+          err.message.includes("RESOURCE_EXHAUSTED")
+        ));
+
+      logger.warn({
+        provider,
+        status: err?.status || 500,
+        errorCode: err?.code || err?.type || "PROVIDER_ERROR",
+        errorMessage: err?.message || String(err),
+        isQuotaExhausted: isQuota,
+        durationMs,
+        chainId,
+        requestId,
+      }, `${provider} vision request failed`);
+
+      trackAIUsageNonBlocking({
+        requestId,
+        chainId,
+        parentRequestId,
+        provider,
+        model: provider === "gemini" ? "gemini-1.5-flash" : "gpt-4o-mini",
+        feature: isFallback ? "AI_FALLBACK" : "IMAGE_ANALYSIS",
+        requestStatus: "FAILED",
+        httpStatus: err?.status || 500,
+        error: err,
+        latencyMs: durationMs,
+        isFallback,
+        fallbackReason,
+        chainFinalStatus: "FAILED",
+      });
+
+      if (!isQuota) {
+        allExhausted = false;
+      }
+      lastError = err;
+
+      // Update correlation pointers for next fallback attempt
+      parentRequestId = requestId;
+      fallbackReason = `Primary provider ${provider} failed: ${err?.message || err?.code || "Unknown Error"}`;
+      isFallback = true;
+    }
+  }
+
+  if (allExhausted) {
+    throw new AIQuotaExhaustedError("رصيد مفتاح الذكاء الاصطناعي مستنفد حالياً. يرجى تجديد الرصيد أو تحديث المفتاح في لوحة التحكم.");
+  }
+
+  throw lastError || new Error("Failed to analyze image with any AI provider");
+}
+
 router.post("/analysis/image", requireAuth, async (req, res) => {
+  const userId = req.userId!;
+  let usageIncremented = false;
+
   try {
     const { imageBase64, mimeType, analysisType } = req.body as {
       imageBase64: string;
       mimeType: string;
       analysisType: "food" | "label";
     };
-    if (!imageBase64 || !mimeType) return void res.status(400).json({ error: "imageBase64 and mimeType required" });
 
-    const userId = req.userId!;
+    if (!imageBase64 || typeof imageBase64 !== "string" || !mimeType) {
+      req.log.warn({ endpoint: "/api/analysis/image", status: 400 }, "Missing imageBase64 or mimeType");
+      return void res.status(400).json({ error: "imageBase64 and mimeType required" });
+    }
 
     const usage = await checkAndIncrementUsage(userId, "image");
     if (!usage.allowed) {
+      req.log.warn({ endpoint: "/api/analysis/image", status: 429, userId: userId.slice(0, 8) + "..." }, "Image limit reached");
       return void res.status(429).json({
         error: "limit_reached",
         code: "IMAGE_LIMIT_REACHED",
         message: "لقد وصلت إلى حد تحليل الصور لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
       });
     }
+    usageIncremented = true;
 
     const isLabel = analysisType === "label";
     const mode = isLabel ? "label" : "image";
@@ -1185,29 +1503,23 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
 
     const promptMode = isLabel ? "label" : "image";
     const promptText = buildImageExtractionPrompt(promptMode);
+    const userInstruction = isLabel ? "استخرج كل المكونات من ملصق المنتج." : "ما الأطعمة والمكونات في هذه الصورة؟";
 
-    const openai = await getOpenAIClient();
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: promptText },
-        {
-          role: "user",
-          content: [
-            { type: "image_url", image_url: { url: `data:${mimeType};base64,${imageBase64}` } },
-            {
-              type: "text",
-              text: isLabel ? "استخرج كل المكونات من ملصق المنتج." : "ما الأطعمة والمكونات في هذه الصورة؟",
-            },
-          ],
-        },
-      ],
-      response_format: { type: "json_object" },
-      max_tokens: 1000,
-      temperature: 0,
-    });
+    const aiRes = await callVisionAIWithFallback(
+      imageBase64,
+      mimeType,
+      promptText,
+      userInstruction,
+      req.log
+    );
 
-    const result = parseExtraction(completion.choices[0].message.content || "{}");
+    let result: ExtractionResult;
+    try {
+      result = parseExtraction(aiRes.content || "{}");
+    } catch (parseErr) {
+      req.log.error({ endpoint: "/api/analysis/image", parseErr }, "Failed to parse AI extraction JSON");
+      result = { isFood: false, dishName: "", rawItems: [] };
+    }
 
     if (!result.isFood) {
       return void res.json(buildNotFoundReport(queryLabel, imageAnalysisType));
@@ -1411,9 +1723,34 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
     }
 
     res.json(report);
-  } catch (err) {
-    req.log.error({ err }, "Failed to analyze image");
-    res.status(500).json({ error: "Image analysis failed" });
+  } catch (err: any) {
+    if (usageIncremented) {
+      await rollbackUsage(userId, "image");
+    }
+
+    if (err instanceof AIQuotaExhaustedError || err?.code === "AI_QUOTA_EXHAUSTED") {
+      req.log.error({
+        endpoint: "/api/analysis/image",
+        status: 503,
+        errorCode: "AI_QUOTA_EXHAUSTED",
+        errorMessage: err.message,
+      }, "Image analysis failed: AI provider quota exhausted");
+
+      return void res.status(503).json({
+        error: err.message || "خدمة تحليل الصور غير متوفرة حالياً بسبب استنفاد رصيد الذكاء الاصطناعي.",
+        code: "AI_QUOTA_EXHAUSTED",
+        message: err.message || "خدمة تحليل الصور غير متوفرة حالياً بسبب استنفاد رصيد الذكاء الاصطناعي.",
+      });
+    }
+
+    req.log.error({
+      endpoint: "/api/analysis/image",
+      status: 500,
+      errorCode: err?.code || "IMAGE_ANALYSIS_FAILED",
+      errorMessage: err?.message || String(err),
+    }, "Failed to analyze image");
+
+    res.status(500).json({ error: "Image analysis failed", code: "IMAGE_ANALYSIS_FAILED" });
   }
 });
 
