@@ -133,12 +133,12 @@ export async function analyzeText(
   return data.report || data;
 }
 
-export async function analyzeDish(dishId: number) {
+export async function analyzeDish(dishId: number, variantName?: string) {
   const base = BASE_URL;
   const res = await fetchWithRetry(`${base}/api/analysis/dish`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
-    body: JSON.stringify({ dishId }),
+    body: JSON.stringify({ dishId, variantName, query: variantName }),
   });
   if (!res.ok) throw await readAnalysisError(res, "حدث خطأ أثناء تحليل الطبق، يرجى المحاولة مرة أخرى.");
   const data = await res.json();

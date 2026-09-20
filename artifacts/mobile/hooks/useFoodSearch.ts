@@ -14,9 +14,18 @@ export interface AutocompleteSuggestion {
   source?: string;
 }
 
-export function useFoodSearch() {
+export interface UseFoodSearchOptions {
+  onDefinitiveResult?: (report: any) => void;
+}
+
+export function useFoodSearch(options?: UseFoodSearchOptions) {
   const { user, refreshUsage } = useAuth();
   const { setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
+
+  const onDefinitiveResultRef = useRef(options?.onDefinitiveResult);
+  useEffect(() => {
+    onDefinitiveResultRef.current = options?.onDefinitiveResult;
+  }, [options?.onDefinitiveResult]);
 
   // The raw text the user typed — never overwritten by selection
   const [query, setQuery] = useState("");
@@ -154,6 +163,17 @@ export function useFoodSearch() {
         setResult(report);
         setCurrentReport(report);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+        const isAmbiguous =
+          !report ||
+          report.notFound === true ||
+          report.resultMode === "MULTIPLE_DISHES" ||
+          report.requiresSelection ||
+          report.needsClarification;
+
+        if (!isAmbiguous && onDefinitiveResultRef.current) {
+          onDefinitiveResultRef.current(report);
+        }
       } catch (err: unknown) {
         if (err instanceof AnalysisError && err.limitReached) {
           setLimitReached(true);
@@ -185,17 +205,28 @@ export function useFoodSearch() {
   const handleSelectDish = useCallback(
     async (dish: any) => {
       const dishId: number | undefined =
-        typeof dish === "number" ? dish : typeof dish === "object" && dish?.id ? Number(dish.id) : undefined;
+        typeof dish === "number"
+          ? dish
+          : typeof dish === "object" && (dish?.id || dish?.canonicalId)
+          ? Number(dish.id || dish.canonicalId)
+          : undefined;
+
+      const variantName: string =
+        typeof dish === "object"
+          ? (dish?.nameAr || dish?.canonicalName || dish?.name || "")
+          : typeof dish === "string"
+          ? dish
+          : "";
 
       if (!dishId || isNaN(dishId)) {
-        const nameAr = typeof dish === "string" ? dish : dish?.nameAr ?? "";
+        const nameAr = variantName || (typeof dish === "string" ? dish : dish?.nameAr ?? "");
         console.warn("[TRACE FALLBACK] No dishId — falling back to analyzeText:", nameAr);
         if (!nameAr) return;
         await _runAnalysis(() => analyzeText(nameAr), `fallback("${nameAr}")`);
         return;
       }
 
-      await _runAnalysis(() => analyzeDish(dishId), `analyzeDish(${dishId})`);
+      await _runAnalysis(() => analyzeDish(dishId, variantName), `analyzeDish(${dishId}, "${variantName}")`);
     },
     [_runAnalysis]
   );

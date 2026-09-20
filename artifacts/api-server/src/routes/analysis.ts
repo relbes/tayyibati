@@ -210,6 +210,9 @@ export interface AnalysisReport {
   proteinCategory?: string;
   proteinSpecificity?: string;
   resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND";
+  analysisSource?: "database" | "ai_fallback";
+  aiProvider?: "openai" | "gemini";
+  aiFallback?: boolean;
   needsClarification?: boolean;
   clarificationType?: string;
   questionAr?: string;
@@ -1078,7 +1081,7 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
 router.post("/analysis/dish", requireAuth, async (req, res) => {
   const tStart = performance.now();
   try {
-    const { dishId, foodId, entityType, id } = req.body as any;
+    const { dishId, foodId, entityType, id, variantName, query } = req.body as any;
     const targetId = Number(dishId || foodId || id);
     if (!targetId || isNaN(targetId)) {
       return void res.status(400).json({ error: "dishId or foodId is required and must be a number" });
@@ -1095,11 +1098,19 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
       });
     }
 
+    const effectiveQuery = typeof variantName === "string" && variantName.trim()
+      ? variantName.trim()
+      : typeof query === "string" && query.trim()
+      ? query.trim()
+      : undefined;
+
     const unifiedResult = await UnifiedAnalysisEngine.analyze({
       dishId: entityType === "food" ? undefined : targetId,
       foodId: entityType === "food" ? targetId : undefined,
       canonicalId: targetId,
       entityType: entityType as any,
+      query: effectiveQuery,
+      displayQuery: effectiveQuery,
       inputType: "text",
       userId,
     });

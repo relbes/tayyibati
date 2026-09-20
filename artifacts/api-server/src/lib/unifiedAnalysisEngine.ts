@@ -814,12 +814,22 @@ export class UnifiedAnalysisEngine {
         legacyAllowed.length, legacyForbidden.length, legacyConditional.length, legacyUnknown.length
       );
 
+      const aiProviderName = (aiKnowledge.debugMetadata?.provider as any) || "openai";
+      const hasUncertainIngs = legacyUnknown.length > 0 || (aiKnowledge.missingIngredients && aiKnowledge.missingIngredients.length > 0);
+      const aiDisclaimer = `لم نجد هذا الطعام في قاعدة بيانات طيباتي، لذلك تم تحليل مكوناته بالذكاء الاصطناعي.${hasUncertainIngs ? " قد تختلف بعض المكونات حسب طريقة التحضير." : ""}`;
+      const detailedExplanation = dishResult.explanation?.detailedReasonAr
+        ? `${aiDisclaimer}\n\n${dishResult.explanation.detailedReasonAr}`
+        : aiDisclaimer;
+
       const aiFallbackReport: AnalysisReport = {
         query: queryText,
         dish: extractBaseEntity(aiKnowledge.canonicalNameAr || queryText) || undefined,
         proteinCategory: dishResult.proteinCategory,
         proteinSpecificity: dishResult.proteinSpecificity,
         resultMode: "COMPOSITE_FOOD",
+        analysisSource: "ai_fallback",
+        aiProvider: aiProviderName,
+        aiFallback: true,
         primaryRuling: {
           status: dishResult.finalCompatibility,
           nameAr: aiKnowledge.canonicalNameAr || queryText,
@@ -835,7 +845,7 @@ export class UnifiedAnalysisEngine {
         compatibilityScore: score,
         ingredientConfidence,
         scoreAvailable,
-        explanation: dishResult.explanation.detailedReasonAr,
+        explanation: detailedExplanation,
         suggestions: [],
         analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
         notFound: false,

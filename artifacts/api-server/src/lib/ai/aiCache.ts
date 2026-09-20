@@ -94,6 +94,11 @@ export async function aiCacheGet(query: string, inputType: SearchModality = "tex
       const rec = records[0];
       const parsedResponse = rec.responseJson as FoodKnowledgeResponse;
 
+      // Guard: Do not return low-confidence or empty results from persistent cache
+      if (!parsedResponse || parsedResponse.confidence < 0.70 || !parsedResponse.ingredients || parsedResponse.ingredients.length === 0) {
+        return null;
+      }
+
       // Populate Memory L1 Cache
       aiCacheSetMemory(key, parsedResponse);
 
@@ -127,6 +132,11 @@ export async function aiCacheGet(query: string, inputType: SearchModality = "tex
 export async function aiCacheSet(query: string, inputType: SearchModality = "text", response: FoodKnowledgeResponse): Promise<void> {
   const key = getAICacheKey(query, inputType);
   const normQuery = norm(query || "").trim();
+
+  // Guard: DO NOT cache uncertain results or failed extractions as authoritative knowledge.
+  if (response.confidence < 0.70 || !response.ingredients || response.ingredients.length === 0) {
+    return;
+  }
 
   // 1. Set Memory L1 Cache
   aiCacheSetMemory(key, response);

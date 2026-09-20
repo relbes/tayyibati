@@ -2457,9 +2457,22 @@ export class CanonicalSearchEngine {
 
     // Every specific query concept token MUST be present in candidate footprint
     for (const qToken of queryTokens) {
-      const matchedInFootprint = footprintTokens.some((fToken) =>
+      let matchedInFootprint = footprintTokens.some((fToken) =>
         fToken.includes(qToken) || qToken.includes(fToken)
       );
+
+      // Protein Subtype Equivalence:
+      // If query specifies a specific meat/poultry subtype (e.g. "غنم", "بقر", "دجاج"),
+      // check if the candidate dish footprint contains the parent protein ("لحم" or "دجاج").
+      if (!matchedInFootprint) {
+        const MEAT_SUBTYPES = new Set(["غنم", "خروف", "ضان", "ضأن", "بقر", "بقري", "عجل", "جاموس", "جمل", "حاشي", "ماعز"]);
+        const POULTRY_SUBTYPES = new Set(["دجاج", "دجاجه", "فراخ", "جاج", "بط", "رومي", "حبش", "نعام", "حمام", "سمان"]);
+        if (MEAT_SUBTYPES.has(qToken)) {
+          matchedInFootprint = footprintTokens.some((fToken) => fToken.includes("لحم") || fToken.includes("لحمه"));
+        } else if (POULTRY_SUBTYPES.has(qToken)) {
+          matchedInFootprint = footprintTokens.some((fToken) => fToken.includes("دجاج") || fToken.includes("طيور") || fToken.includes("دواجن"));
+        }
+      }
 
       if (!matchedInFootprint) {
         return false; // Rejected: Key query concept is missing from candidate dish!
@@ -2598,6 +2611,17 @@ export class CanonicalSearchEngine {
         cContentTokens.some((ct) => ct === t || (t.length >= 4 && ct.length >= 4 && (ct.startsWith(t) || t.startsWith(ct))))
       );
       if (sharedContent.length > 0) {
+        // Guard against spurious single-token overlap on multi-word compound/dish queries:
+        // E.g. Query "شاورما لحم غنم" or "شاورما لحم" has head "شاورما".
+        // A raw food candidate like "لحم الرأس" or "سوقار اللحم" that only matches the secondary token "لحم"
+        // while completely lacking the primary head token MUST NOT win via loose token_similarity!
+        if (qContentTokens.length >= 2 && sharedContent.length === 1) {
+          const qHead = qContentTokens[0];
+          const hasHeadMatch = cContentTokens.some((ct) => ct === qHead || ct.startsWith(qHead) || qHead.startsWith(ct));
+          if (!hasHeadMatch) {
+            return { matches: false, score: 0, method: "fuzzy" };
+          }
+        }
         // Also check if any additional tokens match
         const score = sharedContent.length > 1 ? 75 : 70;
         return { matches: true, score, method: "token_similarity" };
