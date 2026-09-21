@@ -918,7 +918,12 @@ export class UnifiedAnalysisEngine {
 
       // Stage 5 - 9: Execute Dish Compatibility Engine Pipeline
       const dishEngineStart = performance.now();
-      dishResult = await analyzeDishCompatibility(queryText || "وجبة مكس", extractedIngredients, queryText);
+      const targetDishIdentifier = input.dishId
+        ? Number(input.dishId)
+        : (canonicalSearchRes && (canonicalSearchRes.canonicalEntityType === "dish" || (canonicalSearchRes as any).entity_type === "dish") && (canonicalSearchRes.canonicalId || (canonicalSearchRes as any).canonical_id))
+        ? Number(canonicalSearchRes.canonicalId || (canonicalSearchRes as any).canonical_id)
+        : (queryText || "وجبة مكس");
+      dishResult = await analyzeDishCompatibility(targetDishIdentifier, extractedIngredients, queryText);
       const dishEngineDuration = performance.now() - dishEngineStart;
 
       recordStage("ingredient_resolution", dishEngineDuration * 0.25, { resolvedCount: dishResult.recognitionStats.totalResolved });
@@ -1214,7 +1219,11 @@ async function checkAndApplyClarification(
       report.resultMode === "GENERAL_RULE_EXCEPTIONS" ||
       report.resultMode === "MIXED_CATEGORY");
 
-  if (resolution.needsClarification && !isValidFamilyReport) {
+  const isValidDishReport =
+    dishResult?.dish?.id != null &&
+    (report.resultMode === "COMPOSITE_FOOD" || report.primaryRuling?.status != null);
+
+  if (resolution.needsClarification && !isValidFamilyReport && !isValidDishReport) {
     return {
       ...report,
       resultMode: "NOT_FOUND",

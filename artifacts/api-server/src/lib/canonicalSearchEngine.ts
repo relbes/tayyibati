@@ -163,12 +163,12 @@ export function computeRankingScore(
   const aNorm = matchedAlias ? normalize(matchedAlias) : "";
   const aStripped = matchedAlias ? stripArticle(aNorm) : "";
 
-  // 1. Exact Match (Score 1200)
-  if (cNorm === qNorm || cStripped === qStripped || aNorm === qNorm || aStripped === qStripped) {
-    return 1200;
+  // 1. Exact Match on Canonical Name (Score 1250)
+  if (cNorm === qNorm || cStripped === qStripped) {
+    return 1250;
   }
 
-  // 1b. Exact Constituent Match (Score 1200-1250 for compound foods/synonyms separated by /, —, (), or 'و')
+  // 1b. Exact Constituent Match (Score 1240 for compound foods/synonyms separated by /, —, (), or 'و')
   const candParts = candName.split(/\/|\s+و\s+|[/—,()]+/);
   if (candParts.length > 1) {
     for (const cp of candParts) {
@@ -177,11 +177,26 @@ export function computeRankingScore(
         const cpNorm = normalize(cpTrim);
         const cpStripped = stripArticle(cpNorm);
         if (cpNorm === qNorm || cpStripped === qStripped || cpNorm === qStripped || cpStripped === qNorm) {
-          const isAtStart = cNorm.startsWith(cpNorm) || cStripped.startsWith(cpStripped);
-          return isAtStart ? 1250 : 1200;
+          return 1240;
         }
       }
     }
+  }
+
+  // 1b-2. Head Noun + Parenthetical Qualifier Match (e.g. "شاي أحمر (أسود)" -> "شاي أسود")
+  const parenMatch = candName.match(/^([^\s(]+)\s+[^()]+\(([^()]+)\)/);
+  if (parenMatch) {
+    const combined = `${parenMatch[1].trim()} ${parenMatch[2].trim()}`;
+    const combNorm = normalize(combined);
+    const combStripped = stripArticle(combNorm);
+    if (combNorm === qNorm || combStripped === qStripped) {
+      return 1240;
+    }
+  }
+
+  // 1c. Exact Match on Alias / Synonym (Score 1200)
+  if (aNorm === qNorm || aStripped === qStripped) {
+    return 1200;
   }
 
   // 1c. Generic Repeated-Character Typo Match (Score 1150-1175)
@@ -565,6 +580,24 @@ export class CanonicalSearchEngine {
 
       // Split compound food names & true constituent synonyms (e.g. "كمثرى / انجاص / اجاص", "بطاطس / بطاطا", "لبن / حليب", "سمك / أسماك", "الجوز (عين الجمل)", "دجاج و فراخ")
       addEntityHead(f.nameAr);
+
+      // Handle head noun + parenthetical qualifier (e.g. "شاي أحمر (أسود)" -> "شاي أسود")
+      const parenMatch = f.nameAr.match(/^([^\s(]+)\s+[^()]+\(([^()]+)\)/);
+      if (parenMatch) {
+        const headNoun = parenMatch[1].trim();
+        const parenAlt = parenMatch[2].trim();
+        if (headNoun && parenAlt) {
+          const combined = `${headNoun} ${parenAlt}`;
+          const normComb = normalize(combined);
+          const stripComb = stripArticle(normComb);
+          addExactFood(normComb, f);
+          addExactFood(stripComb, f);
+          addExactFood("ال" + stripComb, f);
+          addBaseFood(stripComb, f);
+          addPrefix(foodPrefixIndex, stripComb, f);
+        }
+      }
+
       const rawParts = f.nameAr.split(/\/|\s+و\s+|[/—,()]+/);
       for (const part of rawParts) {
         addEntityHead(part);
@@ -849,8 +882,34 @@ export class CanonicalSearchEngine {
     // -------------------------------------------------------------------------
     // 1. FOOD CHANNEL RESOLUTION
     // -------------------------------------------------------------------------
-    // A. Food Alias & Exact Matches across all expanded variants
+    // A. Food Exact & Alias Matches across all expanded variants
     for (const variant of expandedVariants) {
+      const foodExactHits = indexes.exactFoodIndex.get(variant);
+      if (foodExactHits) {
+        const hits = Array.isArray(foodExactHits) ? foodExactHits : [foodExactHits];
+        for (const foodExact of hits) {
+          if (!seenFoodIds.has(foodExact.id)) {
+            seenFoodIds.add(foodExact.id);
+            foods.push({
+              canonicalId: foodExact.id,
+              canonicalEntityType: "food",
+              canonicalName: foodExact.nameAr,
+              searchConfidence: 100,
+              matchType: "EXACT",
+              matchedAlias: variant !== foodExact.nameAr ? variant : null,
+              matchedReason: "Matched via Food Canonical Name",
+              entity_type: "food",
+              canonical_id: foodExact.id,
+              canonical_name: foodExact.nameAr,
+              confidence: 100,
+              matched_alias: variant !== foodExact.nameAr ? variant : null,
+              search_method: "exact_canonical",
+              searchOutcome: "FOUND",
+            });
+          }
+        }
+      }
+
       const foodAlias = indexes.foodAliasIndex.get(variant);
       if (foodAlias && !seenFoodIds.has(foodAlias.id)) {
         // CANONICAL ENTITY PRECEDENCE CHECK:
@@ -885,32 +944,6 @@ export class CanonicalSearchEngine {
           search_method: "exact_alias",
           searchOutcome: "FOUND",
         });
-      }
-
-      const foodExactHits = indexes.exactFoodIndex.get(variant);
-      if (foodExactHits) {
-        const hits = Array.isArray(foodExactHits) ? foodExactHits : [foodExactHits];
-        for (const foodExact of hits) {
-          if (!seenFoodIds.has(foodExact.id)) {
-            seenFoodIds.add(foodExact.id);
-            foods.push({
-              canonicalId: foodExact.id,
-              canonicalEntityType: "food",
-              canonicalName: foodExact.nameAr,
-              searchConfidence: 95,
-              matchType: "EXACT",
-              matchedAlias: variant !== foodExact.nameAr ? variant : null,
-              matchedReason: "Matched via Food Canonical Name",
-              entity_type: "food",
-              canonical_id: foodExact.id,
-              canonical_name: foodExact.nameAr,
-              confidence: 95,
-              matched_alias: variant !== foodExact.nameAr ? variant : null,
-              search_method: "exact_canonical",
-              searchOutcome: "FOUND",
-            });
-          }
-        }
       }
     }
 
@@ -1215,18 +1248,31 @@ export class CanonicalSearchEngine {
       (hasBaseFoodVariants && (foods.length > 1 || dishes.length > 0))
     );
 
+    const hasExactConstituentFood = foods.some((f) => {
+      const s = computeRankingScore(f.canonicalName || "", rawQuery, "food", f.matchedAlias);
+      return s >= 1200;
+    });
+
     // A generic food query requires explicit choices if:
     // 1. queryIntent is FOOD or UNKNOWN with base food variants
     // 2. Query is NOT English
-    // 3. Query is NOT a specific multi-word variant match (e.g. "شاي أخضر", "طماطم شيري", "بطاطا حلوة")
-    // 4. The food family contains 2 or more distinct variants in the database
+    // 3. Query is a generic single-word stem (e.g. "شاي", "قهوة", "بطاطا", "عيش")
+    // 4. Query is NOT an exact constituent food match (e.g. "شاي أحمر", "القهوة التركية", "المكرونة")
+    // 5. Query is NOT a specific multi-word variant match (e.g. "شاي أخضر", "طماطم شيري", "بطاطا حلوة")
+    // 6. The food family contains 2 or more distinct variants in the database
     const isAmbiguousGenericFood =
       !isEnglish &&
+      !hasExactConstituentFood &&
       (queryIntent === "FOOD" || (queryIntent === "UNKNOWN" && hasBaseFoodVariants)) &&
       !isMultiWordSpecificMatch &&
+      queryWords.length === 1 &&
       hasMultipleVariants;
 
+    // -------------------------------------------------------------------------
+    // 5. PRINCIPLED RESOLUTION DECISION ENGINE
+    // -------------------------------------------------------------------------
     let primaryResult: CanonicalSearchResult | null = null;
+
     if (isAmbiguousGenericFood) {
       const qAr = formatAmbiguityQuestion(rawQuery);
       const candidates: CanonicalSearchResult[] = [];
@@ -1285,26 +1331,195 @@ export class CanonicalSearchEngine {
         }
       }
 
-      displayFoods = candidates;
-      primaryResult = {
-        canonicalId: 0,
-        canonical_id: 0,
-        canonicalName: rawQuery,
-        canonical_name: rawQuery,
-        canonicalEntityType: "food",
-        entity_type: "food",
-        searchConfidence: 85,
-        confidence: 85,
-        matchType: "AMBIGUOUS",
-        searchOutcome: "AMBIGUOUS",
-        isAmbiguous: true,
-        candidateDishes: candidates,
-        candidateFoods: candidates,
-        questionAr: qAr,
-        matchedReason: `Matched ${candidates.length} candidate variants for generic query '${rawQuery}'`,
-      };
-    } else {
-      primaryResult = displayDishes[0] || displayFoods[0] || foods[0] || dishes[0] || null;
+      if (candidates.length >= 2) {
+        displayFoods = candidates;
+        primaryResult = {
+          canonicalId: 0,
+          canonical_id: 0,
+          canonicalName: rawQuery,
+          canonical_name: rawQuery,
+          canonicalEntityType: "food",
+          entity_type: "food",
+          searchConfidence: 85,
+          confidence: 85,
+          matchType: "AMBIGUOUS",
+          searchOutcome: "AMBIGUOUS",
+          isAmbiguous: true,
+          candidateDishes: candidates,
+          candidateFoods: candidates,
+          questionAr: qAr,
+          matchedReason: `Matched ${candidates.length} candidate variants for generic query '${rawQuery}'`,
+        };
+      }
+    }
+
+    if (!primaryResult) {
+      const allCandidates = [...foods, ...dishes];
+
+      // Step A: Exact Matches (Score >= 1200)
+      const exactCandidates = allCandidates.filter((c) => {
+        const s = computeRankingScore(c.canonicalName || "", rawQuery, c.canonicalEntityType || "food", c.matchedAlias);
+        return s >= 1200;
+      });
+
+      if (exactCandidates.length === 1) {
+        // EXACT UNIQUE MATCH: Single exact match resolves directly with zero ambiguity
+        const ec = exactCandidates[0];
+        primaryResult = {
+          ...ec,
+          searchOutcome: "FOUND",
+          matchType: "EXACT",
+        };
+        queryIntent = ec.canonicalEntityType === "dish" ? "DISH" : "FOOD";
+      } else if (exactCandidates.length > 1) {
+        // Multiple exact candidates: Check if they are distinct entities across Food vs Dish
+        const hasBothFoodAndDish = exactCandidates.some((c) => (c.canonicalEntityType || c.entity_type) === "food") && exactCandidates.some((c) => (c.canonicalEntityType || c.entity_type) === "dish");
+        const allFoods = exactCandidates.every((c) => (c.canonicalEntityType || c.entity_type) === "food");
+
+        if (allFoods) {
+          // If all exact candidates are foods (synonym rows in DB like بطاطس/بطاطا vs البطاطس بجميع أشكالها),
+          // pick the primary ranked canonical food directly.
+          const topFood = foods[0] || exactCandidates[0];
+          primaryResult = {
+            ...topFood,
+            searchOutcome: "FOUND",
+            matchType: "EXACT",
+          };
+          queryIntent = "FOOD";
+        } else if (!hasBothFoodAndDish) {
+          // All exact candidates are dishes.
+          // Check if there is an exact canonical title match (e.g. "العكوب باللبن" over "عكوب باللبن (الجميد)")
+          const exactTitleMatches = exactCandidates.filter(
+            (c) => stripArticle(normalize(c.canonicalName || "")) === qStripped || c.matchType === "EXACT"
+          );
+          const distinctDishNames = new Set(exactCandidates.map((c) => stripArticle(normalize(c.canonicalName || ""))));
+
+          if (exactTitleMatches.length === 1 || distinctDishNames.size === 1) {
+            const topDish = exactTitleMatches[0] || dishes[0] || exactCandidates[0];
+            primaryResult = {
+              ...topDish,
+              searchOutcome: "FOUND",
+              matchType: "EXACT",
+            };
+            queryIntent = "DISH";
+          } else {
+            const qAr = formatAmbiguityQuestion(rawQuery);
+            primaryResult = {
+              canonicalId: 0,
+              canonical_id: 0,
+              canonicalName: rawQuery,
+              canonical_name: rawQuery,
+              canonicalEntityType: "dish",
+              entity_type: "dish",
+              searchConfidence: 95,
+              confidence: 95,
+              matchType: "AMBIGUOUS",
+              searchOutcome: "AMBIGUOUS",
+              isAmbiguous: true,
+              candidateDishes: exactCandidates,
+              candidateFoods: exactCandidates,
+              questionAr: qAr,
+              matchedReason: `Matched ${exactCandidates.length} distinct exact dish candidates for '${rawQuery}'`,
+            };
+            queryIntent = "DISH";
+          }
+        } else {
+          // Both Food and Dish exact matches exist -> Ambiguous (e.g. "عيش")
+          const qAr = formatAmbiguityQuestion(rawQuery);
+          primaryResult = {
+            canonicalId: 0,
+            canonical_id: 0,
+            canonicalName: rawQuery,
+            canonical_name: rawQuery,
+            canonicalEntityType: "food",
+            entity_type: "food",
+            searchConfidence: 95,
+            confidence: 95,
+            matchType: "AMBIGUOUS",
+            searchOutcome: "AMBIGUOUS",
+            isAmbiguous: true,
+            candidateDishes: exactCandidates,
+            candidateFoods: exactCandidates,
+            questionAr: qAr,
+            matchedReason: `Matched ${exactCandidates.length} exact candidates for '${rawQuery}'`,
+          };
+        }
+      } else {
+        // Step B: No Exact Match. Evaluate Specific Disambiguation vs Genuine Semantic Ambiguity
+        const strongDishes = dishes.filter((d) => {
+          const s = computeRankingScore(d.canonicalName || "", rawQuery, "dish", d.matchedAlias);
+          return s >= 900;
+        });
+
+        const qTokens = stripArticle(queryNorm).split(/\s+/);
+        const hasSpecificDescriptor = qTokens.some(
+          (qt) => hasRecognizedDescriptor(qt) || PROTEIN_DESCRIPTORS.has(qt) || PREPARATION_DESCRIPTORS.has(qt)
+        );
+
+        const distinctDishes: CanonicalSearchResult[] = [];
+        const seenDishIds = new Set<number | string>();
+        for (const d of dishes) {
+          const cid = d.canonicalId ?? d.canonical_id ?? 0;
+          if (!seenDishIds.has(cid)) {
+            seenDishIds.add(cid);
+            distinctDishes.push(d);
+          }
+        }
+
+        const topDish = dishes[0];
+        const topScore = topDish ? computeRankingScore(topDish.canonicalName || "", rawQuery, "dish", topDish.matchedAlias) : 0;
+        const secondDish = dishes[1];
+        const secondScore = secondDish ? computeRankingScore(secondDish.canonicalName || "", rawQuery, "dish", secondDish.matchedAlias) : 0;
+        const scoreGap = topScore - secondScore;
+
+        // Genuine Dish Ambiguity:
+        // 1. Query has DISH intent
+        // 2. Query lacks distinguishing descriptors (e.g. "مكمورة" or "المكمورة الأردنية")
+        // 3. At least 2 distinct strong dishes with small score gap (< 100)
+        // 4. OR generic single-word stem query (like "مكمورة") with multiple candidate dishes where top dish is not exact full match (score < 1200)
+        const isGenericStem = queryWords.length === 1 && topScore < 1200;
+        const hasCompetingStrongDishes = distinctDishes.length >= 2 && strongDishes.length >= 2 && scoreGap < 100;
+        const isDishAmbiguous =
+          queryIntent === "DISH" &&
+          !hasSpecificDescriptor &&
+          distinctDishes.length >= 2 &&
+          (hasCompetingStrongDishes || (isGenericStem && topScore >= 800));
+
+        if (isDishAmbiguous) {
+          const qAr = formatAmbiguityQuestion(rawQuery);
+          const allDishCandidates = rankCandidates(dishes, rawQuery, SearchRankingProfile.AUTOCOMPLETE);
+          displayDishes = allDishCandidates;
+
+          primaryResult = {
+            canonicalId: 0,
+            canonical_id: 0,
+            canonicalName: rawQuery,
+            canonical_name: rawQuery,
+            canonicalEntityType: "dish",
+            entity_type: "dish",
+            searchConfidence: 85,
+            confidence: 85,
+            matchType: "AMBIGUOUS",
+            searchOutcome: "AMBIGUOUS",
+            isAmbiguous: true,
+            candidateDishes: allDishCandidates,
+            candidateFoods: allDishCandidates,
+            questionAr: qAr,
+            matchedReason: `Matched ${allDishCandidates.length} candidate dishes for '${rawQuery}'`,
+          };
+        } else {
+          // Strong Single Match or Highest-Scoring Semantically Valid Entity
+          const topCandidate = displayDishes[0] || displayFoods[0] || foods[0] || dishes[0] || null;
+          if (topCandidate) {
+            primaryResult = {
+              ...topCandidate,
+              searchOutcome: (topCandidate.searchConfidence ?? 0) >= 60 ? "FOUND" : "NOT_FOUND",
+            };
+          } else {
+            primaryResult = null;
+          }
+        }
+      }
     }
 
     return {
@@ -1716,6 +1931,30 @@ export class CanonicalSearchEngine {
         matchType: "NOT_FOUND",
       };
       return this.formatResult(unmappedProductResult, tStart, isDebug, rawQuery, queryNorm, expandedVariants, searchedIndexes, foodAliasCount, foodAliasDetails, foodCount, foodDetails, dishAliasCount, dishAliasDetails, dishCount, dishDetails, productCount, productDetails);
+    }
+
+    // Delegate to Structured searchEntities for unified candidate classification and resolution decision
+    const structured = await this.searchEntities(context, options);
+    if (structured && structured.primaryResult) {
+      return this.formatResult(
+        structured.primaryResult,
+        tStart,
+        isDebug,
+        rawQuery,
+        queryNorm,
+        expandedVariants,
+        searchedIndexes,
+        foodAliasCount,
+        foodAliasDetails,
+        foodCount,
+        foodDetails,
+        dishAliasCount,
+        dishAliasDetails,
+        dishCount,
+        dishDetails,
+        productCount,
+        productDetails
+      );
     }
 
     // TIER 2: Food Alias Match (Evaluates all expanded variants)
@@ -2409,15 +2648,26 @@ export class CanonicalSearchEngine {
       "شاورما", "كفتة", "كباب", "سجق", "تيركي", "تونة", "جمبري", "روبيان", "لحمة", "دجاجة", "فراخ", "قوزي"
     ]);
 
+    const MAJOR_COMPOUND_ENTITIES = new Set([
+      "شاورما", "كفتة", "كباب", "سجق", "برجر", "تيركي", "قوزي", "بسطرمة", "سوسيس", "سجقات"
+    ]);
+
+    const isCoordinatedToken = (t: string): boolean => {
+      if (t.startsWith("وال") && t.length > 4) return true;
+      if (t.startsWith("و") && t.length >= 4 && !["ورق", "وجبة", "وز"].some((w) => t.startsWith(w))) return true;
+      return false;
+    };
+
     const cleanDishToken = (t: string): string => {
       let s = t;
       if (s.startsWith("وال") && s.length > 4) s = s.slice(1);
       else if (s.startsWith("بال") && s.length > 4) s = s.slice(1);
-      else if (s.startsWith("و") && s.length >= 4 && !["ورق", "وجبة", "وز"].some(w => s.startsWith(w))) s = s.slice(1);
+      else if (s.startsWith("و") && s.length >= 4 && !["ورق", "وجبة", "وز"].some((w) => s.startsWith(w))) s = s.slice(1);
       return stripArticle(s);
     };
 
-    const candidateNameTokens = stripDish.split(/\s+/).map(cleanDishToken).filter((t) => t.length > 1);
+    const rawCandidateTokens = stripDish.split(/\s+/).filter((t) => t.length > 1);
+    const candidateNameTokens = rawCandidateTokens.map(cleanDishToken).filter((t) => t.length > 1);
     const queryTokenSet = new Set(queryTokens);
     stripVariant.split(/\s+/).forEach((t) => {
       queryTokenSet.add(cleanDishToken(t));
@@ -2425,9 +2675,30 @@ export class CanonicalSearchEngine {
       queryTokenSet.add(normalize(t));
     });
 
+    // 1. Coordinated Additions Guard: Candidate must not introduce a coordinated ("و...") component unmentioned in query
+    for (const rawToken of rawCandidateTokens) {
+      if (isCoordinatedToken(rawToken)) {
+        const cleaned = cleanDishToken(rawToken);
+        if (!queryTokenSet.has(cleaned) && !queryTokenSet.has(rawToken)) {
+          return false; // Rejected: Candidate introduces unqueried coordinated component (e.g. "والشاورما")
+        }
+      }
+    }
+
+    // 2. Distinct Major Compound Entity Guard: Candidate must not introduce an unqueried distinct major dish entity
     for (const cToken of candidateNameTokens) {
-      if (ALL_PROTEINS.has(cToken) && !queryTokenSet.has(cToken)) {
-        return false; // Rejected: Candidate introduces unqueried protein/major component!
+      if (MAJOR_COMPOUND_ENTITIES.has(cToken) && !queryTokenSet.has(cToken)) {
+        return false; // Rejected: Candidate introduces unqueried distinct major entity (e.g. "شاورما")
+      }
+    }
+
+    // 3. Protein Specificity Guard: If query specifies a protein, enforce protein compatibility
+    const queryHasProtein = Array.from(queryTokenSet).some((t) => ALL_PROTEINS.has(t));
+    if (queryHasProtein) {
+      for (const cToken of candidateNameTokens) {
+        if (ALL_PROTEINS.has(cToken) && !queryTokenSet.has(cToken)) {
+          return false; // Rejected: Query specified a protein, but candidate has a mismatched protein!
+        }
       }
     }
 

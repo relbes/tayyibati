@@ -5,7 +5,7 @@ import type { AnalysisReport, IngredientResult, ReportIngredientDecision, Report
 
 import { extractBaseEntityWithModifiers } from "../../../api-server/src/lib/arabicNormalization";
 
-export type ResultPresentationMode = "GENERIC_FOOD_FAMILY" | "SPECIFIC_FOOD" | "DISH" | "NOT_FOUND";
+export type ResultPresentationMode = "GENERIC_FOOD_FAMILY" | "SPECIFIC_FOOD" | "DISH" | "NOT_FOUND" | "AMBIGUOUS";
 
 export interface FoodFamilyMemberVM {
   nameAr: string;
@@ -194,6 +194,11 @@ export function createAnalysisResultViewModel(
 
   if ((report.notFound || report.resultMode === "NOT_FOUND") && !report.needsClarification && !(report.suggestions && report.suggestions.length > 0)) {
     presentationMode = "NOT_FOUND";
+  } else if (
+    report.resultMode === "MULTIPLE_DISHES" &&
+    (report.canonicalResult as any)?.searchOutcome === "AMBIGUOUS"
+  ) {
+    presentationMode = "AMBIGUOUS";
   } else if (
     report.resultMode === "COMPOSITE_FOOD" ||
     report.resultMode === "MULTIPLE_DISHES" ||

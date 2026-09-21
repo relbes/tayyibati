@@ -35,11 +35,16 @@ export default function ResultScreen() {
     scrollRef.current?.scrollTo({ y: 0, animated: false });
   }, [currentReport]);
 
-  const handleSelectSuggestion = async (food: string) => {
+  const handleSelectSuggestion = async (food: string, candidateId?: number, entityType?: string) => {
     if (isAnalyzing) return;
     setIsAnalyzing(true);
     try {
-      const report = await analyzeText(food);
+      // If we have a canonical ID, resolve directly by ID to avoid a second raw-text search
+      const query =
+        candidateId != null
+          ? { query: food, canonicalId: candidateId, entityType: entityType || "dish" }
+          : food;
+      const report = await analyzeText(query as any);
       setCurrentReport(report);
     } catch (err) {
       if (err instanceof NetworkError || (err as any)?.isNetworkError) {

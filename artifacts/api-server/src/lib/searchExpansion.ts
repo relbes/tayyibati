@@ -43,6 +43,11 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
   بتزا: ["بيتزا", "البيتزا"],
   // Colloquial/childspeak alternate for طماطم (tomato) widely used across Arabic dialects
   طمطم: ["طماطم", "الطماطم"],
+  // Black tea canonical synonyms (Food 1471 is "شاي أحمر (أسود)")
+  "شاي اسود": ["شاي أحمر", "شاي أحمر (أسود)"],
+  "شاي أسود": ["شاي أحمر", "شاي أحمر (أسود)"],
+  "الشاي الاسود": ["شاي أحمر", "شاي أحمر (أسود)"],
+  "الشاي الأسود": ["شاي أحمر", "شاي أحمر (أسود)"],
 };
 
 /**

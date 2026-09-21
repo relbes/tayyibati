@@ -186,39 +186,45 @@ export class IntentClassificationEngine {
       }
     }
 
-    // STEP 1: Delegate Text Classification to Redesigned CanonicalSearchEngine (Phase 7.6)
-    const searchMatch = await CanonicalSearchEngine.search(rawQuery);
+    // STEP 1: Delegate Text Classification to Structured CanonicalSearchEngine (Dual-Channel Entity Search)
+    const structuredSearch = await CanonicalSearchEngine.searchEntities(rawQuery);
+    const searchMatch = structuredSearch.primaryResult || await CanonicalSearchEngine.search(rawQuery);
     if (searchMatch && searchMatch.search_method !== "ai_fallback") {
-      if (searchMatch.entity_type === "dish") {
+      const matchType = (searchMatch as any).canonicalEntityType || searchMatch.entity_type;
+      const matchName = (searchMatch as any).canonicalName || searchMatch.canonical_name;
+      const matchConf = searchMatch.confidence ?? searchMatch.searchConfidence ?? 90;
+      const matchMethod = (searchMatch as any).searchMethod || searchMatch.search_method || "canonical_search";
+
+      if (matchType === "dish") {
         return {
           entityType: "DISH",
           intent: "CHECK_COMPATIBILITY",
           analysisMode: "INGREDIENT_BASED",
-          confidence: searchMatch.confidence ?? searchMatch.searchConfidence ?? 90,
+          confidence: matchConf,
           pipeline: "DISH_ENGINE",
-          classificationReason: `Matched canonical dish identity (${searchMatch.canonical_name}) via ${searchMatch.search_method}`,
+          classificationReason: `Matched canonical dish identity (${matchName}) via ${matchMethod}`,
         };
       }
 
-      if (searchMatch.entity_type === "product") {
+      if (matchType === "product") {
         return {
           entityType: "COMMERCIAL_PRODUCT",
           intent: "CHECK_COMPATIBILITY",
           analysisMode: "PRODUCT_BASED",
-          confidence: searchMatch.confidence ?? searchMatch.searchConfidence ?? 90,
+          confidence: matchConf,
           pipeline: "PRODUCT_ENGINE",
-          classificationReason: `Matched canonical commercial product identity (${searchMatch.canonical_name}) via ${searchMatch.search_method}`,
+          classificationReason: `Matched canonical commercial product identity (${matchName}) via ${matchMethod}`,
         };
       }
 
-      if (searchMatch.entity_type === "food") {
+      if (matchType === "food") {
         return {
           entityType: "SINGLE_FOOD",
           intent: "CHECK_COMPATIBILITY",
           analysisMode: "DIRECT_FOOD",
-          confidence: searchMatch.confidence ?? searchMatch.searchConfidence ?? 90,
+          confidence: matchConf,
           pipeline: "FOOD_ENGINE",
-          classificationReason: `Matched canonical food identity (${searchMatch.canonical_name}) via ${searchMatch.search_method}`,
+          classificationReason: `Matched canonical food identity (${matchName}) via ${matchMethod}`,
         };
       }
     }

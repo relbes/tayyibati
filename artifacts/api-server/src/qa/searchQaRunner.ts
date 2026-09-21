@@ -152,7 +152,14 @@ async function evaluateTestCase(tc: TestCase): Promise<TestEvaluation> {
   const searchMethod = primaryResult?.searchMethod || primaryResult?.search_method || "UNKNOWN";
   const confidence = primaryResult?.searchConfidence || primaryResult?.confidence || 0;
 
-  const candidateItems = (primaryResult as any)?.candidateDishes || structuredRes.displayFoods || structuredRes.foods || [];
+  const candidateItems =
+    (primaryResult as any)?.candidateDishes ||
+    (primaryResult as any)?.candidateFoods ||
+    (structuredRes.displayDishes && structuredRes.displayDishes.length > 0 ? structuredRes.displayDishes : null) ||
+    (structuredRes.displayFoods && structuredRes.displayFoods.length > 0 ? structuredRes.displayFoods : null) ||
+    (structuredRes.dishes && structuredRes.dishes.length > 0 ? structuredRes.dishes : null) ||
+    structuredRes.foods ||
+    [];
   const choices = candidateItems.map((c: any) => c.canonicalName || c.canonical_name || c.nameAr).filter(Boolean);
   const choicesCount = choices.length;
 

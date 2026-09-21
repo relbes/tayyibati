@@ -669,19 +669,41 @@ export async function analyzeDishCompatibility(
   if (typeof dishIdentifier === "number") {
     targetDish = cache.dishesById.get(dishIdentifier) || null;
   } else {
-    const searchResult = await CanonicalSearchEngine.search(dishIdentifier, { debug: false });
-    if (searchResult && searchResult.entity_type === "dish" && typeof searchResult.canonical_id === "number") {
-      targetDish = cache.dishesById.get(searchResult.canonical_id) || null;
+    // 1. First check exact/normalized in cache
+    const nQ = norm(dishIdentifier);
+    const bQ = stripAlefLam(dishIdentifier);
+    if (cache.dishesByNormAr.has(nQ) || cache.dishesByNormAr.has(bQ)) {
+      const dishList = cache.dishesByNormAr.get(nQ) || cache.dishesByNormAr.get(bQ);
+      targetDish = Array.isArray(dishList) ? dishList[0] : dishList;
+    } else if (cache.dishAliasesByNormAr.has(nQ) || cache.dishAliasesByNormAr.has(bQ)) {
+      const aliasObj = cache.dishAliasesByNormAr.get(nQ) || cache.dishAliasesByNormAr.get(bQ);
+      targetDish = aliasObj ? ((aliasObj as any).canonicalDish || (aliasObj as any)[0]?.canonicalDish || null) : null;
     }
 
+    // 2. Structured entity search with priority on strongest canonical dish match
     if (!targetDish) {
-      const nQ = norm(dishIdentifier);
-      const bQ = stripAlefLam(dishIdentifier);
-      if (cache.dishesByNormAr.has(nQ) || cache.dishesByNormAr.has(bQ)) {
-        targetDish = cache.dishesByNormAr.get(nQ) || cache.dishesByNormAr.get(bQ);
-      } else if (cache.dishAliasesByNormAr.has(nQ) || cache.dishAliasesByNormAr.has(bQ)) {
-        const aliasObj = cache.dishAliasesByNormAr.get(nQ) || cache.dishAliasesByNormAr.get(bQ);
-        targetDish = aliasObj ? ((aliasObj as any).canonicalDish || (aliasObj as any)[0]?.canonicalDish || null) : null;
+      const structuredSearch = await CanonicalSearchEngine.searchEntities(dishIdentifier);
+      const primary = structuredSearch.primaryResult;
+      if (
+        primary &&
+        (primary.canonicalEntityType === "dish" || primary.entity_type === "dish") &&
+        typeof (primary.canonicalId ?? primary.canonical_id) === "number" &&
+        (primary.searchConfidence ?? primary.confidence ?? 0) >= 70
+      ) {
+        targetDish = cache.dishesById.get(Number(primary.canonicalId ?? primary.canonical_id)) || null;
+      } else if (structuredSearch.displayDishes && structuredSearch.displayDishes.length > 0) {
+        const topDish = structuredSearch.displayDishes[0];
+        if ((topDish.searchConfidence ?? topDish.confidence ?? 0) >= 70) {
+          targetDish = cache.dishesById.get(Number(topDish.canonicalId)) || null;
+        }
+      }
+    }
+
+    // 3. Fallback to legacy search only if structured search found nothing
+    if (!targetDish) {
+      const searchResult = await CanonicalSearchEngine.search(dishIdentifier, { debug: false });
+      if (searchResult && searchResult.entity_type === "dish" && typeof searchResult.canonical_id === "number") {
+        targetDish = cache.dishesById.get(searchResult.canonical_id) || null;
       }
     }
   }

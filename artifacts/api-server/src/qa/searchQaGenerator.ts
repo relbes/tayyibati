@@ -83,6 +83,7 @@ export async function generateSearchQaSuite(): Promise<TestCase[]> {
       query: "شاورما",
       expectedBehavior: "SHOW_CHOICES",
       expectedEntityType: "dish",
+      allowedAlternatives: [1111, "شاورما"],
       isMandatory: true,
     },
     {

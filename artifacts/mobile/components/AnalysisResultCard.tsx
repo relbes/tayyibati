@@ -29,7 +29,7 @@ interface AnalysisResultCardProps {
   onRetry?: () => void;
   onGoHome?: () => void;
   onShare?: () => void;
-  onSelectSuggestion?: (queryText: string) => void;
+  onSelectSuggestion?: (queryText: string, candidateId?: number, entityType?: string) => void;
   isAnalyzing?: boolean;
 }
 
@@ -108,6 +108,87 @@ export function AnalysisResultCard({
     if (text.includes("فاكهة") || text.includes("فواكه")) return "🍎";
     return "🍲";
   };
+
+  // ── AMBIGUOUS / MULTIPLE_DISHES disambiguation UI ─────────────────────────
+  if (report?.resultMode === "MULTIPLE_DISHES" && (report.canonicalResult as any)?.searchOutcome === "AMBIGUOUS") {
+    // Prefer candidateDishes (objects with id/nameAr) over plain suggestions strings
+    const candidateDishes: Array<{ id?: number; nameAr?: string; entityType?: string }> =
+      (report as any).candidateDishes || [];
+    const rawSuggestions: unknown[] = (report.suggestions as unknown[]) || [];
+
+    // Build a unified candidate list
+    const candidates: Array<{ label: string; id?: number; entityType?: string }> =
+      candidateDishes.length > 0
+        ? candidateDishes.map((d) => ({
+            label: d.nameAr || "",
+            id: d.id,
+            entityType: d.entityType || "dish",
+          }))
+        : rawSuggestions.map((s) => ({
+            label: typeof s === "string" ? s : (s as any)?.label || "",
+          }));
+
+    const handleAmbiguousSelect = (label: string, id?: number, entityType?: string) => {
+      if (isAnalyzing) return;
+      setSelectedSuggestion(label);
+      if (onSelectSuggestion) {
+        onSelectSuggestion(label, id, entityType);
+      }
+    };
+
+    return (
+      <View style={[styles.clarificationCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        <View style={styles.clarificationHeader}>
+          <View style={[styles.clarificationIconContainer, { backgroundColor: colors.primary + "15" }]}>
+            <Icon name="search-outline" size={28} color={colors.primary} />
+          </View>
+          <Text style={[styles.clarificationQuestion, { color: colors.foreground }]}>
+            هل تقصد؟
+          </Text>
+          <Text style={[styles.clarificationSubtitle, { color: colors.mutedForeground }]}>
+            وجدنا أكثر من نتيجة مطابقة لبحثك، اختر ما تقصده.
+          </Text>
+        </View>
+
+        <View style={styles.suggestionsList}>
+          {candidates.map((cand, idx) => {
+            const emoji = getSuggestionEmoji(undefined, cand.label);
+            const isThisLoading = isAnalyzing && selectedSuggestion === cand.label;
+            return (
+              <TouchableOpacity
+                key={`${cand.label}_${idx}`}
+                style={[
+                  styles.suggestionButton,
+                  {
+                    backgroundColor: colors.secondary,
+                    borderColor: colors.border,
+                    opacity: isAnalyzing && selectedSuggestion !== cand.label ? 0.6 : 1,
+                  },
+                ]}
+                onPress={() => handleAmbiguousSelect(cand.label, cand.id, cand.entityType)}
+                disabled={isAnalyzing}
+                activeOpacity={0.7}
+              >
+                <View style={styles.suggestionRightPart}>
+                  <Text style={styles.suggestionEmoji}>{emoji}</Text>
+                  <View style={styles.suggestionTextContainer}>
+                    <Text style={[styles.suggestionLabel, { color: colors.foreground }]}>
+                      {cand.label}
+                    </Text>
+                  </View>
+                </View>
+                {isThisLoading ? (
+                  <ActivityIndicator size="small" color={colors.primary} />
+                ) : (
+                  <Icon name="chevron-back" size={18} color={colors.mutedForeground} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+    );
+  }
 
   // Handle Clarification Requests
   if (report?.needsClarification) {
