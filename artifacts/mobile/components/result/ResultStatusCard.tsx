@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
-import { useColors } from "@/hooks/useColors";
 
 export interface ResultStatusCardProps {
   recognizedName: string;
   status: "allowed" | "forbidden" | "conditional" | "unknown";
-  inputType: "text" | "camera";
+  inputType?: "text" | "camera";
+  analysisType?: "text" | "image" | "label";
+  isSingleFood?: boolean;
   summaryText?: string;
   confidence?: number | null;
   compatibilityScore?: number | null;
@@ -18,334 +19,193 @@ export interface ResultStatusCardProps {
 
 export const ResultStatusCard = React.memo(function ResultStatusCard({
   recognizedName,
-  inputType,
+  status,
+  analysisType = "text",
+  isSingleFood = false,
   summaryText,
-  confidence,
-  allowedCount = 0,
-  forbiddenCount = 0,
-  conditionalCount = 0,
-  unresolvedCount = 0,
 }: ResultStatusCardProps) {
-  const colors = useColors();
+  // Status configuration mapping matching the Tayyibati design system
+  const statusConfig = {
+    allowed: {
+      decisionText: "مسموح",
+      topBadgeText: "متوافق مع نظام الطيبات",
+      topBadgeIcon: "leaf" as const,
+      color: "#16A34A",
+      circleBg: "#16A34A",
+      topBadgeBg: "#DCFCE7",
+      topBadgeBorder: "#BBF7D0",
+      topBadgeTextColor: "#16A34A",
+      icon: "checkmark" as const,
+      defaultSummary: isSingleFood
+        ? "هذا المكون متوافق مع نظام الطيبات."
+        : "هذا الطعام متوافق مع نظام الطيبات.",
+    },
+    conditional: {
+      decisionText: "مشروط",
+      topBadgeText: "يحتوي على مكونات بحاجة لمراجعة",
+      topBadgeIcon: "alert-circle" as const,
+      color: "#F59E0B",
+      circleBg: "#F59E0B",
+      topBadgeBg: "#FEF3C7",
+      topBadgeBorder: "#FDE68A",
+      topBadgeTextColor: "#D97706",
+      icon: "remove" as const,
+      defaultSummary: "يحتوي هذا الطعام على مكونات بحاجة إلى مراجعة.",
+    },
+    forbidden: {
+      decisionText: "ممنوع",
+      topBadgeText: "يحتوي على مكونات غير مسموحة",
+      topBadgeIcon: "alert-circle" as const,
+      color: "#EF4444",
+      circleBg: "#EF4444",
+      topBadgeBg: "#FEE2E2",
+      topBadgeBorder: "#FECACA",
+      topBadgeTextColor: "#EF4444",
+      icon: "close" as const,
+      defaultSummary:
+        analysisType === "label"
+          ? "يحتوي هذا المنتج على مكونات غير مسموحة في نظام الطيبات."
+          : "تحتوي هذه الوجبة على مكونات غير مسموحة في نظام الطيبات.",
+    },
+    unknown: {
+      decisionText: "غير محدد",
+      topBadgeText: "يتطلب تدقيقاً إضافياً",
+      topBadgeIcon: "help-circle" as const,
+      color: "#6B7280",
+      circleBg: "#6B7280",
+      topBadgeBg: "#F1F5F9",
+      topBadgeBorder: "#E2E8F0",
+      topBadgeTextColor: "#64748B",
+      icon: "help" as const,
+      defaultSummary: "لم نتمكن من تحديد حالة جميع المكونات بدقة كافية.",
+    },
+  };
 
-  // Total ingredient count calculation
-  const totalIngredients = allowedCount + forbiddenCount + conditionalCount + unresolvedCount;
-
-  // Decision cases logic (UI Presentation ONLY)
-  const is100Allowed = totalIngredients > 0 && allowedCount === totalIngredients;
-  const is100Forbidden = totalIngredients > 0 && forbiddenCount === totalIngredients;
-  const isMixedMeal = !is100Allowed && !is100Forbidden;
-
-  // Card theme styling based on pure decision or mixed meal
-  const cardStyle = is100Allowed
-    ? { bg: colors.allowed + "14", border: colors.allowed + "40" }
-    : is100Forbidden
-    ? { bg: colors.forbidden + "14", border: colors.forbidden + "40" }
-    : { bg: colors.card, border: colors.border };
-
-  // Calculate percentages cleanly
-  const allowedPct = totalIngredients > 0 ? Math.round((allowedCount / totalIngredients) * 100) : 0;
-  const forbiddenPct = totalIngredients > 0 ? Math.round((forbiddenCount / totalIngredients) * 100) : 0;
-  const conditionalPct = totalIngredients > 0 ? Math.round((conditionalCount / totalIngredients) * 100) : 0;
-  const unresolvedPct = totalIngredients > 0 ? Math.round((unresolvedCount / totalIngredients) * 100) : 0;
-
-  // System match confidence from backend
-  const displayConfidence = typeof confidence === "number" ? Math.round(confidence) : null;
+  const currentStatus = status && statusConfig[status] ? status : "unknown";
+  const cfg = statusConfig[currentStatus];
 
   return (
     <View
-      style={[styles.card, { backgroundColor: cardStyle.bg, borderColor: cardStyle.border }]}
+      style={styles.card}
       accessibilityRole="header"
-      accessibilityLabel={
-        is100Allowed
-          ? `نتيجة التحليل لـ ${recognizedName}: القرار النهائي مسموح`
-          : is100Forbidden
-          ? `نتيجة التحليل لـ ${recognizedName}: القرار النهائي محظور`
-          : `نتيجة التحليل لـ ${recognizedName}: نسب مكونات الوجبة`
-      }
+      accessibilityLabel={`نتيجة التحليل لـ ${recognizedName}: ${cfg.decisionText}`}
     >
-      {/* Top Header Row: Source Badge & Decision Badge (Only for 100% Pure Meals) */}
-      <View style={[styles.topRow, { flexDirection: "row-reverse" }]}>
-        <View style={[styles.sourceBadge, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: "row-reverse" }]}>
-          <Icon
-            name={inputType === "camera" ? "camera-outline" : "search-outline"}
-            size={14}
-            color={colors.mutedForeground}
-          />
-          <Text style={[styles.sourceBadgeText, { color: colors.foreground }]}>
-            {inputType === "camera" ? "تحليل الكاميرا" : "البحث النصي"}
+      {/* 1. Top Status Warning Badge Row (RTL: aligned to right) */}
+      <View style={styles.topBadgeRow}>
+        <View
+          style={[
+            styles.topBadge,
+            {
+              backgroundColor: cfg.topBadgeBg,
+              borderColor: cfg.topBadgeBorder,
+            },
+          ]}
+        >
+          <Icon name={cfg.topBadgeIcon} size={14} color={cfg.topBadgeTextColor} />
+          <Text style={[styles.topBadgeText, { color: cfg.topBadgeTextColor }]}>
+            {cfg.topBadgeText}
+          </Text>
+        </View>
+      </View>
+
+      {/* 2. Main Content Row: Text Stack on Right + Large Emblem on Left */}
+      <View style={styles.heroRow}>
+        {/* Right: Meal Title + Status text */}
+        <View style={styles.heroTextContainer}>
+          <Text style={styles.mealTitle} numberOfLines={2}>
+            {recognizedName}
+          </Text>
+          <Text style={[styles.statusText, { color: cfg.color }]}>
+            {cfg.decisionText}
           </Text>
         </View>
 
-        {/* Case A: 100% Allowed */}
-        {is100Allowed ? (
-          <View style={[styles.statusBadge, { backgroundColor: colors.allowed, flexDirection: "row-reverse" }]}>
-            <Icon name="checkmark-circle-outline" size={14} color={colors.card} />
-            <Text style={[styles.statusBadgeText, { color: colors.card }]}>
-              القرار النهائي: مسموح
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Case B: 100% Forbidden */}
-        {is100Forbidden ? (
-          <View style={[styles.statusBadge, { backgroundColor: colors.forbidden, flexDirection: "row-reverse" }]}>
-            <Icon name="close-circle-outline" size={14} color={colors.card} />
-            <Text style={[styles.statusBadgeText, { color: colors.card }]}>
-              القرار النهائي: محظور
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Case C: Mixed Meal — NO Decision Badge rendered! */}
-      </View>
-
-      {/* Main Title & Explanation */}
-      <View style={styles.headerBlock}>
-        <Text style={[styles.mealTitle, { color: colors.foreground, textAlign: "right" }]}>{recognizedName}</Text>
-        <Text style={[styles.summaryText, { color: colors.mutedForeground, textAlign: "right" }]}>
-          {summaryText || `تم تقييم حالة هذه الوجبة بناءً على المكونات المسجلة وحكم النظام.`}
-        </Text>
-      </View>
-
-      {/* INGREDIENT COMPOSITION BREAKDOWN (Pure Composition Focus) */}
-      <View style={[styles.compositionContainer, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        <Text style={[styles.compositionHeaderTitle, { color: colors.foreground, textAlign: "right" }]}>
-          نسب مكونات الوجبة
-        </Text>
-
-        <View style={styles.compositionBarsList}>
-          {/* Allowed Ingredients Progress Bar */}
-          {allowedCount > 0 ? (
-            <View style={styles.barItem}>
-              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
-                <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات مسموحة</Text>
-                <Text style={[styles.percentValue, { color: colors.allowed }]}>🟢 {allowedPct}%</Text>
-              </View>
-              <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    { width: `${Math.min(100, Math.max(0, allowedPct))}%`, backgroundColor: colors.allowed },
-                  ]}
-                />
-              </View>
-            </View>
-          ) : null}
-
-          {/* Forbidden Ingredients Progress Bar */}
-          {forbiddenCount > 0 ? (
-            <View style={styles.barItem}>
-              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
-                <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات محظورة</Text>
-                <Text style={[styles.percentValue, { color: colors.forbidden }]}>🔴 {forbiddenPct}%</Text>
-              </View>
-              <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    { width: `${Math.min(100, Math.max(0, forbiddenPct))}%`, backgroundColor: colors.forbidden },
-                  ]}
-                />
-              </View>
-            </View>
-          ) : null}
-
-          {/* Conditional Ingredients Progress Bar */}
-          {conditionalCount > 0 ? (
-            <View style={styles.barItem}>
-              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
-                <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات مشروطة</Text>
-                <Text style={[styles.percentValue, { color: colors.conditional }]}>🟡 {conditionalPct}%</Text>
-              </View>
-              <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    { width: `${Math.min(100, Math.max(0, conditionalPct))}%`, backgroundColor: colors.conditional },
-                  ]}
-                />
-              </View>
-            </View>
-          ) : null}
-
-          {/* Unresolved Ingredients Progress Bar */}
-          {unresolvedCount > 0 ? (
-            <View style={styles.barItem}>
-              <View style={[styles.barLabelRow, { flexDirection: "row-reverse" }]}>
-                <Text style={[styles.barLabelText, { color: colors.foreground }]}>من المكونات غير معروفة</Text>
-                <Text style={[styles.percentValue, { color: colors.unknown }]}>⚪ {unresolvedPct}%</Text>
-              </View>
-              <View style={[styles.barTrack, { backgroundColor: colors.border }]}>
-                <View
-                  style={[
-                    styles.barFill,
-                    { width: `${Math.min(100, Math.max(0, unresolvedPct))}%`, backgroundColor: colors.unknown },
-                  ]}
-                />
-              </View>
-            </View>
-          ) : null}
+        {/* Left: Prominent Circular Status Emblem */}
+        <View style={[styles.heroEmblem, { backgroundColor: cfg.circleBg }]}>
+          <Icon name={cfg.icon} size={28} color="#FFFFFF" strokeWidth={3} />
         </View>
       </View>
 
-      {/* System Confidence Bar from backend */}
-      {displayConfidence !== null ? (
-        <View style={styles.confidenceWrap}>
-          <View style={[styles.confidenceHeader, { flexDirection: "row-reverse" }]}>
-            <Icon
-              name="shield-checkmark-outline"
-              size={14}
-              color={is100Allowed ? colors.allowed : is100Forbidden ? colors.forbidden : colors.primary}
-            />
-            <Text style={[styles.confidenceLabel, { color: colors.mutedForeground }]}>
-              ثقة المطابقة (من النظام):
-            </Text>
-            <Text
-              style={[
-                styles.confidenceValue,
-                { color: is100Allowed ? colors.allowed : is100Forbidden ? colors.forbidden : colors.foreground },
-              ]}
-            >
-              {displayConfidence}%
-            </Text>
-          </View>
-          <View style={[styles.progressTrack, { backgroundColor: colors.border }]}>
-            <View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${Math.min(100, Math.max(0, displayConfidence))}%`,
-                  backgroundColor: is100Allowed
-                    ? colors.allowed
-                    : is100Forbidden
-                    ? colors.forbidden
-                    : colors.primary,
-                },
-              ]}
-            />
-          </View>
-        </View>
-      ) : null}
+      {/* 3. Reason / Explanation Text */}
+      <Text style={styles.summaryText}>
+        {summaryText || cfg.defaultSummary}
+      </Text>
     </View>
   );
 });
 
 const styles = StyleSheet.create({
   card: {
+    backgroundColor: "#FFFFFF",
     borderRadius: 20,
     borderWidth: 1,
-    padding: 20,
-    gap: 16,
-    marginVertical: 4,
+    borderColor: "#E2E8F0",
+    padding: 18,
+    gap: 12,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  topRow: {
-    flexDirection: "row",
+  topBadgeRow: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    justifyContent: "space-between",
   },
-  sourceBadge: {
-    flexDirection: "row",
+  topBadge: {
+    flexDirection: "row-reverse",
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
     paddingVertical: 5,
-    borderRadius: 16,
+    borderRadius: 14,
     borderWidth: 1,
   },
-  sourceBadgeText: {
+  topBadgeText: {
     fontSize: 12,
-    fontFamily: "Tajawal_500Medium",
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  statusBadgeText: {
-    fontSize: 13,
     fontFamily: "Tajawal_700Bold",
   },
-  headerBlock: {
+  heroRow: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    marginTop: 2,
+  },
+  heroTextContainer: {
+    flex: 1,
+    alignItems: "flex-end",
     gap: 4,
   },
   mealTitle: {
     fontSize: 22,
     fontFamily: "Tajawal_700Bold",
+    color: "#0F172A",
     textAlign: "right",
     lineHeight: 28,
   },
+  statusText: {
+    fontSize: 18,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "right",
+  },
+  heroEmblem: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+  },
   summaryText: {
-    fontSize: 13,
+    fontSize: 13.5,
     fontFamily: "Tajawal_400Regular",
+    color: "#64748B",
     textAlign: "right",
-    lineHeight: 19,
-  },
-  compositionContainer: {
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 14,
-    gap: 12,
-  },
-  compositionHeaderTitle: {
-    fontSize: 14,
-    fontFamily: "Tajawal_700Bold",
-    textAlign: "right",
-  },
-  compositionBarsList: {
-    gap: 10,
-  },
-  barItem: {
-    gap: 4,
-  },
-  barLabelRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  percentValue: {
-    fontSize: 14,
-    fontFamily: "Tajawal_700Bold",
-  },
-  barLabelText: {
-    fontSize: 13,
-    fontFamily: "Tajawal_500Medium",
-  },
-  barTrack: {
-    height: 8,
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-  barFill: {
-    height: "100%",
-    borderRadius: 4,
-  },
-  confidenceWrap: {
-    gap: 4,
-  },
-  confidenceHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  confidenceLabel: {
-    fontSize: 11,
-    fontFamily: "Tajawal_500Medium",
-  },
-  confidenceValue: {
-    fontSize: 12,
-    fontFamily: "Tajawal_700Bold",
-  },
-  progressTrack: {
-    height: 5,
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 3,
+    lineHeight: 20,
   },
 });

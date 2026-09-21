@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, StyleSheet, Platform, StyleProp, ViewStyle } from "react-native";
+import { View, Text, StyleSheet, Platform, StyleProp, ViewStyle, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Path, Circle, Rect, Ellipse, Defs, RadialGradient, LinearGradient, Stop } from "react-native-svg";
 import { BackButton } from "@/components/BackButton";
@@ -704,7 +704,7 @@ function SoftDotSvg({
 /* ----------------------------------------------------
  * Botanical Background Composition (Pure Visual)
  * ---------------------------------------------------- */
-const BotanicalBackground = React.memo(function BotanicalBackground({
+export const BotanicalBackground = React.memo(function BotanicalBackground({
   topOffset = 44,
 }: {
   topOffset?: number;
@@ -801,6 +801,8 @@ export interface PageHeaderProps {
   badgeIcon?: React.ReactNode;
   onBackPress?: () => void;
   showBackButton?: boolean;
+  onRetry?: () => void;
+  leftAction?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 }
@@ -812,6 +814,8 @@ export const PageHeader = React.memo(function PageHeader({
   badgeIcon,
   onBackPress,
   showBackButton = true,
+  onRetry,
+  leftAction,
   style,
   children,
 }: PageHeaderProps) {
@@ -867,13 +871,39 @@ export const PageHeader = React.memo(function PageHeader({
       {/* 1. Botanical Background Elements */}
       <BotanicalBackground topOffset={topPadding} />
 
-      {/* 2. Standardized Squircle Dark Emerald Back Button */}
+      {/* 2. Standardized Squircle Dark Emerald Back Button (RTL Right) */}
       {showBackButton && (
         <BackButton
           onPress={onBackPress}
           style={[styles.backBtn, { top: topPadding + 6 }]}
         />
       )}
+
+      {/* 2b. Standardized Squircle Action Button (RTL Left: "إعادة التحليل") */}
+      {leftAction !== undefined ? (
+        <View style={[styles.leftActionBtn, { top: topPadding + 6 }]}>
+          {leftAction}
+        </View>
+      ) : onRetry ? (
+        <TouchableOpacity
+          onPress={onRetry}
+          style={[styles.retryBtn, { top: topPadding + 6 }]}
+          activeOpacity={0.7}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="إعادة التحليل"
+        >
+          <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+            <Path
+              d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+              stroke="#FFFFFF"
+              strokeWidth={2.6}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </Svg>
+        </TouchableOpacity>
+      ) : null}
 
       {/* 3. Center Section: Badge + Title + Subtitle */}
       <View style={styles.headerCenterSection}>
@@ -928,6 +958,29 @@ const styles = StyleSheet.create({
     position: "absolute",
     right: 18,
     zIndex: 20,
+  },
+  leftActionBtn: {
+    position: "absolute",
+    left: 18,
+    zIndex: 20,
+  },
+  retryBtn: {
+    position: "absolute",
+    left: 18,
+    zIndex: 20,
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#008C5A",
+    borderColor: "#007A4E",
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#022B1B",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28,
+    shadowRadius: 5,
+    elevation: 4,
   },
   headerCenterSection: {
     alignItems: "center",

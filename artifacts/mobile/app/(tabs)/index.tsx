@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from "react";
+import React, { useRef, useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import { AuthRequiredDialog } from "@/components/AuthRequiredDialog";
 import { RefinementSuggestions } from "@/components/RefinementSuggestions";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
+import { useInAppNotifications } from "@/hooks/useInAppNotifications";
+import { NotificationCenterModal } from "@/components/NotificationCenterModal";
 
 // Home Components
 import { HomeQuickActions } from "@/components/HomeQuickActions";
@@ -39,6 +41,14 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 12 : Math.max(insets.top, 12);
+
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+  } = useInAppNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const {
     query,
@@ -176,10 +186,10 @@ export default function HomeScreen() {
             <TouchableOpacity
               style={styles.notificationBtn}
               activeOpacity={0.7}
-              onPress={() => {}}
+              onPress={() => setShowNotifications(true)}
             >
               <Icon name="notifications" size={22} color="#ffffff" />
-              <View style={styles.notificationDot} />
+              {unreadCount > 0 && <View style={styles.notificationDot} />}
             </TouchableOpacity>
           </View>
 
@@ -296,6 +306,15 @@ export default function HomeScreen() {
         visible={authModalVisible}
         onClose={() => setAuthModalVisible(false)}
       />
+
+      <NotificationCenterModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        onMarkAsRead={markAsRead}
+        onMarkAllAsRead={markAllAsRead}
+      />
     </View>
   );
 }
@@ -371,7 +390,7 @@ const styles = StyleSheet.create({
     width: 9,
     height: 9,
     borderRadius: 4.5,
-    backgroundColor: "#EF4444",
+    backgroundColor: "#16A34A",
     borderWidth: 1.5,
     borderColor: "#DCFCE7",
   },

@@ -8,6 +8,8 @@ import {
   Platform,
   Image,
   Alert,
+  useWindowDimensions,
+  DimensionValue,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -35,13 +37,44 @@ export default function CameraScreen() {
   const router = useRouter();
   const { user, refreshUsage } = useAuth();
   const { isAnalyzing, setIsAnalyzing } = useAnalysis();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  // Responsive taller illustrative camera viewport height (approx 220-270px)
+  const bannerHeight = Math.min(Math.max(Math.round(windowHeight * 0.28), 220), 270);
   const [pickedImage, setPickedImage] = useState<string | null>(null);
+  const [imageDimensions, setImageDimensions] = useState<{ width: number; height: number } | null>(null);
   const [pickedImageData, setPickedImageData] = useState<{ base64: string; mimeType: string } | null>(null);
   const [result, setResult] = useState<any>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
   const { action } = useLocalSearchParams<{ action?: string }>();
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const rtl = isRTL();
+
+  // Dynamic preview container sizing so the image is large and fills the container naturally without cropping
+  const contentWidth = Math.max(windowWidth - 32, 280);
+  const maxPreviewHeight = Math.min(Math.max(Math.round(windowHeight * 0.58), 400), 500);
+  const minPreviewHeight = 240;
+
+  let previewContainerHeight = 360;
+  let previewContainerWidth: DimensionValue = "100%";
+
+  if (imageDimensions && imageDimensions.width > 0 && imageDimensions.height > 0) {
+    const aspect = imageDimensions.width / imageDimensions.height;
+    const naturalHeight = Math.round(contentWidth / aspect);
+
+    if (naturalHeight > maxPreviewHeight) {
+      // Tall / portrait image: maximize height and hug width to match aspect ratio
+      previewContainerHeight = maxPreviewHeight;
+      previewContainerWidth = Math.min(Math.round(maxPreviewHeight * aspect), contentWidth);
+    } else if (naturalHeight < minPreviewHeight) {
+      // Very wide landscape: clamp to minPreviewHeight
+      previewContainerHeight = minPreviewHeight;
+      previewContainerWidth = contentWidth;
+    } else {
+      // Natural fit: fills content width and natural height
+      previewContainerHeight = naturalHeight;
+      previewContainerWidth = contentWidth;
+    }
+  }
 
   React.useEffect(() => {
     // Only auto-launch if we haven't picked an image yet, and an action is requested
@@ -86,6 +119,16 @@ export default function CameraScreen() {
       const asset = imageResult.assets[0];
       setResult(null);
       setPickedImage(asset.uri);
+
+      if (asset.width && asset.height) {
+        setImageDimensions({ width: asset.width, height: asset.height });
+      } else {
+        Image.getSize(
+          asset.uri,
+          (w, h) => setImageDimensions({ width: w, height: h }),
+          () => setImageDimensions(null)
+        );
+      }
 
       let base64 = asset.base64 ?? null;
       if (base64?.startsWith("data:")) {
@@ -170,6 +213,7 @@ export default function CameraScreen() {
   const resetAll = () => {
     setPickedImage(null);
     setPickedImageData(null);
+    setImageDimensions(null);
     setResult(null);
   };
 
@@ -229,7 +273,7 @@ export default function CameraScreen() {
           {!pickedImage ? (
             <>
               {/* Large Food Image Container with Viewfinder Brackets and Arabic Overlay */}
-              <View style={styles.foodBannerCard}>
+              <View style={[styles.foodBannerCard, { height: bannerHeight }]}>
                 <Image
                   source={require("@/assets/images/camera_food_bowl.jpg")}
                   style={styles.foodBannerImage}
@@ -249,37 +293,40 @@ export default function CameraScreen() {
                 </View>
               </View>
 
-              {/* Action Buttons Row: Capture Photo & Pick from Gallery on ONE ROW */}
-              <View style={[styles.actionButtonsRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-                {/* Primary Button: التقاط صورة (on right in RTL) */}
+              {/* Action Buttons Row: 2 Large Visual Action Cards in ONE ROW */}
+              <View style={[styles.actionCardsRow, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+                {/* Camera Card (Primary) - on Right in RTL */}
                 <TouchableOpacity
-                  style={[
-                    styles.rowActionBtn,
-                    styles.rowPrimaryBtn,
-                    { flexDirection: rtl ? "row" : "row-reverse" },
-                  ]}
+                  style={[styles.actionCard, styles.cameraActionCard]}
                   onPress={() => pickImage("camera")}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="التقاط صورة بالكاميرا"
                 >
-                  <Text style={styles.rowPrimaryBtnText}>التقاط صورة</Text>
-                  <Icon name="camera" size={22} color="#ffffff" />
+                  <View style={styles.actionIconContainer}>
+                    <Icon name="camera" size={32} color="#FFFFFF" />
+                  </View>
+                  <View style={styles.actionTextContainer}>
+                    <Text style={styles.cameraCardTitle}>التقاط صورة</Text>
+                    <Text style={styles.cameraCardSubtitle}>بالكاميرا</Text>
+                  </View>
                 </TouchableOpacity>
 
-                {/* Secondary Button: اختيار صورة من الجهاز (on left in RTL) */}
+                {/* Gallery Card (Secondary) - on Left in RTL */}
                 <TouchableOpacity
-                  style={[
-                    styles.rowActionBtn,
-                    styles.rowSecondaryBtn,
-                    { flexDirection: rtl ? "row" : "row-reverse" },
-                  ]}
+                  style={[styles.actionCard, styles.galleryActionCard]}
                   onPress={() => pickImage("library")}
                   activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel="اختيار صورة من المعرض"
                 >
-                  <View style={styles.rowSecondaryTextCol}>
-                    <Text style={styles.rowSecondaryBtnText}>اختيار صورة</Text>
-                    <Text style={styles.rowSecondaryBtnSubtext}>من الجهاز</Text>
+                  <View style={styles.actionIconContainer}>
+                    <Icon name="image" size={32} color="#7C3AED" />
                   </View>
-                  <Icon name="image" size={24} color="#008C5A" />
+                  <View style={styles.actionTextContainer}>
+                    <Text style={styles.galleryCardTitle}>اختيار صورة</Text>
+                    <Text style={styles.galleryCardSubtitle}>من المعرض</Text>
+                  </View>
                 </TouchableOpacity>
               </View>
 
@@ -287,31 +334,42 @@ export default function CameraScreen() {
               <CameraQualityTips />
             </>
           ) : (
-            /* Image Preview Card */
+            /* Image Preview Card: full image aspect ratio (never cropped, dynamically fills container) */
             <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: pickedImage }}
+              <View
                 style={[
-                  styles.previewImage,
-                  { borderColor: colors.border },
+                  styles.previewImageWrapper,
+                  {
+                    width: previewContainerWidth,
+                    height: previewContainerHeight,
+                    alignSelf: "center",
+                    borderColor: colors.border,
+                  },
                 ]}
-                resizeMode="cover"
-              />
+              >
+                <Image
+                  source={{ uri: pickedImage }}
+                  style={styles.previewImage}
+                  resizeMode="contain"
+                />
+              </View>
               {hasResult && !isAnalyzing && (
                 <TouchableOpacity
                   style={[
                     styles.retakeBtn,
                     {
-                      backgroundColor: colors.muted,
-                      borderColor: colors.border,
+                      backgroundColor: "#F0FDF4",
+                      borderColor: "#86EFAC",
                       flexDirection: rtl ? "row-reverse" : "row",
                     },
                   ]}
                   onPress={resetAll}
                   activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel="صورة جديدة"
                 >
-                  <Icon name="refresh" size={16} color={colors.mutedForeground} />
-                  <Text style={[styles.retakeText, { color: colors.mutedForeground }]}>
+                  <Icon name="refresh" size={18} color="#008C5A" />
+                  <Text style={[styles.retakeText, { color: "#008C5A" }]}>
                     صورة جديدة
                   </Text>
                 </TouchableOpacity>
@@ -520,7 +578,7 @@ const styles = StyleSheet.create({
   },
   foodBannerCard: {
     width: "100%",
-    height: 205,
+    minHeight: 220,
     borderRadius: 22,
     overflow: "hidden",
     position: "relative",
@@ -537,8 +595,8 @@ const styles = StyleSheet.create({
   },
   cornerBracket: {
     position: "absolute",
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderColor: "#FFFFFF",
   },
   cornerTL: {
@@ -576,7 +634,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   foodOverlayTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontFamily: "Tajawal_700Bold",
     color: "#FFFFFF",
     textAlign: "right",
@@ -585,7 +643,7 @@ const styles = StyleSheet.create({
     textShadowRadius: 4,
   },
   foodOverlaySubtitle: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontFamily: "Tajawal_500Medium",
     color: "rgba(255, 255, 255, 0.95)",
     textAlign: "right",
@@ -594,53 +652,71 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
   },
-  actionButtonsRow: {
+  actionCardsRow: {
     width: "100%",
     gap: 12,
-    alignItems: "center",
+    marginVertical: 6,
+    alignItems: "stretch",
   },
-  rowActionBtn: {
+  actionCard: {
     flex: 1,
-    height: 54,
-    borderRadius: 16,
+    height: 94,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    gap: 6,
   },
-  rowPrimaryBtn: {
-    backgroundColor: "#008C5A",
-    shadowColor: "#008C5A",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.18,
-    shadowRadius: 5,
-    elevation: 2,
+  cameraActionCard: {
+    backgroundColor: "#FB7185",
+    shadowColor: "#FB7185",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.28,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  rowPrimaryBtnText: {
+  galleryActionCard: {
+    backgroundColor: "#F5F0F8",
+    borderWidth: 1.5,
+    borderColor: "#E4DBF3",
+  },
+  actionIconContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 34,
+  },
+  actionTextContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cameraCardTitle: {
     color: "#FFFFFF",
     fontFamily: "Tajawal_700Bold",
-    fontSize: 15.5,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 18,
   },
-  rowSecondaryBtn: {
-    backgroundColor: "#E6F6F0",
-    borderWidth: 1.5,
-    borderColor: "#A3E2CB",
+  cameraCardSubtitle: {
+    color: "rgba(255, 255, 255, 0.92)",
+    fontFamily: "Tajawal_500Medium",
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 15,
   },
-  rowSecondaryTextCol: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  rowSecondaryBtnText: {
+  galleryCardTitle: {
+    color: "#7C3AED",
     fontFamily: "Tajawal_700Bold",
-    fontSize: 13.5,
-    color: "#008C5A",
-    lineHeight: 17,
+    fontSize: 15,
+    textAlign: "center",
+    lineHeight: 18,
   },
-  rowSecondaryBtnSubtext: {
-    fontFamily: "Tajawal_700Bold",
-    fontSize: 13.5,
-    color: "#008C5A",
-    lineHeight: 17,
+  galleryCardSubtitle: {
+    color: "#8B5CF6",
+    fontFamily: "Tajawal_500Medium",
+    fontSize: 12,
+    textAlign: "center",
+    lineHeight: 15,
   },
   primaryActionBtn: {
     width: "100%",
@@ -668,24 +744,40 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_700Bold",
     fontSize: 17,
   },
-  imageContainer: { gap: 10 },
+  imageContainer: {
+    gap: 12,
+    width: "100%",
+  },
+  previewImageWrapper: {
+    width: "100%",
+    borderRadius: 20,
+    backgroundColor: "#0F172A",
+    borderWidth: 1,
+    overflow: "hidden",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
+  },
   previewImage: {
     width: "100%",
-    height: 220,
-    borderRadius: 16,
-    borderWidth: 1,
+    height: "100%",
   },
   retakeBtn: {
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    padding: 10,
-    borderRadius: 10,
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 14,
     borderWidth: 1,
   },
   retakeText: {
-    fontSize: 13,
-    fontFamily: "Tajawal_500Medium",
+    fontSize: 14,
+    fontFamily: "Tajawal_700Bold",
   },
   confirmationStack: {
     marginTop: 8,

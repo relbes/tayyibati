@@ -50,7 +50,11 @@ export default function SearchScreen() {
     handleSelectDish,
     handleSelectSuggestion,
     clearSearch,
-  } = useFoodSearch();
+  } = useFoodSearch({
+    onDefinitiveResult: (_report) => {
+      router.push("/result");
+    },
+  });
 
   const inputRef = useRef<TextInput>(null);
 
@@ -58,12 +62,11 @@ export default function SearchScreen() {
     router.push("/(tabs)/camera");
   }, [router]);
 
-  // Show AnalysisResultCard only for final single-entity results.
-  // Multiple-dishes shows the selection UI via RefinementSuggestions.
+  // Show inline AnalysisResultCard on Search screen only for clarification or notFound.
+  // Single definitive results are routed to the dedicated /result screen.
   const showResultCard =
     !!result &&
-    result.resultMode !== "MULTIPLE_DISHES" &&
-    !result.requiresSelection;
+    (result.needsClarification || result.notFound);
 
   return (
     <View style={styles.container}>

@@ -20,6 +20,10 @@ import { useAuth } from "@/context/AuthContext";
 import { getUserUsage, getPublicConfig } from "@/lib/api";
 import { isRTL } from "@/lib/i18n";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
+import { useSubscriptionDetails } from "@/hooks/useSubscriptionDetails";
+import { useInAppNotifications } from "@/hooks/useInAppNotifications";
+import { ProfileSubscriptionCard } from "@/components/ProfileSubscriptionCard";
+import { NotificationCenterModal } from "@/components/NotificationCenterModal";
 
 interface UsageInfo {
   monthlyTextCount: number;
@@ -41,6 +45,16 @@ export default function ProfileScreen() {
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const rtl = isRTL();
 
+  const subscription = useSubscriptionDetails();
+  const {
+    notifications,
+    unreadCount,
+    markAsRead,
+    markAllAsRead,
+    evaluateSubscriptionNotifications,
+  } = useInAppNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
+
   useEffect(() => {
     getPublicConfig()
       .then((cfg) => setSubscriptionEnabled(cfg.subscription_enabled !== "false"))
@@ -52,6 +66,16 @@ export default function ProfileScreen() {
       getUserUsage().then(setUsage).catch(() => {});
     }
   }, [user]);
+
+  useEffect(() => {
+    if (
+      subscription &&
+      subscription.status !== "FREE" &&
+      subscription.status !== "ERROR"
+    ) {
+      evaluateSubscriptionNotifications(subscription);
+    }
+  }, [subscription, evaluateSubscriptionNotifications]);
 
   const handleSignOut = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -159,6 +183,14 @@ export default function ProfileScreen() {
           )}
         </View>
 
+        {/* Subscription Info Card (Shown for Premium users) */}
+        {user.isPremium && (
+          <ProfileSubscriptionCard
+            subscription={subscription}
+            onUpgrade={() => router.push("/pricing")}
+          />
+        )}
+
         <View style={styles.content}>
           {/* Usage Card */}
           {usage && !usage.isPremium && (
@@ -219,6 +251,12 @@ export default function ProfileScreen() {
 
           {/* Menu Items */}
           {[
+            {
+              icon: "notifications-outline" as const,
+              label: "الإشعارات",
+              badgeCount: unreadCount,
+              onPress: () => setShowNotifications(true),
+            },
             { icon: "star-outline" as const, label: "الباقات", route: "/pricing" },
             { icon: "time-outline" as const, label: "سجل التحليلات", route: "/(tabs)/history" },
             { icon: "shield-checkmark-outline" as const, label: "سياسة الخصوصية", route: "/privacy-policy" },
@@ -227,7 +265,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               key={item.label}
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border, flexDirection: rtl ? "row-reverse" : "row" }]}
-              onPress={() => item.route && router.push(item.route as any)}
+              onPress={() => item.onPress ? item.onPress() : (item.route && router.push(item.route as any))}
             >
               <View style={[styles.menuIcon, { backgroundColor: colors.primary + "18" }]}>
                 <Icon name={item.icon} size={20} color={colors.primary} />
@@ -235,9 +273,15 @@ export default function ProfileScreen() {
               <View style={[styles.menuLabelWrap, { alignItems: rtl ? "flex-end" : "flex-start" }]}>
                 <Text style={[styles.menuLabelText, { color: colors.foreground }]}>{item.label}</Text>
               </View>
+              {item.badgeCount !== undefined && item.badgeCount > 0 && (
+                <View style={styles.menuBadge}>
+                  <Text style={styles.menuBadgeText}>{item.badgeCount}</Text>
+                </View>
+              )}
               <Icon name={rtl ? "chevron-back" : "chevron-forward"} size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           ))}
+
 
           {/* Sign Out */}
           <TouchableOpacity
@@ -254,6 +298,15 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
+
+      <NotificationCenterModal
+        visible={showNotifications}
+        onClose={() => setShowNotifications(false)}
+        notifications={notifications}
+        unreadCount={unreadCount}
+        onMarkAsRead={markAsRead}
+        onMarkAllAsRead={markAllAsRead}
+      />
     </View>
   );
 }
@@ -435,5 +488,17 @@ const styles = StyleSheet.create({
   menuLabelText: {
     fontSize: 15,
     fontFamily: "Tajawal_500Medium",
+  },
+  menuBadge: {
+    backgroundColor: "#16A34A",
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    marginHorizontal: 4,
+  },
+  menuBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontFamily: "Tajawal_700Bold",
   },
 });

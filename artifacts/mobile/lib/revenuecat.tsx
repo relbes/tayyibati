@@ -44,7 +44,10 @@ export function initializeRevenueCat() {
     __DEV__ ? Purchases.LOG_LEVEL.DEBUG : Purchases.LOG_LEVEL.ERROR
   );
   try {
-    Purchases.configure({ apiKey });
+    Purchases.configure({
+      apiKey,
+      shouldShowInAppMessagesAutomatically: false,
+    });
     console.log("[RevenueCat SDK] Successfully configured RevenueCat SDK.");
   } catch (err: any) {
     console.warn("[RevenueCat SDK] RevenueCat configure failed:", err?.message);
@@ -101,6 +104,18 @@ function useSubscriptionContext() {
   const isSubscribed =
     customerInfoQuery.data?.entitlements.active?.[REVENUECAT_ENTITLEMENT_IDENTIFIER] !== undefined;
 
+  const hasBillingIssue = React.useMemo(() => {
+    if (!customerInfoQuery.data) return false;
+    const allEntitlements = customerInfoQuery.data.entitlements?.all || {};
+    for (const key of Object.keys(allEntitlements)) {
+      const ent = (allEntitlements as any)[key];
+      if (ent?.billingIssueDetectedAt) {
+        return true;
+      }
+    }
+    return false;
+  }, [customerInfoQuery.data]);
+
   // Only show loading if BOTH queries are still pending (not just slow/errored)
   const isLoading =
     (customerInfoQuery.isPending && !customerInfoQuery.isError) ||
@@ -110,6 +125,7 @@ function useSubscriptionContext() {
     customerInfo: customerInfoQuery.data,
     offerings: offeringsQuery.data,
     isSubscribed,
+    hasBillingIssue,
     isLoading,
     purchase: purchaseMutation.mutateAsync,
     restore: restoreMutation.mutateAsync,

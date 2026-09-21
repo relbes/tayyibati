@@ -12,6 +12,10 @@ import { UnresolvedSection } from "./result/UnresolvedSection";
 import { ResultActionButtons } from "./result/ResultActionButtons";
 import { EmptyAnalysisState } from "./result/EmptyAnalysisState";
 import { FoodFamilyResultCard } from "./result/FoodFamilyResultCard";
+import { SingleFoodDetailsCard } from "./result/SingleFoodDetailsCard";
+import { ResultIngredientList } from "./result/ResultIngredientList";
+import { AllowedPercentageCard } from "./result/AllowedPercentageCard";
+import { ResultInfoCard } from "./result/ResultInfoCard";
 
 import { useRouter } from "expo-router";
 
@@ -251,6 +255,51 @@ export function AnalysisResultCard({
     unresolvedCount: mealDecision?.unknownCount ?? unresolvedInputs.length,
   };
 
+  // Determine if this is a single food vs a composite dish/product
+  const isSingleFood =
+    viewModel.presentationMode === "SPECIFIC_FOOD" ||
+    (ingredientDecisions.length <= 1 &&
+      !(report as any)?.dish &&
+      (report as any)?.entityType !== "dish" &&
+      (report as any)?.resultMode !== "COMPOSITE_FOOD" &&
+      (report as any)?.resultMode !== "MULTIPLE_DISHES");
+
+  const rawCanonical = (report as any)?.canonicalResult;
+  const categoryAr =
+    (report?.primaryRuling as any)?.categoryAr ||
+    rawCanonical?.category_name_ar ||
+    rawCanonical?.categoryNameAr ||
+    "طبيعي";
+  const sourceType =
+    (report?.primaryRuling as any)?.sourceType ||
+    rawCanonical?.source_type ||
+    rawCanonical?.sourceType ||
+    "نباتي";
+
+  // Ordered ingredients for direct list display: forbidden -> conditional -> allowed -> unknown
+  const allIngredientsOrdered = [
+    ...forbiddenIngredients,
+    ...conditionalIngredients,
+    ...allowedIngredients,
+    ...ingredientDecisions.filter(
+      (i) =>
+        i.status !== "forbidden" &&
+        i.status !== "conditional" &&
+        i.status !== "allowed"
+    ),
+  ];
+  const allAllowed =
+    statistics.forbiddenCount === 0 && statistics.conditionalCount === 0;
+
+  // Contextual info/warning note
+  const infoNote =
+    report?.explanation ||
+    (report as any)?.summary ||
+    (report as any)?.analysis?.notes ||
+    (mealDecision as any)?.reason ||
+    report?.primaryRuling?.dbReason ||
+    null;
+
   const toggleDevDetails = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setShowDevDetails(!showDevDetails);
@@ -269,6 +318,12 @@ export function AnalysisResultCard({
     (analysis as any)?.score ??
     null;
 
+  const totalIngredients = statistics.totalIngredients;
+  let allowedPct = 0;
+  if (totalIngredients > 0) {
+    allowedPct = Math.round((statistics.allowedCount / totalIngredients) * 100);
+  }
+
   return (
     <View style={styles.container}>
       {/* SECTION 1: Result Hero Card */}
@@ -276,6 +331,9 @@ export function AnalysisResultCard({
         recognizedName={recognizedName}
         status={finalStatus}
         inputType={inputType}
+        analysisType={report?.analysisType || "text"}
+        isSingleFood={isSingleFood}
+        summaryText={infoNote || undefined}
         confidence={backendConfidence}
         compatibilityScore={backendCompatibilityScore}
         allowedCount={statistics.allowedCount}
@@ -284,37 +342,46 @@ export function AnalysisResultCard({
         unresolvedCount={statistics.unresolvedCount}
       />
 
-      {/* SECTION 2: Statistics (Dynamic 3 to 5 cards) */}
-      <StatisticCard statistics={statistics} />
+      {/* SECTION 2: Single Food Details OR (Percentage + Statistics + Ingredients List) */}
+      {isSingleFood ? (
+        <>
+          <SingleFoodDetailsCard
+            nameAr={recognizedName}
+            categoryAr={categoryAr}
+            sourceType={sourceType}
+            status={finalStatus}
+          />
+          {infoNote ? (
+            <ResultInfoCard
+              status={finalStatus}
+              note={infoNote}
+              foodName={recognizedName}
+              isSingleFood={isSingleFood}
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          <AllowedPercentageCard
+            allowedPercentage={allowedPct}
+            allowedCount={statistics.allowedCount}
+            totalCount={totalIngredients}
+            status={finalStatus}
+          />
+          <StatisticCard statistics={statistics} />
+          <ResultIngredientList
+            ingredients={allIngredientsOrdered}
+            allAllowed={allAllowed}
+          />
+        </>
+      )}
 
-      {/* SECTION 3: Forbidden Ingredients (Hidden if 0) */}
-      <IngredientSection
-        title="المكونات المحظورة"
-        icon="❌"
-        status="forbidden"
-        ingredients={forbiddenIngredients}
-      />
+      {/* SECTION 4: Unresolved Ingredients (if any) */}
+      {unresolvedInputs.length > 0 && (
+        <UnresolvedSection unresolvedInputs={unresolvedInputs} />
+      )}
 
-      {/* SECTION 4: Conditional Ingredients (Hidden if 0) */}
-      <IngredientSection
-        title="المكونات المشروطة"
-        icon="⚠️"
-        status="conditional"
-        ingredients={conditionalIngredients}
-      />
-
-      {/* SECTION 5: Allowed Ingredients (Hidden if 0) */}
-      <IngredientSection
-        title="المكونات المسموحة"
-        icon="✅"
-        status="allowed"
-        ingredients={allowedIngredients}
-      />
-
-      {/* SECTION 6: Unresolved Ingredients (Hidden if 0) */}
-      <UnresolvedSection unresolvedInputs={unresolvedInputs} />
-
-      {/* SECTION 7: Developer Details (Rendered ONLY when __DEV__ AND isDevMode) */}
+      {/* SECTION 5: Developer Details (Rendered ONLY when __DEV__ AND isDevMode) */}
       {typeof __DEV__ !== "undefined" && __DEV__ && isDevMode && (
         <View style={[styles.devAccordion, { backgroundColor: colors.card, borderColor: colors.border }]}>
           <TouchableOpacity
@@ -347,20 +414,16 @@ export function AnalysisResultCard({
         </View>
       )}
 
-      {/* SECTION 8: Action Buttons */}
-      <ResultActionButtons
-        onAnalyzeAnother={onRetry || (() => {})}
-        onGoHome={handleGoHome}
-        onShare={onShare}
-      />
+      {/* Action buttons removed from bottom as requested; re-analyze is placed at top */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    gap: 16,
-    padding: 16,
+    gap: 14,
+    padding: 0,
+    width: "100%",
   },
   clarificationCard: {
     borderRadius: 16,

@@ -526,3 +526,22 @@ export async function resetPasswordWithCode(email: string, code: string, newPass
   if (!res.ok) return parseAuthError(res, "تعذّر إعادة تعيين كلمة المرور");
   return res.json();
 }
+
+export interface SubscriptionDetailsResponse {
+  status: "ACTIVE" | "CANCELLED" | "EXPIRED" | "BILLING_ISSUE" | "FREE";
+  planName: string;
+  startDate: string | null;
+  expirationDate: string | null;
+  autoRenew: boolean;
+  store: string | null;
+  billingIssue: boolean;
+}
+
+export async function getSubscriptionDetails(): Promise<SubscriptionDetailsResponse> {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/users/me/subscription`, {
+    headers: authHeader(),
+  });
+  if (!res.ok) throw new Error("تعذر تحميل معلومات الاشتراك.");
+  return res.json();
+}

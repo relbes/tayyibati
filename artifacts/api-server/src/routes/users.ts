@@ -897,6 +897,115 @@ router.get("/users/me", requireAuth, async (req, res) => {
   }
 });
 
+router.get("/users/me/subscription", requireAuth, async (req, res) => {
+  try {
+    const userId = req.userId!;
+
+    const [user] = await db
+      .select()
+      .from(usersTable)
+      .where(eq(usersTable.id, userId));
+
+    if (!user) {
+      return void res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.isPremium !== "true") {
+      return void res.json({
+        status: "FREE",
+        planName: "مجاني",
+        startDate: null,
+        expirationDate: null,
+        autoRenew: false,
+        store: null,
+        billingIssue: false,
+      });
+    }
+
+    let planName = "Tayyibati Premium";
+    if (user.planId != null) {
+      const [plan] = await db
+        .select()
+        .from(subscriptionPlansTable)
+        .where(eq(subscriptionPlansTable.id, user.planId));
+      if (plan) {
+        planName = plan.name || plan.nameEn || "Tayyibati Premium";
+      }
+    }
+
+    const secretKey = process.env.REVENUECAT_SECRET_KEY || process.env.REVENUECAT_API_KEY;
+    if (secretKey) {
+      try {
+        const rcRes = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${secretKey}`,
+            "Content-Type": "application/json",
+            "X-Platform": "android",
+          },
+        });
+
+        if (rcRes.ok) {
+          const data: any = await rcRes.json();
+          const subscriber = data?.subscriber;
+          const entitlements = subscriber?.entitlements || {};
+          const subscriptions = subscriber?.subscriptions || {};
+
+          const ent = entitlements.premium || entitlements[Object.keys(entitlements)[0]];
+          const subKey = ent?.product_identifier || Object.keys(subscriptions)[0];
+          const sub = subKey ? subscriptions[subKey] : null;
+
+          const startDate = ent?.original_purchase_date || ent?.purchase_date || sub?.original_purchase_date || sub?.purchase_date || null;
+          const expirationDate = ent?.expires_date || sub?.expires_date || null;
+          const unsubscribeDetectedAt = ent?.unsubscribe_detected_at || sub?.unsubscribe_detected_at || null;
+          const billingIssuesDetectedAt = ent?.billing_issues_detected_at || sub?.billing_issues_detected_at || null;
+          const store = ent?.store || sub?.store || "PLAY_STORE";
+
+          const now = Date.now();
+          const expTime = expirationDate ? new Date(expirationDate).getTime() : null;
+          const isExpired = expTime !== null && !isNaN(expTime) && expTime <= now;
+
+          let status = "ACTIVE";
+          if (billingIssuesDetectedAt) {
+            status = "BILLING_ISSUE";
+          } else if (isExpired) {
+            status = "EXPIRED";
+          } else if (unsubscribeDetectedAt) {
+            status = "CANCELLED";
+          } else {
+            status = "ACTIVE";
+          }
+
+          return void res.json({
+            status,
+            planName,
+            startDate,
+            expirationDate,
+            autoRenew: !unsubscribeDetectedAt && !isExpired && !billingIssuesDetectedAt,
+            store: store ? String(store).toUpperCase() : "PLAY_STORE",
+            billingIssue: !!billingIssuesDetectedAt,
+          });
+        }
+      } catch (rcErr) {
+        req.log.warn({ rcErr, userId }, "[Subscription] Could not query RevenueCat subscriber, using DB fallback");
+      }
+    }
+
+    res.json({
+      status: "ACTIVE",
+      planName,
+      startDate: user.createdAt?.toISOString() || null,
+      expirationDate: null,
+      autoRenew: true,
+      store: "PLAY_STORE",
+      billingIssue: false,
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to get subscription details");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/users/:id", requireAuth, async (req, res) => {
   try {
     const targetId = req.params.id as string;

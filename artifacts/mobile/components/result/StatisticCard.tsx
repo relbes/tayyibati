@@ -1,16 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { Icon } from "@/components/Icon";
-import { useColors } from "@/hooks/useColors";
-
-export interface StatisticItem {
-  key: string;
-  label: string;
-  value: number;
-  icon: string;
-  color: string;
-  bg: string;
-}
 
 export interface StatisticCardProps {
   statistics: {
@@ -23,76 +13,70 @@ export interface StatisticCardProps {
 }
 
 export const StatisticCard = React.memo(function StatisticCard({ statistics }: StatisticCardProps) {
-  const colors = useColors();
-
-  // Core required 3 statistics cards: Total, Allowed, Forbidden
-  const items: StatisticItem[] = [
-    {
-      key: "total",
-      label: "المكونات",
-      value: statistics.totalIngredients,
-      icon: "pie-chart-outline",
-      color: colors.primary,
-      bg: colors.secondary,
-    },
+  // 3 Equal cards in one horizontal row matching the reference layout:
+  // In RTL order: [مسموح (Right)] [مشروط (Middle)] [ممنوع (Left)]
+  const cards = [
     {
       key: "allowed",
       label: "مسموح",
       value: statistics.allowedCount,
-      icon: "checkmark-circle-outline",
-      color: colors.allowed,
-      bg: colors.allowed + "15",
+      icon: "checkmark",
+      circleBg: "#16A34A",
+      bg: "#F0FDF4",
+      border: "#DCFCE7",
+      labelColor: "#16A34A",
     },
     {
-      key: "forbidden",
-      label: "محظور",
-      value: statistics.forbiddenCount,
-      icon: "close-circle-outline",
-      color: colors.forbidden,
-      bg: colors.forbidden + "15",
-    },
-  ];
-
-  // Dynamically include Conditional ONLY if conditionalCount > 0
-  if (statistics.conditionalCount > 0) {
-    items.push({
       key: "conditional",
       label: "مشروط",
       value: statistics.conditionalCount,
-      icon: "alert-circle-outline",
-      color: colors.conditional,
-      bg: colors.conditional + "15",
-    });
-  }
-
-  // Dynamically include Unresolved ONLY if unresolvedCount > 0
-  if (statistics.unresolvedCount > 0) {
-    items.push({
-      key: "unresolved",
-      label: "غير محدد",
-      value: statistics.unresolvedCount,
-      icon: "help-circle-outline",
-      color: colors.unknown,
-      bg: colors.muted,
-    });
-  }
+      icon: "remove",
+      circleBg: "#F59E0B",
+      bg: "#FFFBEB",
+      border: "#FEF3C7",
+      labelColor: "#D97706",
+    },
+    {
+      key: "forbidden",
+      label: "ممنوع",
+      value: statistics.forbiddenCount,
+      icon: "close",
+      circleBg: "#EF4444",
+      bg: "#FEF2F2",
+      border: "#FEE2E2",
+      labelColor: "#DC2626",
+    },
+  ];
 
   return (
     <View
-      style={styles.grid}
+      style={styles.container}
       accessibilityRole="summary"
-      accessibilityLabel={`إحصائيات المكونات: إجمالي ${statistics.totalIngredients}، ${statistics.allowedCount} مسموح، ${statistics.forbiddenCount} محظور`}
+      accessibilityLabel={`إحصائيات المكونات: ${statistics.allowedCount} مسموح، ${statistics.conditionalCount} مشروط، ${statistics.forbiddenCount} ممنوع`}
     >
-      {items.map((item) => (
+      {cards.map((item) => (
         <View
           key={item.key}
-          style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}
+          style={[
+            styles.statCard,
+            {
+              backgroundColor: item.bg,
+              borderColor: item.border,
+            },
+          ]}
         >
-          <View style={[styles.iconWrap, { backgroundColor: item.bg }]}>
-            <Icon name={item.icon as any} size={20} color={item.color} />
+          {/* Small circular status icon with white symbol */}
+          <View style={[styles.iconCircle, { backgroundColor: item.circleBg }]}>
+            <Icon name={item.icon as any} size={15} color="#FFFFFF" strokeWidth={2.8} />
           </View>
-          <Text style={[styles.value, { color: colors.foreground }]}>{item.value}</Text>
-          <Text style={[styles.label, { color: colors.mutedForeground }]}>{item.label}</Text>
+
+          {/* Large number */}
+          <Text style={styles.valueText}>{item.value}</Text>
+
+          {/* Short Arabic label */}
+          <Text style={[styles.labelText, { color: item.labelColor }]}>
+            {item.label}
+          </Text>
         </View>
       ))}
     </View>
@@ -100,37 +84,43 @@ export const StatisticCard = React.memo(function StatisticCard({ statistics }: S
 });
 
 const styles = StyleSheet.create({
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  container: {
+    flexDirection: "row-reverse",
+    justifyContent: "space-between",
+    alignItems: "center",
     gap: 10,
-    marginVertical: 4,
+    width: "100%",
   },
-  card: {
+  statCard: {
     flex: 1,
-    minWidth: "28%",
     borderRadius: 16,
     borderWidth: 1,
     paddingVertical: 14,
     paddingHorizontal: 8,
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  iconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  iconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 6,
   },
-  value: {
-    fontSize: 20,
+  valueText: {
+    fontSize: 22,
     fontFamily: "Tajawal_700Bold",
+    color: "#0F172A",
+    lineHeight: 26,
   },
-  label: {
-    fontSize: 12,
-    fontFamily: "Tajawal_500Medium",
-    marginTop: 2,
+  labelText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_700Bold",
   },
 });

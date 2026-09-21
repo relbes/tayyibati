@@ -13,90 +13,120 @@ interface Props {
   onManualEntry: (text: string) => void;
 }
 
-export function ImageQualityNotice({ report, onRetry, onSelectCandidate, onManualEntry }: Props) {
+export function ImageQualityNotice({
+  report,
+  onRetry,
+  onSelectCandidate,
+  onManualEntry,
+}: Props) {
   const colors = useColors();
   const ir = report.imageRecognition;
   const rtl = isRTL();
 
   if (!ir) return null;
 
+  // If there are suggestions/candidates, render the prominent candidate selector directly with onRetry
+  if (ir.candidates && ir.candidates.length > 0) {
+    return (
+      <ImageCandidateSelector
+        report={report}
+        onSelectCandidate={onSelectCandidate}
+        onManualEntry={onManualEntry}
+        onRetry={onRetry}
+      />
+    );
+  }
+
   const isPackaged = ir.imageType === "PACKAGED_PRODUCT";
-  const title = isPackaged ? "لم نتمكن من تحديد المنتج بدقة" : "لم نتمكن من تحديد الطعام بدقة";
-  const subtitle = isPackaged
-    ? "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات."
-    : "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات.";
+  const title = isPackaged
+    ? "لم نتمكن من تحديد المنتج بدقة"
+    : "لم نتمكن من تحديد الطعام بدقة";
+  const subtitle =
+    "حاول التقاط صورة أوضح للمنتج أو العبوة، ويفضل إظهار الاسم والمكونات.";
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.header, { flexDirection: rtl ? "row-reverse" : "row" }]}>
-        <Icon name="alert-triangle" size={24} color={colors.destructive} />
-        <Text style={[styles.title, { color: colors.foreground }]}>
-          {title}
-        </Text>
-      </View>
-      <Text style={[styles.subtitle, { color: colors.mutedForeground, textAlign: rtl ? "right" : "left" }]}>
-        {subtitle}
-      </Text>
-
-      <TouchableOpacity 
-        style={[styles.retryBtn, { backgroundColor: colors.primary, flexDirection: rtl ? "row-reverse" : "row" }]}
-        onPress={onRetry}
-      >
-        <Icon name="camera" size={20} color="#fff" />
-        <Text style={styles.retryBtnText}>إعادة التصوير</Text>
-      </TouchableOpacity>
-
-      {ir.candidates.length > 0 && (
-        <View style={styles.candidatesWrapper}>
-          <ImageCandidateSelector 
-            report={report} 
-            onSelectCandidate={onSelectCandidate}
-            onManualEntry={onManualEntry}
-          />
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <View style={styles.warningIconBadge}>
+          <Icon name="alert-triangle" size={22} color="#DC2626" />
         </View>
-      )}
+        <Text style={styles.title}>{title}</Text>
+      </View>
+      <Text style={styles.subtitle}>{subtitle}</Text>
+
+      <TouchableOpacity
+        style={styles.retryBtn}
+        onPress={onRetry}
+        activeOpacity={0.85}
+      >
+        <Icon name="camera" size={20} color="#FFFFFF" />
+        <Text style={styles.retryBtnText}>إعادة التقاط الصورة</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    padding: 16,
-    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
     borderWidth: 1,
-    marginVertical: 12,
+    borderColor: "#E2E8F0",
+    padding: 18,
+    marginVertical: 10,
     width: "100%",
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    gap: 12,
   },
   header: {
+    flexDirection: "row-reverse",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
+    gap: 10,
+  },
+  warningIconBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#FEF2F2",
+    alignItems: "center",
+    justifyContent: "center",
   },
   title: {
-    fontSize: 18,
+    fontSize: 17,
     fontFamily: "Tajawal_700Bold",
+    color: "#0F172A",
+    textAlign: "right",
     flex: 1,
   },
   subtitle: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontFamily: "Tajawal_400Regular",
-    marginBottom: 20,
+    color: "#64748B",
     lineHeight: 20,
-    width: "100%",
+    textAlign: "right",
   },
   retryBtn: {
+    flexDirection: "row-reverse",
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    padding: 14,
-    borderRadius: 12,
+    backgroundColor: "#008C5A",
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginTop: 6,
+    shadowColor: "#008C5A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    elevation: 2,
   },
   retryBtnText: {
-    color: "#fff",
-    fontSize: 16,
+    color: "#FFFFFF",
+    fontSize: 15.5,
     fontFamily: "Tajawal_700Bold",
   },
-  candidatesWrapper: {
-    marginTop: 16,
-  }
 });

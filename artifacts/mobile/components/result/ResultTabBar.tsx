@@ -4,18 +4,18 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useRouter } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { isRTL } from "@/lib/i18n";
 
-interface NavRoute { key: string; name: string }
-interface NavState { index: number; routes: NavRoute[] }
-interface BottomTabBarProps { state: NavState; navigation: any }
+export interface ResultTabBarProps {
+  activeTab?: "index" | "search" | "camera" | "history" | "profile";
+}
 
 interface TabConfig {
-  name: string;
+  name: "index" | "search" | "camera" | "history" | "profile";
   label: string;
   icon: string;
   iconFocused: string;
@@ -23,21 +23,36 @@ interface TabConfig {
 }
 
 const TABS: TabConfig[] = [
-  { name: "index",   label: "الرئيسية", icon: "home-outline",   iconFocused: "home" },
-  { name: "search",  label: "البحث",    icon: "search-outline", iconFocused: "search" },
-  { name: "camera",  label: "",         icon: "camera",         iconFocused: "camera", isCenter: true },
-  { name: "history", label: "السجل",    icon: "time-outline",   iconFocused: "time" },
-  { name: "profile", label: "حسابي",    icon: "person-outline", iconFocused: "person" },
+  { name: "index", label: "الرئيسية", icon: "home-outline", iconFocused: "home" },
+  { name: "search", label: "البحث", icon: "search-outline", iconFocused: "search" },
+  { name: "camera", label: "", icon: "camera", iconFocused: "camera", isCenter: true },
+  { name: "history", label: "السجل", icon: "time-outline", iconFocused: "time" },
+  { name: "profile", label: "حسابي", icon: "person-outline", iconFocused: "person" },
 ];
 
 const PRIMARY = "#16A34A";
 const INACTIVE = "#64748B";
 
-export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
+export const ResultTabBar = React.memo(function ResultTabBar({
+  activeTab = "index",
+}: ResultTabBarProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const rtl = isRTL();
 
   const bottomPad = Math.max(insets.bottom, 8);
+
+  const handleTabPress = (name: TabConfig["name"]) => {
+    try {
+      if (name === "index") {
+        router.replace("/(tabs)");
+      } else {
+        router.replace(`/(tabs)/${name}` as any);
+      }
+    } catch {
+      router.navigate("/(tabs)" as any);
+    }
+  };
 
   return (
     <View
@@ -50,52 +65,25 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       ]}
     >
       {TABS.map((tab) => {
-        const routeIndex = state.routes.findIndex((r: NavRoute) => r.name === tab.name);
-        const isFocused = state.index === routeIndex;
+        const isFocused = activeTab === tab.name;
         const color = isFocused ? PRIMARY : INACTIVE;
 
-        const onPress = () => {
-          if (routeIndex === -1) {
-            navigation.navigate(tab.name);
-            return;
-          }
-          const event = navigation.emit({
-            type: "tabPress",
-            target: state.routes[routeIndex]?.key ?? "",
-            canPreventDefault: true,
-          });
-          if (!isFocused && !event.defaultPrevented) {
-            navigation.navigate(tab.name);
-          }
-        };
-
-        // Render Centered Popped Camera Button
         if (tab.isCenter) {
           return (
             <TouchableOpacity
               key={tab.name}
               style={styles.centerTab}
-              onPress={onPress}
+              onPress={() => handleTabPress(tab.name)}
               activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="الكاميرا"
             >
               <View style={styles.centerButtonWrapper}>
-                {/* Decorative top accent rays */}
-                <View style={styles.centerRays}>
-                  <View style={styles.rayLeft} />
-                  <View style={styles.rayCenter} />
-                  <View style={styles.rayRight} />
-                </View>
-
-                {/* Outer glowing ring */}
+                {/* Outer halo ring */}
                 <View style={styles.centerButtonOuter}>
                   {/* Inner green floating button */}
                   <View style={styles.centerButtonInner}>
-                    <Icon
-                      name="camera"
-                      size={26}
-                      color="#FFFFFF"
-                      strokeWidth={2}
-                    />
+                    <Icon name="camera" size={26} color="#FFFFFF" strokeWidth={2} />
                   </View>
                 </View>
               </View>
@@ -103,13 +91,14 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
           );
         }
 
-        // Render Standard Tab
         return (
           <TouchableOpacity
             key={tab.name}
             style={styles.tab}
-            onPress={onPress}
+            onPress={() => handleTabPress(tab.name)}
             activeOpacity={0.75}
+            accessibilityRole="button"
+            accessibilityLabel={tab.label}
           >
             <View style={styles.tabContent}>
               <Icon
@@ -124,13 +113,10 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
                   {
                     color,
                     fontFamily: isFocused ? "Tajawal_700Bold" : "Tajawal_500Medium",
-                    fontSize: tab.name === "profile" ? 10.5 : 12,
-                    letterSpacing: tab.name === "profile" ? -0.3 : 0,
+                    fontSize: 12,
                   },
                 ]}
                 numberOfLines={1}
-                adjustsFontSizeToFit={tab.name === "profile"}
-                minimumFontScale={0.8}
               >
                 {tab.label}
               </Text>
@@ -145,7 +131,7 @@ export function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       })}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   container: {
@@ -153,7 +139,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     borderTopWidth: 1,
-    borderTopColor: "#F3F4F6",
+    borderTopColor: "#F1F5F9",
     paddingTop: 6,
     alignItems: "center",
     shadowColor: "#000000",
@@ -167,12 +153,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 56,
+    minHeight: 54,
   },
   tabContent: {
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 1,
+    paddingHorizontal: 2,
     paddingVertical: 2,
     gap: 2,
     minWidth: 46,
@@ -182,68 +168,39 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   activeDot: {
-    width: 4.5,
-    height: 4.5,
-    borderRadius: 2.25,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: PRIMARY,
     marginTop: 2,
   },
   dotPlaceholder: {
-    width: 4.5,
-    height: 4.5,
+    width: 4,
+    height: 4,
     marginTop: 2,
   },
   centerTab: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 56,
+    minHeight: 54,
     zIndex: 10,
   },
   centerButtonWrapper: {
     alignItems: "center",
     justifyContent: "center",
-    marginTop: -22,
+    marginTop: -20,
     position: "relative",
   },
-  centerRays: {
-    position: "absolute",
-    top: -9,
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "center",
-    gap: 6,
-    zIndex: 12,
-  },
-  rayCenter: {
-    width: 3,
-    height: 7,
-    borderRadius: 1.5,
-    backgroundColor: PRIMARY,
-  },
-  rayLeft: {
-    width: 3,
-    height: 6,
-    borderRadius: 1.5,
-    backgroundColor: PRIMARY,
-    transform: [{ rotate: "-28deg" }],
-  },
-  rayRight: {
-    width: 3,
-    height: 6,
-    borderRadius: 1.5,
-    backgroundColor: PRIMARY,
-    transform: [{ rotate: "28deg" }],
-  },
   centerButtonOuter: {
-    width: 66,
-    height: 66,
-    borderRadius: 33,
-    backgroundColor: "#E6F6F0",
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#F0FDF4",
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1.5,
-    borderColor: "#A3E2CB",
+    borderColor: "#DCFCE7",
   },
   centerButtonInner: {
     width: 52,
@@ -254,9 +211,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     shadowColor: PRIMARY,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 6,
-    elevation: 8,
+    elevation: 6,
   },
 });
-
