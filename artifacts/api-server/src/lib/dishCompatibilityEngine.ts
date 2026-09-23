@@ -657,11 +657,8 @@ export async function analyzeDishCompatibility(
   // Determine query protein category context
   const proteinContextQuery = originalQuery || (typeof dishIdentifier === "string" ? dishIdentifier : "");
   const queryProtein = getProteinFields(proteinContextQuery);
-  if (queryProtein.proteinCategory === "MEAT" && queryProtein.proteinSpecificity === "UNSPECIFIED") {
-    queryProtein.proteinSpecificity = "BEEF";
-  } else if (queryProtein.proteinCategory === "POULTRY" && queryProtein.proteinSpecificity === "UNSPECIFIED") {
-    queryProtein.proteinSpecificity = "CHICKEN";
-  }
+  // Do not infer a specific animal from a generic protein term.
+  // "لحم" does not mean beef, and "دواجن" does not necessarily mean chicken.
 
   let targetDish: any = null;
   let countryOrigins: string[] = ["الوطن العربي"];
