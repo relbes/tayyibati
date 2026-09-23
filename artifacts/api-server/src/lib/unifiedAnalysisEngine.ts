@@ -465,6 +465,68 @@ export class UnifiedAnalysisEngine {
       }
     }
 
+    // General entity-resolution priority guard:
+    // If request is not explicitly selecting a dish, and FoodResolutionEngine finds an exact food
+    // with CONFIDENT state, the exact Food resolution takes priority over a competing Dish alias.
+    // MANDATE: NEVER overwrite AMBIGUOUS search outcome!
+    if (
+      input.entityType !== "dish" &&
+      !input.dishId &&
+      canonicalSearchRes?.searchOutcome !== "AMBIGUOUS" &&
+      structuredSearch.primaryResult?.searchOutcome !== "AMBIGUOUS"
+    ) {
+      const isDishResult = Boolean(
+        canonicalSearchRes &&
+        ((canonicalSearchRes as any).canonicalEntityType === "dish" || (canonicalSearchRes as any).entity_type === "dish")
+      );
+      const isDishAlias = Boolean(
+        isDishResult && (
+          (canonicalSearchRes as any)?.searchMethod === "exact_alias" ||
+          (canonicalSearchRes as any)?.search_method === "exact_alias" ||
+          canonicalSearchRes?.matchType === "ALIAS" ||
+          Boolean((canonicalSearchRes as any)?.matchedAlias) ||
+          canonicalSearchRes?.matchedReason?.includes("Dish Alias")
+        )
+      );
+
+      // Evaluate FoodResolutionEngine if there is a competing Dish alias, or no confident dish match
+      if (isDishAlias || !canonicalSearchRes || canonicalSearchRes.searchOutcome === "NOT_FOUND") {
+        const foodResolution = await FoodResolutionEngine.resolve(
+          queryText,
+          (input.inputType || "text") as any,
+          0
+        );
+
+        const candidate = foodResolution.selectedCandidate;
+
+        if (
+          foodResolution.state === "CONFIDENT" &&
+          candidate?.type === "food" &&
+          candidate?.foodType === "exact_food"
+        ) {
+          canonicalSearchRes = {
+            ...(canonicalSearchRes || {}),
+            id: candidate.id,
+            canonicalId: candidate.id,
+            canonical_id: candidate.id,
+            canonicalName: candidate.nameAr,
+            canonical_name: candidate.nameAr,
+            canonicalEntityType: "food",
+            entity_type: "food",
+            searchConfidence: 100,
+            confidence: 100,
+            matchType: "EXACT",
+            searchOutcome: "FOUND",
+            search_method: "food_resolution_exact",
+          } as any;
+          if (structuredSearch.primaryResult) {
+            structuredSearch.primaryResult = canonicalSearchRes;
+          }
+        }
+      }
+    }
+
+
     const diagnostics = canonicalSearchRes?.diagnostics || {
       originalQuery: queryText,
       normalizedQuery: CanonicalSearchEngine.normalize(queryText),
