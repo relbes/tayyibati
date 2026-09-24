@@ -11,6 +11,7 @@ import { requireAuth } from "../middleware/requireAuth";
 import { requireAdmin } from "./admin";
 import { getFreeMonthlyLimit } from "../lib/config";
 import { getUserPlanLimits } from "./analysis";
+import { recordUserActivity } from "../lib/userActivityLogger";
 
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 
@@ -651,6 +652,18 @@ router.post("/users/register", async (req, res) => {
         avatar: avatar ? String(avatar) : null,
       })
       .returning();
+
+    recordUserActivity({
+      userId: created.id,
+      category: "AUTH",
+      eventType: "ACCOUNT_CREATED",
+      eventName: "Account Created",
+      description: provider === "google" ? "Account created with Google" : "Account created with Email",
+      actorType: "USER",
+      actorId: created.id,
+      metadata: { provider: created.provider, email: created.email },
+    });
+
     res.status(201).json({ ...toPublicUser(created), token: issueToken(created.id) });
   } catch (err) {
     req.log.error({ err }, "Failed to register user");
@@ -717,6 +730,17 @@ router.post("/users/login", async (req, res) => {
       .set({ failedLoginAttempts: 0, lockedUntil: null })
       .where(eq(usersTable.id, user.id))
       .returning();
+
+    recordUserActivity({
+      userId: loggedIn.id,
+      category: "AUTH",
+      eventType: "LOGIN",
+      eventName: "Email Login",
+      description: "Successful login via email",
+      actorType: "USER",
+      actorId: loggedIn.id,
+    });
+
     res.json({ ...toPublicUser(loggedIn), token: issueToken(loggedIn.id) });
   } catch (err) {
     req.log.error({ err }, "Failed to login user");
@@ -1077,6 +1101,20 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     if (updates.isPremium !== undefined) {
       await syncTodayUsagePremium(user.id, user.isPremium === "true");
     }
+
+    const admin = (req as any).adminUser;
+    recordUserActivity({
+      userId: user.id,
+      category: "ADMIN_ACTION",
+      eventType: "ADMIN_UPDATE_USER",
+      eventName: "User Updated by Admin",
+      description: `Admin updated fields: ${Object.keys(updates).join(", ")}`,
+      actorType: "ADMIN",
+      actorId: admin?.id || null,
+      actorName: admin?.username || "Admin",
+      metadata: { updates },
+    });
+
     res.json(toAdminUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to update user");
@@ -1091,6 +1129,7 @@ router.post("/users/:id/plan", requireAdmin, async (req, res) => {
 
     let isPremium = false;
     let resolvedPlanId: number | null = null;
+    let planName = "No Plan";
     if (planId !== null) {
       const [plan] = await db
         .select()
@@ -1098,6 +1137,7 @@ router.post("/users/:id/plan", requireAdmin, async (req, res) => {
         .where(eq(subscriptionPlansTable.id, Number(planId)));
       if (!plan) return void res.status(404).json({ error: "Plan not found" });
       resolvedPlanId = plan.id;
+      planName = plan.nameEn || plan.name || `#${plan.id}`;
       const freeLimit = await getFreeMonthlyLimit();
       isPremium = plan.dailyLimit < 0 || plan.dailyLimit > freeLimit || parseFloat(plan.price) > 0;
     }
@@ -1109,6 +1149,20 @@ router.post("/users/:id/plan", requireAdmin, async (req, res) => {
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     await syncTodayUsagePremium(user.id, isPremium);
+
+    const admin = (req as any).adminUser;
+    recordUserActivity({
+      userId: user.id,
+      category: "ADMIN_ACTION",
+      eventType: "ADMIN_CHANGE_PLAN",
+      eventName: "Plan Changed by Admin",
+      description: resolvedPlanId ? `Assigned to ${planName} (${isPremium ? "Premium" : "Free"})` : "Removed subscription plan",
+      actorType: "ADMIN",
+      actorId: admin?.id || null,
+      actorName: admin?.username || "Admin",
+      metadata: { planId: resolvedPlanId, planName, isPremium },
+    });
+
     res.json(toAdminUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to enroll user in plan");
@@ -1125,6 +1179,19 @@ router.post("/users/:id/unlock", requireAdmin, async (req, res) => {
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
     req.log.info({ userId: req.params.id }, "Admin unlocked user account");
+
+    const admin = (req as any).adminUser;
+    recordUserActivity({
+      userId: user.id,
+      category: "ADMIN_ACTION",
+      eventType: "ADMIN_UNLOCK_USER",
+      eventName: "Account Unlocked by Admin",
+      description: "Admin cleared lockout status and failed attempts",
+      actorType: "ADMIN",
+      actorId: admin?.id || null,
+      actorName: admin?.username || "Admin",
+    });
+
     res.json(toAdminUser(user));
   } catch (err) {
     req.log.error({ err }, "Failed to unlock user");
@@ -1145,6 +1212,19 @@ router.post("/users/:id/reset-password", requireAdmin, async (req, res) => {
       .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!user) return void res.status(404).json({ error: "Not found" });
+
+    const admin = (req as any).adminUser;
+    recordUserActivity({
+      userId: user.id,
+      category: "ADMIN_ACTION",
+      eventType: "ADMIN_RESET_PASSWORD",
+      eventName: "Password Reset by Admin",
+      description: "Admin set a new password for user",
+      actorType: "ADMIN",
+      actorId: admin?.id || null,
+      actorName: admin?.username || "Admin",
+    });
+
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to reset password");
@@ -1159,11 +1239,25 @@ router.delete("/users/:id", requireAdmin, async (req, res) => {
       .where(eq(usersTable.id, req.params.id as string))
       .returning();
     if (!deleted) return void res.status(404).json({ error: "Not found" });
+
+    const admin = (req as any).adminUser;
+    recordUserActivity({
+      userId: deleted.id,
+      category: "ADMIN_ACTION",
+      eventType: "ADMIN_DELETE_USER",
+      eventName: "User Deleted by Admin",
+      description: `Admin deleted user ${deleted.email}`,
+      actorType: "ADMIN",
+      actorId: admin?.id || null,
+      actorName: admin?.username || "Admin",
+    });
+
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to delete user");
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
 export default router;

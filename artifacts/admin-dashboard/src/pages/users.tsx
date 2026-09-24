@@ -13,10 +13,28 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { UserHistoryTab } from "@/components/UserHistoryTab";
+import { UserReportModal } from "@/components/UserReportModal";
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { Pencil, Trash2, Users as UsersIcon, Star, Search, Key, Mail, LockOpen, Lock, Download } from "lucide-react";
+import {
+  Pencil,
+  Trash2,
+  Users as UsersIcon,
+  Star,
+  Search,
+  Key,
+  Mail,
+  LockOpen,
+  Lock,
+  Download,
+  History as HistoryIcon,
+  User as UserIcon,
+  Calendar,
+  BarChart3,
+} from "lucide-react";
 
 import { getApiBaseUrl, adminFetch } from "@/lib/api";
 
@@ -107,6 +125,8 @@ export default function Users() {
   const { lang } = useLang();
   const [search, setSearch] = useState("");
   const [editUser, setEditUser] = useState<User | null>(null);
+  const [reportUser, setReportUser] = useState<User | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("overview");
   const [form, setForm] = useState({ name: "", email: "", isPremium: "false", planId: NO_PLAN });
   const [newPassword, setNewPassword] = useState("");
 
@@ -178,8 +198,9 @@ export default function Users() {
     }
   };
 
-  const openEdit = (user: User) => {
+  const openEdit = (user: User, initialTab: string = "overview") => {
     setEditUser(user);
+    setActiveTab(initialTab);
     setForm({ name: user.name, email: user.email, isPremium: user.isPremium, planId: user.planId != null ? String(user.planId) : NO_PLAN });
     setNewPassword("");
   };
@@ -280,11 +301,29 @@ export default function Users() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(user)}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setReportUser(user)}
+                        title={tr(lang, "userReport")}
+                        className="text-emerald-600 hover:text-emerald-700 hover:bg-emerald-500/10"
+                      >
+                        <BarChart3 className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => openEdit(user, "history")}
+                        title={lang === "ar" ? "سجل النشاط" : "Activity History"}
+                        className="text-primary hover:text-primary hover:bg-primary/10"
+                      >
+                        <HistoryIcon className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(user, "overview")} title={tr(lang, "edit")}>
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDelete(user)}
-                        className="text-destructive hover:text-destructive">
+                        className="text-destructive hover:text-destructive" title={tr(lang, "delete")}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -297,87 +336,192 @@ export default function Users() {
       )}
 
       <Dialog open={!!editUser} onOpenChange={(o) => { if (!o) setEditUser(null); }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{tr(lang, "editUser")}</DialogTitle>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-base shrink-0">
+                  {editUser?.name ? editUser.name.charAt(0).toUpperCase() : editUser?.email.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <DialogTitle className="text-lg font-bold">
+                    {editUser?.name || editUser?.email}
+                  </DialogTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {editUser?.email} · {lang === "ar" ? "انضم في" : "Joined"}{" "}
+                    {editUser?.createdAt ? new Date(editUser.createdAt).toLocaleDateString(lang === "ar" ? "ar-SA" : "en-US") : "—"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setReportUser(editUser)}
+                  className="gap-1.5 text-xs text-primary hover:text-primary hover:bg-primary/10"
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                  {tr(lang, "userReport")}
+                </Button>
+                {editUser?.isPremium === "true" ? (
+                  <Badge className="gap-1"><Star className="h-3 w-3" /> {tr(lang, "premium")}</Badge>
+                ) : (
+                  <Badge variant="secondary">{tr(lang, "basic")}</Badge>
+                )}
+                {editUser?.isLocked && (
+                  <Badge variant="destructive" className="gap-1">
+                    <Lock className="h-3 w-3" /> {tr(lang, "locked")}
+                  </Badge>
+                )}
+              </div>
+            </div>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            {editUser?.isLocked && (
-              <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-destructive" />
-                  <div>
-                    <p className="text-sm font-medium text-destructive">
-                      {lang === "ar" ? "الحساب محجوب" : "Account locked"}
-                    </p>
-                    {editUser.lockedUntil && (
-                      <p className="text-xs text-muted-foreground">
-                        {formatLockedUntil(editUser.lockedUntil, lang)} · {editUser.failedLoginAttempts} {tr(lang, "failedAttempts")}
-                      </p>
-                    )}
+
+          {editUser && (
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full mt-2">
+              <TabsList className="grid w-full grid-cols-3">
+                <TabsTrigger value="overview" className="gap-1.5 text-xs">
+                  <UserIcon className="h-3.5 w-3.5" />
+                  {tr(lang, "overviewTab")}
+                </TabsTrigger>
+                <TabsTrigger value="subscription" className="gap-1.5 text-xs">
+                  <Star className="h-3.5 w-3.5" />
+                  {tr(lang, "subscriptionTab")}
+                </TabsTrigger>
+                <TabsTrigger value="history" className="gap-1.5 text-xs">
+                  <HistoryIcon className="h-3.5 w-3.5" />
+                  {tr(lang, "historyTab")}
+                </TabsTrigger>
+              </TabsList>
+
+              {/* OVERVIEW TAB */}
+              <TabsContent value="overview" className="space-y-4 py-3">
+                {editUser.isLocked && (
+                  <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-destructive" />
+                      <div>
+                        <p className="text-sm font-medium text-destructive">
+                          {lang === "ar" ? "الحساب محجوب" : "Account locked"}
+                        </p>
+                        {editUser.lockedUntil && (
+                          <p className="text-xs text-muted-foreground">
+                            {formatLockedUntil(editUser.lockedUntil, lang)} · {editUser.failedLoginAttempts} {tr(lang, "failedAttempts")}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline"
+                      className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      onClick={() => unlockMut.mutate(editUser.id)} disabled={unlockMut.isPending}>
+                      <LockOpen className="h-3.5 w-3.5" />
+                      {tr(lang, "unlock")}
+                    </Button>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>{tr(lang, "name")}</Label>
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {tr(lang, "email")}</Label>
+                    <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
                   </div>
                 </div>
-                <Button size="sm" variant="outline"
-                  className="gap-1.5 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={() => unlockMut.mutate(editUser.id)} disabled={unlockMut.isPending}>
-                  <LockOpen className="h-3.5 w-3.5" />
-                  {tr(lang, "unlock")}
+                <div className="space-y-1.5 pt-2 border-t">
+                  <Label className="flex items-center gap-1.5"><Key className="h-3.5 w-3.5" /> {tr(lang, "resetPassword")}</Label>
+                  <Input type="text"
+                    placeholder={lang === "ar" ? "اتركه فارغاً للإبقاء على كلمة المرور الحالية" : "Leave blank to keep current"}
+                    value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+                  <p className="text-xs text-muted-foreground">
+                    {editUser?.hasPassword
+                      ? (lang === "ar" ? "المستخدم لديه كلمة مرور." : "User has a password set.")
+                      : (lang === "ar" ? "لا توجد كلمة مرور." : "User has no password yet.")}
+                    {" "}{lang === "ar" ? "4 أحرف على الأقل." : "Min 4 characters."}
+                  </p>
+                </div>
+              </TabsContent>
+
+              {/* SUBSCRIPTION TAB */}
+              <TabsContent value="subscription" className="space-y-4 py-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>{tr(lang, "status")}</Label>
+                    <Select value={form.isPremium} onValueChange={(v) => setForm({ ...form, isPremium: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="false">{tr(lang, "basic")}</SelectItem>
+                        <SelectItem value="true">{tr(lang, "premium")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>{tr(lang, "plan")}</Label>
+                    <Select value={form.planId} onValueChange={(v) => setForm({ ...form, planId: v })}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value={NO_PLAN}>{lang === "ar" ? "بدون خطة" : "No plan"}</SelectItem>
+                        {plans.map((p) => (
+                          <SelectItem key={p.id} value={String(p.id)}>{lang === "ar" ? p.name : p.nameEn}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {form.planId !== NO_PLAN && (
+                  <div className="rounded-lg border bg-muted/30 p-3.5 space-y-1 text-xs">
+                    <div className="font-semibold text-sm text-foreground">
+                      {planName(Number(form.planId))}
+                    </div>
+                    <p className="text-muted-foreground">
+                      {lang === "ar"
+                        ? "حدود الباقة والمميزات تُطبق على هذا الحساب وتُسجل في سجل النشاط."
+                        : "Plan limits and features are applied to this account and recorded in history."}
+                    </p>
+                  </div>
+                )}
+              </TabsContent>
+
+              {/* HISTORY TAB */}
+              <TabsContent value="history" className="py-3">
+                <UserHistoryTab
+                  userId={editUser.id}
+                  userName={editUser.name}
+                  userEmail={editUser.email}
+                  isActive={activeTab === "history"}
+                />
+              </TabsContent>
+            </Tabs>
+          )}
+
+          <DialogFooter className="flex items-center justify-between sm:justify-between w-full pt-3 border-t">
+            <span className="text-xs text-muted-foreground font-mono">
+              ID: {editUser?.id}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setEditUser(null)}>
+                {activeTab === "history" ? (lang === "ar" ? "إغلاق" : "Close") : tr(lang, "cancel")}
+              </Button>
+              {activeTab !== "history" && (
+                <Button onClick={() => saveMut.mutate()} disabled={!form.email || saveMut.isPending}>
+                  {tr(lang, "save")}
                 </Button>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <Label>{tr(lang, "name")}</Label>
-              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              )}
             </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Mail className="h-3.5 w-3.5" /> {tr(lang, "email")}</Label>
-              <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>{tr(lang, "status")}</Label>
-                <Select value={form.isPremium} onValueChange={(v) => setForm({ ...form, isPremium: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="false">{tr(lang, "basic")}</SelectItem>
-                    <SelectItem value="true">{tr(lang, "premium")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>{tr(lang, "plan")}</Label>
-                <Select value={form.planId} onValueChange={(v) => setForm({ ...form, planId: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={NO_PLAN}>{lang === "ar" ? "بدون خطة" : "No plan"}</SelectItem>
-                    {plans.map((p) => (
-                      <SelectItem key={p.id} value={String(p.id)}>{lang === "ar" ? p.name : p.nameEn}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="flex items-center gap-1.5"><Key className="h-3.5 w-3.5" /> {tr(lang, "resetPassword")}</Label>
-              <Input type="text"
-                placeholder={lang === "ar" ? "اتركه فارغاً للإبقاء على كلمة المرور الحالية" : "Leave blank to keep current"}
-                value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-              <p className="text-xs text-muted-foreground">
-                {editUser?.hasPassword
-                  ? (lang === "ar" ? "المستخدم لديه كلمة مرور." : "User has a password set.")
-                  : (lang === "ar" ? "لا توجد كلمة مرور." : "User has no password yet.")}
-                {" "}{lang === "ar" ? "4 أحرف على الأقل." : "Min 4 characters."}
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditUser(null)}>{tr(lang, "cancel")}</Button>
-            <Button onClick={() => saveMut.mutate()} disabled={!form.email || saveMut.isPending}>
-              {tr(lang, "save")}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Standalone User Report Modal */}
+      <UserReportModal
+        userId={reportUser?.id ?? null}
+        userName={reportUser?.name ?? undefined}
+        isOpen={!!reportUser}
+        onClose={() => setReportUser(null)}
+        defaultLang={lang}
+      />
     </div>
   );
 }

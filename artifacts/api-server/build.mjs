@@ -44,6 +44,7 @@ async function buildAll() {
       path.resolve(artifactDir, "src/test_potato_family_fix.ts"),
       path.resolve(artifactDir, "src/test_api_endpoints.ts"),
       path.resolve(artifactDir, "src/test_ai_monitoring_suite.ts"),
+      path.resolve(artifactDir, "src/test_user_activity_history.ts"),
       path.resolve(artifactDir, "src/qa/searchQaRunner.ts")
     ],
     platform: "node",

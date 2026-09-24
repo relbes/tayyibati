@@ -13,6 +13,7 @@ export * from "./aiCache";
 export * from "./adminUsers";
 export * from "./leads";
 export * from "./aiMonitoring";
+export * from "./userActivityHistory";
 
 
 

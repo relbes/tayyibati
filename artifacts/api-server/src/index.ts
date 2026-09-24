@@ -31,9 +31,14 @@ if (!process.env.DATABASE_URL || !process.env.OPENAI_API_KEY) {
 import app from "./app";
 import { logger } from "./lib/logger";
 import { runAiMonitoringMigration } from "./lib/ai/aiMonitoringMigration";
+import { runUserActivityHistoryMigration } from "./lib/userActivityHistoryMigration";
 
 runAiMonitoringMigration().catch((err) => {
   logger.warn({ err }, "Initial AI Monitoring migration check warning");
+});
+
+runUserActivityHistoryMigration().catch((err) => {
+  logger.warn({ err }, "Initial User Activity History migration check warning");
 });
 
 const rawPort = process.env["PORT"] || "5000";

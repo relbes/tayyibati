@@ -21,6 +21,7 @@ import { callGeminiVision } from "../lib/ai/geminiProvider";
 import crypto from "crypto";
 import { trackAIUsageNonBlocking } from "../lib/ai/aiUsageTracker";
 import { isFallbackEligibleError } from "../lib/ai/aiProvider";
+import { recordUserActivity } from "../lib/userActivityLogger";
 
 const router = Router();
 
@@ -1002,6 +1003,22 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
         compatibilityScore: report.compatibilityScore,
         report: report as any,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+
+      recordUserActivity({
+        userId,
+        category: "SEARCH",
+        eventType: "FOOD_SEARCH",
+        eventName: "Food Search",
+        description: report.query || "Food search",
+        actorType: "USER",
+        actorId: userId,
+        metadata: {
+          compatibilityScore: report.compatibilityScore,
+          status: (report as any).status,
+          matchedFoodId: (report as any).matchedFoodId,
+          matchedDishId: (report as any).matchedDishId,
+        },
+      });
     }
 
     const jsonResponse = {
@@ -1126,6 +1143,22 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
         compatibilityScore: report.compatibilityScore,
         report: report as any,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+
+      recordUserActivity({
+        userId,
+        category: "SEARCH",
+        eventType: "FOOD_SEARCH",
+        eventName: "Food Search",
+        description: report.query || "Food search",
+        actorType: "USER",
+        actorId: userId,
+        metadata: {
+          compatibilityScore: report.compatibilityScore,
+          status: (report as any).status,
+          matchedFoodId: (report as any).matchedFoodId,
+          matchedDishId: (report as any).matchedDishId,
+        },
+      });
     }
 
     return void res.json({
@@ -1743,6 +1776,21 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
         compatibilityScore: report.compatibilityScore ?? 0,
         report: report as any,
       }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+
+      recordUserActivity({
+        userId,
+        category: imageAnalysisType === "image" ? "IMAGE_ANALYSIS" : "INGREDIENT_ANALYSIS",
+        eventType: imageAnalysisType === "image" ? "IMAGE_ANALYSIS" : "LABEL_ANALYSIS",
+        eventName: imageAnalysisType === "image" ? "Image Analysis" : "Label Analysis",
+        description: report.query || (imageAnalysisType === "image" ? "Image analysis completed" : "Ingredient label analysis"),
+        actorType: "USER",
+        actorId: userId,
+        metadata: {
+          compatibilityScore: report.compatibilityScore,
+          status: (report as any).status,
+          analysisType: imageAnalysisType,
+        },
+      });
     }
 
     res.json(report);

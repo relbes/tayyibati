@@ -12,6 +12,7 @@ import { adminKnowledgeReviewRouter } from "./adminKnowledgeReview";
 import { adminAiCacheRouter } from "./adminAiCache";
 import leadsRouter from "./leads";
 import adminAiMonitoringRouter from "./adminAiMonitoring";
+import adminUserHistoryRouter from "./adminUserHistory";
 
 const router: IRouter = Router();
 
@@ -22,6 +23,7 @@ router.use(foodsRouter);
 router.use(dishesRouter);
 router.use(analysisRouter);
 router.use(historyRouter);
+router.use(adminUserHistoryRouter);
 router.use(usersRouter);
 router.use(adminRouter);
 router.use(leadsRouter);
