@@ -20,23 +20,19 @@ import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { PageHeader } from "@/components/PageHeader";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
-import * as WebBrowser from "expo-web-browser";
-import * as AuthSession from "expo-auth-session";
+import {
+  GoogleSignin,
+  statusCodes,
+  isSuccessResponse,
+  isErrorWithCode,
+} from "@react-native-google-signin/google-signin";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { AuthError } from "@/lib/api";
 
-WebBrowser.maybeCompleteAuthSession();
-
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID;
-
-const GOOGLE_DISCOVERY = {
-  authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-  tokenEndpoint: "https://oauth2.googleapis.com/token",
-  revocationEndpoint: "https://oauth2.googleapis.com/revoke",
-};
 
 const domain =
   process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
@@ -55,12 +51,6 @@ async function fetchGoogleLoginEnabled(): Promise<boolean> {
   } catch {
     return false;
   }
-}
-
-function getGoogleClientId(): string {
-  if (Platform.OS === "ios" && GOOGLE_IOS_CLIENT_ID) return GOOGLE_IOS_CLIENT_ID;
-  if (Platform.OS === "android" && GOOGLE_ANDROID_CLIENT_ID) return GOOGLE_ANDROID_CLIENT_ID;
-  return GOOGLE_WEB_CLIENT_ID || "not-configured";
 }
 
 export default function AuthScreen() {
@@ -88,28 +78,14 @@ export default function AuthScreen() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const androidReversedScheme = GOOGLE_ANDROID_CLIENT_ID
-    ? `com.googleusercontent.apps.${GOOGLE_ANDROID_CLIENT_ID.replace(".apps.googleusercontent.com", "")}`
-    : "tayyibati";
-
-  const redirectUri = AuthSession.makeRedirectUri({
-    scheme: Platform.OS === "android" ? androidReversedScheme : "tayyibati",
-    path: "auth",
-  });
-
-  const [request, response, promptAsync] = AuthSession.useAuthRequest(
-    {
-      clientId: getGoogleClientId(),
-      redirectUri,
-      scopes: ["openid", "profile", "email"],
-      responseType: AuthSession.ResponseType.Code,
-      usePKCE: true,
-    },
-    GOOGLE_DISCOVERY,
-  );
-
   useEffect(() => {
     fetchGoogleLoginEnabled().then(setGoogleEnabled);
+    if (Platform.OS !== "web" && GOOGLE_WEB_CLIENT_ID) {
+      GoogleSignin.configure({
+        webClientId: GOOGLE_WEB_CLIENT_ID,
+        iosClientId: GOOGLE_IOS_CLIENT_ID,
+      });
+    }
   }, []);
 
   useEffect(() => {
@@ -122,48 +98,6 @@ export default function AuthScreen() {
     }, 1000);
     return () => clearInterval(timer);
   }, [lockedSecondsLeft !== null]);
-
-  useEffect(() => {
-    if (response?.type === "success") {
-      const code = response.params?.code;
-      if (code) {
-        handleGoogleCodeExchange(code);
-      } else {
-        setGoogleLoading(false);
-        setError("تعذر الحصول على رمز التفويض من Google.");
-      }
-    } else if (response?.type === "error") {
-      setGoogleLoading(false);
-      setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
-    } else if (response?.type === "dismiss" || response?.type === "cancel") {
-      setGoogleLoading(false);
-    }
-  }, [response]);
-
-  const handleGoogleCodeExchange = async (code: string) => {
-    try {
-      const tokenResult = await AuthSession.exchangeCodeAsync(
-        {
-          clientId: getGoogleClientId(),
-          code,
-          redirectUri,
-          extraParams: request?.codeVerifier ? { code_verifier: request.codeVerifier } : undefined,
-        },
-        GOOGLE_DISCOVERY,
-      );
-
-      const idToken = tokenResult.idToken || (tokenResult.rawResponse as any)?.id_token;
-      if (idToken) {
-        await handleGoogleSuccess(idToken);
-      } else {
-        setGoogleLoading(false);
-        setError("تعذر الحصول على رمز المصادقة من Google.");
-      }
-    } catch {
-      setGoogleLoading(false);
-      setError("فشل تبادل رمز التفويض مع Google.");
-    }
-  };
 
   const handleGoogleSuccess = async (idToken: string) => {
     if (!idToken) { setGoogleLoading(false); return; }
@@ -183,14 +117,58 @@ export default function AuthScreen() {
   };
 
   const handleGooglePress = async () => {
-    if (!GOOGLE_WEB_CLIENT_ID && !GOOGLE_ANDROID_CLIENT_ID) {
+    if (!GOOGLE_WEB_CLIENT_ID) {
       setError("Google Sign-In is not configured.");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setGoogleLoading(true);
     setError("");
-    await promptAsync();
+
+    if (Platform.OS === "web") {
+      setGoogleLoading(false);
+      setError("تسجيل الدخول بـ Google متاح عبر تطبيق الهاتف فقط.");
+      return;
+    }
+
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      try {
+        await GoogleSignin.signOut();
+      } catch {
+        // Ignore if no prior user was signed in
+      }
+      const response = await GoogleSignin.signIn();
+      if (isSuccessResponse(response)) {
+        const idToken = response.data.idToken;
+        if (idToken) {
+          await handleGoogleSuccess(idToken);
+        } else {
+          setGoogleLoading(false);
+          setError("تعذر الحصول على رمز المصادقة من Google.");
+        }
+      } else {
+        setGoogleLoading(false);
+      }
+    } catch (err: any) {
+      setGoogleLoading(false);
+      if (isErrorWithCode(err)) {
+        switch (err.code) {
+          case statusCodes.SIGN_IN_CANCELLED:
+            break;
+          case statusCodes.IN_PROGRESS:
+            break;
+          case statusCodes.PLAY_SERVICES_NOT_AVAILABLE:
+            setError("خدمات Google Play غير متوفرة أو بحاجة إلى تحديث.");
+            break;
+          default:
+            setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
+            break;
+        }
+      } else {
+        setError("حدث خطأ غير متوقع أثناء تسجيل الدخول بـ Google.");
+      }
+    }
   };
 
   const handleSubmit = async () => {
@@ -307,7 +285,7 @@ export default function AuthScreen() {
                   opacity: googleLoading ? 0.6 : 1,
                 }]}
                 onPress={handleGooglePress}
-                disabled={googleLoading || loading || !request}
+                disabled={googleLoading || loading || !GOOGLE_WEB_CLIENT_ID}
                 activeOpacity={0.75}
               >
                 <View style={styles.googleIcon}>

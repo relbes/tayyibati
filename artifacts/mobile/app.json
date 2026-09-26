@@ -94,6 +94,12 @@
           "cameraPermission": "يستخدم التطبيق الكاميرا لتصوير الأطعمة والملصقات.",
           "microphonePermission": false
         }
+      ],
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.133601957570-tl1echnbnngfo7pnk25tfri72eun63r1"
+        }
       ]
     ],
     "experiments": {
