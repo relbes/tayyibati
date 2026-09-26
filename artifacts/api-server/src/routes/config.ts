@@ -65,10 +65,15 @@ router.patch("/config/:key", requireAdmin, async (req, res) => {
       return void res.status(400).json({ error: "value is required" });
     }
 
+    // Keys that must always be public so client applications can read them
+    const ALWAYS_PUBLIC_KEYS = new Set(["google_login_enabled"]);
+
     // Never allow secret keys to be marked public
     let publicFlag: string | undefined;
     if (isSecretKey(key)) {
       publicFlag = "false";
+    } else if (ALWAYS_PUBLIC_KEYS.has(key)) {
+      publicFlag = "true";
     } else if (isPublic !== undefined) {
       publicFlag = isPublic === true || isPublic === "true" ? "true" : "false";
     }

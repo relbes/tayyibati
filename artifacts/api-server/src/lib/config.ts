@@ -46,3 +46,32 @@ export async function getFreeMonthlyLimit(): Promise<number> {
     return FREE_MONTHLY_LIMIT_DEFAULT;
   }
 }
+
+/**
+ * Ensures google_login_enabled is present in app_config table with value 'true' and is_public 'true'.
+ * If absent, seeds it so the mobile app and public config endpoint recognize Google Login.
+ */
+export async function ensureGoogleLoginConfig(): Promise<void> {
+  try {
+    const [existing] = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.key, "google_login_enabled"));
+    if (!existing) {
+      await db.insert(appConfigTable).values({
+        key: "google_login_enabled",
+        value: "true",
+        description: "Enables Google Sign-In button on mobile and web clients",
+        isPublic: "true",
+      });
+    } else if (existing.isPublic !== "true") {
+      await db
+        .update(appConfigTable)
+        .set({ isPublic: "true" })
+        .where(eq(appConfigTable.key, "google_login_enabled"));
+    }
+  } catch {
+    // Non-fatal if table not yet initialized
+  }
+}
+

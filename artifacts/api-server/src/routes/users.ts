@@ -3,7 +3,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { db } from "@workspace/db";
-import { userUsageTable, usersTable, subscriptionPlansTable, passwordResetsTable } from "@workspace/db";
+import { userUsageTable, usersTable, subscriptionPlansTable, passwordResetsTable, appConfigTable } from "@workspace/db";
 import { eq, and, ilike, or, desc, isNull, ne } from "drizzle-orm";
 import { sendPasswordResetEmail } from "../lib/email";
 import { issueToken } from "../lib/session";
@@ -12,6 +12,7 @@ import { requireAdmin } from "./admin";
 import { getFreeMonthlyLimit } from "../lib/config";
 import { getUserPlanLimits } from "./analysis";
 import { recordUserActivity } from "../lib/userActivityLogger";
+import { verifyGoogleIdToken } from "../lib/googleAuth";
 
 const REVENUECAT_PROJECT_ID = process.env.REVENUECAT_PROJECT_ID;
 
@@ -554,6 +555,99 @@ router.get("/users/usage", requireAuth, async (req, res) => {
     res.json({ userId, monthlyTextCount, monthlyImageCount, textLimit, imageLimit, textRemaining, imageRemaining, isPremium });
   } catch (err) {
     req.log.error({ err }, "Failed to get user usage");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/users/google", async (req, res) => {
+  try {
+    const [configRow] = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.key, "google_login_enabled"));
+
+    if (configRow && configRow.value === "false") {
+      return void res.status(403).json({ error: "Google Sign-In is currently disabled by administrator" });
+    }
+
+    const { idToken } = req.body ?? {};
+    if (!idToken || typeof idToken !== "string") {
+      return void res.status(400).json({ error: "idToken is required" });
+    }
+
+    let verifiedPayload;
+    try {
+      verifiedPayload = await verifyGoogleIdToken(idToken);
+    } catch (authErr: any) {
+      req.log.warn({ err: authErr.message }, "Google ID Token verification failed");
+      return void res.status(401).json({ error: authErr.message || "Invalid Google ID Token" });
+    }
+
+    const { email, name, avatar, googleId } = verifiedPayload;
+    const normalizedEmail = email.trim().toLowerCase();
+
+    const [existing] = await db.select().from(usersTable).where(eq(usersTable.email, normalizedEmail));
+
+    if (existing) {
+      // Existing user found by email:
+      // - Preserve passwordHash intact (never delete or overwrite)
+      // - Reset failed login attempts and clear any lockout
+      // - Populate avatar / name if not already set
+      const updates: Record<string, unknown> = {
+        failedLoginAttempts: 0,
+        lockedUntil: null,
+      };
+      if (avatar && !existing.avatar) updates.avatar = avatar;
+      if (name && !existing.name) updates.name = name;
+
+      const [updated] = await db
+        .update(usersTable)
+        .set(updates)
+        .where(eq(usersTable.id, existing.id))
+        .returning();
+
+      await recordUserActivity({
+        userId: updated.id,
+        category: "AUTH",
+        eventType: "LOGIN",
+        eventName: "Google Login",
+        description: "Successful login via Google",
+        actorType: "USER",
+        actorId: updated.id,
+        metadata: { provider: "google", email: updated.email, googleId },
+      });
+
+      return void res.json({ ...toPublicUser(updated), token: issueToken(updated.id) });
+    }
+
+    // New user: create account with provider: "google"
+    const userId = stableIdFromEmail(normalizedEmail);
+    const [created] = await db
+      .insert(usersTable)
+      .values({
+        id: userId,
+        email: normalizedEmail,
+        name: name || normalizedEmail.split("@")[0],
+        passwordHash: null,
+        provider: "google",
+        avatar: avatar || null,
+      })
+      .returning();
+
+    await recordUserActivity({
+      userId: created.id,
+      category: "AUTH",
+      eventType: "ACCOUNT_CREATED",
+      eventName: "Account Created",
+      description: "Account created with Google",
+      actorType: "USER",
+      actorId: created.id,
+      metadata: { provider: "google", email: created.email, googleId },
+    });
+
+    res.status(201).json({ ...toPublicUser(created), token: issueToken(created.id) });
+  } catch (err) {
+    req.log.error({ err }, "Failed to authenticate Google user");
     res.status(500).json({ error: "Internal server error" });
   }
 });

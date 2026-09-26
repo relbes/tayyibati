@@ -120,6 +120,7 @@ export async function analyzeText(
 ) {
   const base = BASE_URL;
   const payload = typeof input === "string" ? { query: input, displayQuery: input } : { displayQuery: input.query, ...input };
+  
   const res = await fetchWithRetry(`${base}/api/analysis/text`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -128,13 +129,27 @@ export async function analyzeText(
   if (!res.ok) {
     throw await readAnalysisError(res, "حدث خطأ أثناء تحليل النص، يرجى المحاولة مرة أخرى.");
   }
-  const data = await res.json();
+ const data = await res.json();
 
-  return data.report || data;
+
+
+return data.report || data;
+
+  
 }
 
 export async function analyzeDish(dishId: number, variantName?: string) {
   const base = BASE_URL;
+  if (__DEV__) {
+  console.log(
+    "[Tayyibati DEBUG] analyzeDish REQUEST:",
+    JSON.stringify({
+      dishId,
+      variantName,
+      query: variantName,
+    })
+  );
+}
   const res = await fetchWithRetry(`${base}/api/analysis/dish`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -142,6 +157,7 @@ export async function analyzeDish(dishId: number, variantName?: string) {
   });
   if (!res.ok) throw await readAnalysisError(res, "حدث خطأ أثناء تحليل الطبق، يرجى المحاولة مرة أخرى.");
   const data = await res.json();
+  
 
   return data.report || data;
 }
@@ -431,6 +447,17 @@ export async function loginUser(payload: { email: string; password?: string }) {
     body: JSON.stringify(payload),
   });
   if (!res.ok) return parseAuthError(res, "تعذّر تسجيل الدخول");
+  return res.json();
+}
+
+export async function loginWithGoogleApi(idToken: string) {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/users/google`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken }),
+  });
+  if (!res.ok) return parseAuthError(res, "تعذّر تسجيل الدخول بـ Google");
   return res.json();
 }
 

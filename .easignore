@@ -53,3 +53,8 @@ Thumbs.db
 !.env.example
 # Local Android SDK configuration
 artifacts/mobile/android/local.properties
+# Android generated/build artifacts
+artifacts/mobile/android/build/
+artifacts/mobile/android/app/build/
+artifacts/mobile/android/.gradle/
+artifacts/mobile/android/local.properties

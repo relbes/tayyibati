@@ -11,7 +11,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz"
+        "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "133601957570-tl1echnbnngfo7pnk25tfri72eun63r1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "133601957570-rff83ikpf57cf4lbge8p8phbdlqte6mc.apps.googleusercontent.com"
       }
     },
     "preview": {
@@ -20,7 +22,9 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz"
+        "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "133601957570-tl1echnbnngfo7pnk25tfri72eun63r1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "133601957570-gsrlsponvrbk5b2fus71scqr167kcqrb.apps.googleusercontent.com"
       }
     },
     "production": {
@@ -30,7 +34,9 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "https://api.tayyibati.xyz",
-        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_AjmoqrxMPuVQqIhwzNZDPrbuFNy"
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY": "goog_AjmoqrxMPuVQqIhwzNZDPrbuFNy",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB": "133601957570-tl1echnbnngfo7pnk25tfri72eun63r1.apps.googleusercontent.com",
+        "EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID": "133601957570-rff83ikpf57cf4lbge8p8phbdlqte6mc.apps.googleusercontent.com"
       }
     }
   },

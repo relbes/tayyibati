@@ -11,6 +11,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   registerUser,
   loginUser,
+  loginWithGoogleApi,
   getUser,
   getCurrentUser,
   getUserUsage,
@@ -63,6 +64,8 @@ interface AuthContextType {
     email: string,
     password: string
   ) => Promise<void>;
+
+  loginWithGoogle: (idToken: string) => Promise<void>;
 
   signOut: () => Promise<void>;
 
@@ -438,6 +441,22 @@ const refreshUser = useCallback(async () => {
   );
 
   /**
+   * Login with Google ID Token.
+   */
+  const loginWithGoogle = useCallback(
+    async (idToken: string) => {
+      const api: ApiUser = await loginWithGoogleApi(idToken);
+
+      await persist(toUser(api), api.token);
+
+      loginRevenueCat(api.id);
+
+      await refreshUser();
+    },
+    [persist, refreshUser]
+  );
+
+  /**
    * Sign out.
    */
   const signOut = useCallback(async () => {
@@ -502,6 +521,7 @@ const refreshUser = useCallback(async () => {
         signIn,
         registerWithPassword,
         loginWithPassword,
+        loginWithGoogle,
         signOut,
         updatePremium,
         refreshUser,

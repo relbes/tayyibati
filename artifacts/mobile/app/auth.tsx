@@ -67,7 +67,7 @@ export default function AuthScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signIn, registerWithPassword, loginWithPassword } = useAuth();
+  const { signIn, registerWithPassword, loginWithPassword, loginWithGoogle } = useAuth();
   const { tab: paramTab } = useLocalSearchParams<{ tab?: "login" | "register" }>();
   const [tab, setTab] = useState<"login" | "register">(paramTab === "register" ? "register" : "login");
 
@@ -88,14 +88,22 @@ export default function AuthScreen() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
-  const redirectUri = AuthSession.makeRedirectUri({ scheme: "tayyibati", path: "auth" });
+  const androidReversedScheme = GOOGLE_ANDROID_CLIENT_ID
+    ? `com.googleusercontent.apps.${GOOGLE_ANDROID_CLIENT_ID.replace(".apps.googleusercontent.com", "")}`
+    : "tayyibati";
+
+  const redirectUri = AuthSession.makeRedirectUri({
+    scheme: Platform.OS === "android" ? androidReversedScheme : "tayyibati",
+    path: "auth",
+  });
 
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
       clientId: getGoogleClientId(),
       redirectUri,
       scopes: ["openid", "profile", "email"],
-      responseType: AuthSession.ResponseType.Token,
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: true,
     },
     GOOGLE_DISCOVERY,
   );
@@ -117,38 +125,65 @@ export default function AuthScreen() {
 
   useEffect(() => {
     if (response?.type === "success") {
-      const accessToken = (response.params as Record<string, string>).access_token ?? "";
-      handleGoogleSuccess(accessToken);
+      const code = response.params?.code;
+      if (code) {
+        handleGoogleCodeExchange(code);
+      } else {
+        setGoogleLoading(false);
+        setError("تعذر الحصول على رمز التفويض من Google.");
+      }
     } else if (response?.type === "error") {
       setGoogleLoading(false);
       setError("فشل تسجيل الدخول بـ Google. حاول مجدداً.");
+    } else if (response?.type === "dismiss" || response?.type === "cancel") {
+      setGoogleLoading(false);
     }
   }, [response]);
 
-  const handleGoogleSuccess = async (accessToken: string) => {
-    if (!accessToken) { setGoogleLoading(false); return; }
+  const handleGoogleCodeExchange = async (code: string) => {
     try {
-      const userRes = await fetch("https://www.googleapis.com/userinfo/v2/me", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!userRes.ok) throw new Error("Failed to fetch Google profile");
-      const profile = await userRes.json();
-      await signIn(profile.email, profile.name ?? profile.email.split("@")[0], {
-        provider: "google",
-        avatar: profile.picture,
-        id: "google_" + profile.id,
-      });
+      const tokenResult = await AuthSession.exchangeCodeAsync(
+        {
+          clientId: getGoogleClientId(),
+          code,
+          redirectUri,
+          extraParams: request?.codeVerifier ? { code_verifier: request.codeVerifier } : undefined,
+        },
+        GOOGLE_DISCOVERY,
+      );
+
+      const idToken = tokenResult.idToken || (tokenResult.rawResponse as any)?.id_token;
+      if (idToken) {
+        await handleGoogleSuccess(idToken);
+      } else {
+        setGoogleLoading(false);
+        setError("تعذر الحصول على رمز المصادقة من Google.");
+      }
+    } catch {
+      setGoogleLoading(false);
+      setError("فشل تبادل رمز التفويض مع Google.");
+    }
+  };
+
+  const handleGoogleSuccess = async (idToken: string) => {
+    if (!idToken) { setGoogleLoading(false); return; }
+    try {
+      await loginWithGoogle(idToken);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } catch {
-      setError("حدث خطأ أثناء تسجيل الدخول بـ Google.");
+    } catch (e) {
+      if (e instanceof AuthError) {
+        setError(e.message);
+      } else {
+        setError("حدث خطأ أثناء تسجيل الدخول بـ Google.");
+      }
     } finally {
       setGoogleLoading(false);
     }
   };
 
   const handleGooglePress = async () => {
-    if (!GOOGLE_WEB_CLIENT_ID) {
+    if (!GOOGLE_WEB_CLIENT_ID && !GOOGLE_ANDROID_CLIENT_ID) {
       setError("Google Sign-In is not configured.");
       return;
     }
@@ -201,7 +236,7 @@ export default function AuthScreen() {
     }
   };
 
-  const showGoogleBtn = googleEnabled && !!GOOGLE_WEB_CLIENT_ID;
+  const showGoogleBtn = googleEnabled && (!!GOOGLE_WEB_CLIENT_ID || !!GOOGLE_ANDROID_CLIENT_ID);
 
   return (
     <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>

@@ -32,6 +32,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import { runAiMonitoringMigration } from "./lib/ai/aiMonitoringMigration";
 import { runUserActivityHistoryMigration } from "./lib/userActivityHistoryMigration";
+import { ensureGoogleLoginConfig } from "./lib/config";
 
 runAiMonitoringMigration().catch((err) => {
   logger.warn({ err }, "Initial AI Monitoring migration check warning");
@@ -39,6 +40,10 @@ runAiMonitoringMigration().catch((err) => {
 
 runUserActivityHistoryMigration().catch((err) => {
   logger.warn({ err }, "Initial User Activity History migration check warning");
+});
+
+ensureGoogleLoginConfig().catch((err) => {
+  logger.warn({ err }, "Initial Google Login config check warning");
 });
 
 const rawPort = process.env["PORT"] || "5000";
