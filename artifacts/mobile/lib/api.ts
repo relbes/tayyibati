@@ -4,10 +4,11 @@ import { setBaseUrl } from "@workspace/api-client-react";
 const domain =
   process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
 
-const BASE_URL =
+const BASE_URL = (
   domain.startsWith("http://") || domain.startsWith("https://")
     ? domain
-    : `https://${domain}`;
+    : `https://${domain}`
+).replace(/\/+$/, "");
 
 setBaseUrl(BASE_URL);
 
@@ -527,7 +528,9 @@ export async function syncPremium(params?: SyncPremiumParams): Promise<SyncPremi
 
 export async function getPublicConfig(): Promise<Record<string, string>> {
   const base = BASE_URL;
-  const res = await fetchWithRetry(`${base}/api/config/public`);
+  const res = await fetchWithRetry(`${base}/api/config/public`, {
+    headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+  });
   if (!res.ok) throw new Error("Failed to fetch config");
   return res.json();
 }

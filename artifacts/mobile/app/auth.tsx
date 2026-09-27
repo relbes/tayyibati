@@ -13,7 +13,8 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
@@ -28,28 +29,57 @@ import {
 } from "@react-native-google-signin/google-signin";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { AuthError } from "@/lib/api";
+import { AuthError, getPublicConfig } from "@/lib/api";
 
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB;
-const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS;
-const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID;
+const DEFAULT_GOOGLE_WEB_CLIENT_ID =
+  "133601957570-tl1echnbnngfo7pnk25tfri72eun63r1.apps.googleusercontent.com";
+const DEFAULT_GOOGLE_ANDROID_CLIENT_ID =
+  "133601957570-gsrlsponvrbk5b2fus71scqr167kcqrb.apps.googleusercontent.com";
+
+const GOOGLE_WEB_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_WEB?.trim() ||
+  DEFAULT_GOOGLE_WEB_CLIENT_ID;
+const GOOGLE_IOS_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_IOS?.trim();
+const GOOGLE_ANDROID_CLIENT_ID =
+  process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID?.trim() ||
+  DEFAULT_GOOGLE_ANDROID_CLIENT_ID;
 
 const domain =
   process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
 
-const BASE_URL =
+const BASE_URL = (
   domain.startsWith("http://") || domain.startsWith("https://")
     ? domain
-    : `https://${domain}`;
+    : `https://${domain}`
+).replace(/\/+$/, "");
+
+const GOOGLE_LOGIN_ENABLED_STORAGE_KEY = "tayyibati_google_login_enabled";
+
+function isTruthyValue(val: unknown): boolean {
+  if (val === true || val === 1) return true;
+  if (typeof val === "string") {
+    const s = val.trim().toLowerCase();
+    return s === "true" || s === "1" || s === "yes" || s === "on";
+  }
+  return false;
+}
 
 async function fetchGoogleLoginEnabled(): Promise<boolean> {
   try {
-   const res = await fetch(`${BASE_URL}/api/config/public`);
-    if (!res.ok) return false;
-    const config = await res.json();
-    return config.google_login_enabled === "true";
+    const config = await getPublicConfig();
+    return isTruthyValue(config?.google_login_enabled);
   } catch {
-    return false;
+    try {
+      const res = await fetch(`${BASE_URL}/api/config/public`, {
+        headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
+      });
+      if (!res.ok) return false;
+      const config = await res.json();
+      return isTruthyValue(config?.google_login_enabled);
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -78,15 +108,49 @@ export default function AuthScreen() {
   const [googleEnabled, setGoogleEnabled] = useState(false);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
 
+  const checkGoogleEnabled = React.useCallback(async () => {
+    try {
+      const enabled = await fetchGoogleLoginEnabled();
+      setGoogleEnabled(enabled);
+      AsyncStorage.setItem(
+        GOOGLE_LOGIN_ENABLED_STORAGE_KEY,
+        enabled ? "true" : "false"
+      ).catch(() => {});
+    } catch {
+      // Retain state on error
+    }
+  }, []);
+
   useEffect(() => {
-    fetchGoogleLoginEnabled().then(setGoogleEnabled);
+    AsyncStorage.getItem(GOOGLE_LOGIN_ENABLED_STORAGE_KEY)
+      .then((val) => {
+        if (val === "true") {
+          setGoogleEnabled(true);
+        }
+      })
+      .catch(() => {});
+
+    checkGoogleEnabled();
+
     if (Platform.OS !== "web" && GOOGLE_WEB_CLIENT_ID) {
       GoogleSignin.configure({
         webClientId: GOOGLE_WEB_CLIENT_ID,
         iosClientId: GOOGLE_IOS_CLIENT_ID,
       });
     }
-  }, []);
+  }, [checkGoogleEnabled]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      checkGoogleEnabled();
+    }, [checkGoogleEnabled])
+  );
+
+  useEffect(() => {
+    if (!googleEnabled) {
+      checkGoogleEnabled();
+    }
+  }, [tab, googleEnabled, checkGoogleEnabled]);
 
   useEffect(() => {
     if (lockedSecondsLeft === null || lockedSecondsLeft <= 0) return;
@@ -214,7 +278,7 @@ export default function AuthScreen() {
     }
   };
 
-  const showGoogleBtn = googleEnabled && (!!GOOGLE_WEB_CLIENT_ID || !!GOOGLE_ANDROID_CLIENT_ID);
+  const showGoogleBtn = googleEnabled && !!GOOGLE_WEB_CLIENT_ID;
 
   return (
     <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
