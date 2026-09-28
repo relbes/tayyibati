@@ -8,7 +8,7 @@
  * - See docs/ENGINEERING_PRINCIPLES.md (Knowledge Before AI, Cache First)
  */
 import { db, foodsTable, foodAliases } from "@workspace/db";
-import { normalizeName, normalize, stripArticle, norm, stripAlefLam, extractBaseEntity } from "./arabicNormalization";
+import { normalizeName, normalize, stripArticle, norm, stripAlefLam, extractBaseEntity, FOOD_CONSTRUCT_HEADS } from "./arabicNormalization";
 import { expandSearchQuery } from "./searchExpansion";
 import { trackAIUsageNonBlocking } from "./ai/aiUsageTracker";
 
@@ -773,16 +773,28 @@ export function resolveFoodIdentity(
   // E.g. "الجوز (عين الجمل)" contains constituent synonym "عين الجمل"
   for (const f of foods) {
     const { nAr } = foodNormMap.get(f.id)!;
-    const parts = nAr.split(/[/—,()]+/).map((c) => stripArticle(normalizeName(c.trim()))).filter((c) => c.length >= 2);
+    const parts = nAr.split(/[/—,()،\u060C]+/).map((c) => stripArticle(normalizeName(c.trim()))).filter((c) => c.length >= 2);
+    const isJuice = Boolean(
+      (f.category && (f.category.toLowerCase().includes("juice") || f.category.includes("عصير"))) ||
+      f.nameAr.includes("عصير") ||
+      (f.nameEn && f.nameEn.toLowerCase().includes("juice"))
+    );
     for (const part of parts) {
-      if (part === strippedQ || part === normQ) {
-        return { food: f, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+      const matchTargets = [part];
+      if (isJuice && !part.startsWith("عصير")) {
+        matchTargets.push("عصير " + part);
+        matchTargets.push("عصير ال" + part);
       }
-      for (const variant of expandedVariants) {
-        const vNorm = normalizeName(variant);
-        const vStrip = stripArticle(vNorm);
-        if (part === vStrip || part === vNorm) {
+      for (const tgt of matchTargets) {
+        if (tgt === strippedQ || tgt === normQ) {
           return { food: f, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+        }
+        for (const variant of expandedVariants) {
+          const vNorm = normalizeName(variant);
+          const vStrip = stripArticle(vNorm);
+          if (tgt === vStrip || tgt === vNorm) {
+            return { food: f, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
+          }
         }
       }
     }
@@ -844,18 +856,39 @@ export function resolveFoodIdentity(
 
   // Stage 7: Multi-word Token Match / Word boundary (e.g. "صدور دجاج" -> matches "الدجاج والفراخ")
   if (strippedQ.length >= 3) {
-    for (const f of foods) {
-      const { sAr } = foodNormMap.get(f.id)!;
-      const foodTokens = sAr.split(/[/—,\s]+/).map((t) => stripArticle(t)).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
-      const queryTokens = strippedQ.split(/\s+/).map((t) => stripArticle(t)).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+    const queryTokens = strippedQ.split(/\s+/).map((t) => stripArticle(t)).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+    if (queryTokens.length > 0) {
+      // Substantive tokens (excluding generic construct heads like عصير, زيت, خل, etc.)
+      const substantiveQTokens = queryTokens.filter(t => !FOOD_CONSTRUCT_HEADS.has(t));
+      const requiredTokens = substantiveQTokens.length > 0 ? substantiveQTokens : queryTokens;
 
-      if (queryTokens.length === 0 || foodTokens.length === 0) continue;
+      const scoredMatches: Array<{ food: any; score: number }> = [];
 
-      const hasExactTokenMatch = queryTokens.some((qTok) =>
-        foodTokens.some((fTok) => fTok === qTok)
-      );
-      if (hasExactTokenMatch) {
-        return { food: f, matchType: "WORD_BOUNDARY", confidence: "MEDIUM", originalInput: rawInput, matchedTerm: f.nameAr };
+      for (const f of foods) {
+        const { sAr } = foodNormMap.get(f.id)!;
+        const foodTokens = sAr.split(/[/—,()،\u060C\s]+/).map((t) => stripArticle(t)).filter((t) => t.length >= 2 && !STOP_WORDS.has(t));
+        if (foodTokens.length === 0) continue;
+
+        // Substantive token match is required if query has substantive tokens
+        const matchesSubstantive = requiredTokens.some((qTok) =>
+          foodTokens.some((fTok) => fTok === qTok || fTok.startsWith(qTok) || qTok.startsWith(fTok))
+        );
+
+        if (matchesSubstantive) {
+          let score = 0;
+          for (const qTok of queryTokens) {
+            if (foodTokens.includes(qTok)) score += 10;
+            else if (foodTokens.some(ft => ft.startsWith(qTok) || qTok.startsWith(ft))) score += 5;
+          }
+          if (sAr.includes(strippedQ) || strippedQ.includes(sAr)) score += 20;
+          scoredMatches.push({ food: f, score });
+        }
+      }
+
+      if (scoredMatches.length > 0) {
+        scoredMatches.sort((a, b) => b.score - a.score);
+        const best = scoredMatches[0].food;
+        return { food: best, matchType: "WORD_BOUNDARY", confidence: "MEDIUM", originalInput: rawInput, matchedTerm: best.nameAr };
       }
     }
   }
@@ -993,13 +1026,8 @@ export function resolveWithInheritance(
     for (const f of foods) {
       if (seenIds.has(f.id)) continue;
 
-      const normF = normalizeName(f.nameAr);
-      const strippedF = stripArticle(normF);
-
-      if (
-        (strippedQ.length >= 3 && (strippedF.includes(strippedQ) || strippedQ.includes(strippedF))) ||
-        (normQ.length >= 3 && (normF.includes(normQ) || normQ.includes(normF)))
-      ) {
+      // Only explicit database parent-child relationships
+      if (f.parentFoodId === primaryFood.id) {
         seenIds.add(f.id);
         candidates.push(f);
       }
@@ -1066,21 +1094,13 @@ export function aggregateFoodFamilySafety(
     }
   }
 
-  const familyBaseName = extractBaseEntity(food.nameAr) || food.nameAr;
-  const familyNormBase = stripArticle(normalizeName(familyBaseName));
-
   if (candidates && candidates.length > 0) {
     for (const cand of candidates) {
       if (!memberIds.has(cand.id)) {
-        const candBaseName = extractBaseEntity(cand.nameAr) || cand.nameAr;
-        const candNormBase = stripArticle(normalizeName(candBaseName));
         const isSameFamily =
           cand.parentFoodId === food.id ||
           food.parentFoodId === cand.id ||
-          (cand.parentFoodId !== null && cand.parentFoodId === food.parentFoodId) ||
-          candNormBase === familyNormBase ||
-          candNormBase.startsWith(familyNormBase + " ") ||
-          familyNormBase.startsWith(candNormBase + " ");
+          (cand.parentFoodId !== null && cand.parentFoodId !== undefined && cand.parentFoodId === food.parentFoodId);
 
         if (isSameFamily) {
           memberIds.add(cand.id);

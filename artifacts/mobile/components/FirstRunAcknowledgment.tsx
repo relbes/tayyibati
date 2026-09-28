@@ -64,11 +64,11 @@ export function FirstRunAcknowledgment({ onAccept }: { onAccept: () => void }) {
           {checkedCount} / 3
         </LocalizedText>
         <TouchableOpacity 
-          style={[styles.button, { backgroundColor: allChecked ? colors.primary : colors.muted }]}
+          style={[styles.button, { backgroundColor: allChecked ? "#15803D" : colors.muted }]}
           disabled={!allChecked}
           onPress={onAccept}
         >
-          <LocalizedText style={[styles.buttonText, { color: allChecked ? '#fff' : colors.mutedForeground, textAlign: 'center' }]}>
+          <LocalizedText style={[styles.buttonText, { color: allChecked ? '#FFFFFF' : colors.mutedForeground, textAlign: 'center' }]}>
             {t("firstRun.enterApp")}
           </LocalizedText>
         </TouchableOpacity>

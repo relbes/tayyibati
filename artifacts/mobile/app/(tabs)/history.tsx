@@ -151,7 +151,7 @@ export default function HistoryScreen() {
               سجّل دخولك لحفظ تحليلاتك ومراجعتها لاحقاً
             </Text>
             <TouchableOpacity
-              style={[styles.loginBtn, { backgroundColor: colors.primary }]}
+              style={[styles.loginBtn, { backgroundColor: "#15803D" }]}
               onPress={() => router.push("/auth")}
             >
               <Text style={styles.loginBtnText}>تسجيل الدخول</Text>

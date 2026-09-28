@@ -76,6 +76,11 @@ git_status_before_release.txt
 # Temporary audit outputs
 *_report.json
 *_summary.json
+artifacts/api-server/src/qa/qa_results_*
+artifacts/api-server/src/qa/qa_regression_comparison.json
+artifacts/api-server/src/test_local_admin_toggle.ts
+rnconfig.json
+artifacts/mobile/rnconfig.json
 
 # Local logs
 *.log

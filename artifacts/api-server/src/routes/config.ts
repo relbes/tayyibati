@@ -6,25 +6,57 @@ import { requireAdmin } from "./admin";
 // Sensitive keys that must NEVER be returned in plaintext over the API or exposed publicly
 const SECRET_KEYS = new Set(["openai_api_key", "gemini_api_key"]);
 
+// Keys that must always be public so client applications can read them
+const ALWAYS_PUBLIC_KEYS = new Set(["google_login_enabled"]);
+
 function isSecretKey(key: string): boolean {
-  return SECRET_KEYS.has(key.toLowerCase()) || key.toLowerCase().endsWith("_api_key") || key.toLowerCase().endsWith("_secret");
+  const k = key.toLowerCase();
+  return (
+    SECRET_KEYS.has(k) ||
+    k.endsWith("_api_key") ||
+    k.endsWith("_secret") ||
+    k.includes("secret") ||
+    k.includes("password") ||
+    k.includes("private_key")
+  );
 }
 
 const router = Router();
 
 router.get("/config/public", async (req, res) => {
   try {
-    const rows = await db
-      .select()
-      .from(appConfigTable)
-      .where(eq(appConfigTable.isPublic, "true"));
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const rows = await db.select().from(appConfigTable);
     const config: Record<string, string> = {};
+    const repairPromises: Promise<any>[] = [];
+
     for (const row of rows) {
       // Strictly prevent any secret key from leaking to public config even if erroneously flagged
       if (!isSecretKey(row.key)) {
-        config[row.key] = row.value;
+        const isAlwaysPublic = ALWAYS_PUBLIC_KEYS.has(row.key);
+        if (row.isPublic === "true" || isAlwaysPublic) {
+          config[row.key] = row.value;
+          // Self-heal: If an always-public key in DB is not flagged 'true', repair it in DB
+          if (isAlwaysPublic && row.isPublic !== "true") {
+            repairPromises.push(
+              db
+                .update(appConfigTable)
+                .set({ isPublic: "true" })
+                .where(eq(appConfigTable.key, row.key))
+                .catch(() => {})
+            );
+          }
+        }
       }
     }
+
+    if (repairPromises.length > 0) {
+      await Promise.allSettled(repairPromises);
+    }
+
     res.json(config);
   } catch (err) {
     req.log.error({ err }, "Failed to get public config");
@@ -64,9 +96,6 @@ router.patch("/config/:key", requireAdmin, async (req, res) => {
     if (value === undefined || value === null) {
       return void res.status(400).json({ error: "value is required" });
     }
-
-    // Keys that must always be public so client applications can read them
-    const ALWAYS_PUBLIC_KEYS = new Set(["google_login_enabled"]);
 
     // Never allow secret keys to be marked public
     let publicFlag: string | undefined;

@@ -120,7 +120,7 @@ export default function ProfileScreen() {
               سجّل دخولك لحفظ تحليلاتك والوصول لميزات أكثر
             </Text>
             <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+              style={[styles.primaryBtn, { backgroundColor: "#15803D" }]}
               onPress={() => router.push("/auth")}
             >
               <Text style={styles.primaryBtnText}>تسجيل الدخول / إنشاء حساب</Text>

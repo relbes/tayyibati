@@ -43,7 +43,7 @@ export function AuthRequiredDialog({ visible, onClose }: AuthRequiredDialogProps
           </Text>
 
           <View style={styles.btnStack}>
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={handleRegister} activeOpacity={0.8}>
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: "#15803D" }]} onPress={handleRegister} activeOpacity={0.8}>
               <Text style={styles.primaryBtnText}>إنشاء حساب</Text>
             </TouchableOpacity>
 

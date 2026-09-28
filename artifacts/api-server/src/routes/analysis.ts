@@ -201,6 +201,11 @@ export interface IngredientResult {
   proteinCategory?: string;
   proteinSpecificity?: string;
   priority?: string;
+  confirmed?: boolean;
+  provenance?: "confirmed" | "inferred" | "label" | "recipe" | string;
+  isVisuallyConfirmed?: boolean;
+  confidence?: "HIGH" | "MEDIUM" | "LOW" | string;
+  matchType?: string;
 }
 
 export interface AnalysisReport {
@@ -1674,81 +1679,229 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
     let primaryRuling: AnalysisReport["primaryRuling"] = undefined;
     let resultMode: AnalysisReport["resultMode"] = "COMPOSITE_FOOD";
 
-    // If it's a single dish/food and we have a strong db ruling for it directly:
-    if (componentsToResolve.length === 1) {
-      const resolution = resolveWithInheritance(componentsToResolve[0], knowledgeCache);
-      if (resolution && (resolution.matchType === "EXACT_FOOD" || resolution.matchType === "SPECIFIC_INHERITED")) {
-         resultMode = resolution.matchType as any;
-         primaryRuling = {
-           status: resolution.food.status,
-           nameAr: resolution.food.nameAr,
-           nameEn: resolution.food.nameEn,
-           dbReason: resolution.food.reason,
-           dbNotes: resolution.food.notes,
-           isInherited: resolution.matchType === "SPECIFIC_INHERITED",
-           inheritsFrom: resolution.inheritsFrom ? { nameAr: resolution.inheritsFrom.nameAr, nameEn: resolution.inheritsFrom.nameEn } : undefined
-         };
-         if (resolution.food.status === "allowed") allowed.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "allowed", reason: resolution.food.reason });
-         else if (resolution.food.status === "forbidden") forbidden.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "forbidden", reason: resolution.food.reason });
-         else if (resolution.food.status === "conditional") conditional.push({ name: resolution.food.nameEn, nameAr: resolution.food.nameAr, status: "conditional", reason: resolution.food.reason });
+    // Check if this is a single item recognition (e.g. SINGLE_FOOD or top candidate when components are 1)
+    const isSingleCandidate = componentsToResolve.length === 1 && ir.imageType !== "MULTIPLE_FOODS" && ir.imageType !== "DISH";
+
+    if (isSingleCandidate) {
+      const candidateQuery = componentsToResolve[0];
+      // 1. Check direct resolution with inheritance (covers foods, specific foods, base families)
+      let resolution = resolveWithInheritance(candidateQuery, knowledgeCache);
+
+      // 2. If not directly resolved by inheritance, check CanonicalSearchEngine for food
+      if (!resolution || !resolution.food) {
+        const searchRes = await CanonicalSearchEngine.searchEntities(candidateQuery, { debug: false });
+        if (searchRes.primaryResult && searchRes.primaryResult.canonicalEntityType === "food") {
+          const foundFood = knowledgeCache.foodById.get(Number(searchRes.primaryResult.canonicalId));
+          if (foundFood) {
+            resolution = resolveWithInheritance(foundFood.nameAr, knowledgeCache);
+          }
+        }
+      }
+
+      if (resolution && resolution.food) {
+        const f = resolution.food;
+        resultMode = (resolution.resultMode as any) || (resolution.matchType === "SPECIFIC_INHERITED" ? "SPECIFIC_INHERITED" : "EXACT_FOOD");
+        primaryRuling = {
+          status: f.status,
+          nameAr: f.nameAr,
+          nameEn: f.nameEn,
+          dbReason: f.reason,
+          dbNotes: f.notes,
+          isInherited: resolution.matchType === "SPECIFIC_INHERITED",
+          inheritsFrom: resolution.inheritsFrom ? { nameAr: resolution.inheritsFrom.nameAr, nameEn: resolution.inheritsFrom.nameEn } : undefined,
+        };
+
+        const singleItem: IngredientResult = {
+          name: f.nameEn || f.nameAr,
+          nameAr: f.nameAr,
+          nameEn: f.nameEn || f.nameAr,
+          status: f.status as IngredientStatus,
+          reason: f.reason,
+          notes: f.notes,
+          confirmed: true,
+          provenance: "confirmed",
+          isVisuallyConfirmed: true,
+          confidence: "HIGH",
+        };
+
+        if (f.status === "allowed") allowed.push(singleItem);
+        else if (f.status === "forbidden") forbidden.push(singleItem);
+        else if (f.status === "conditional") conditional.push(singleItem);
+        else unknown.push(singleItem);
       }
     }
 
-    // If we didn't get a primary ruling, we resolve each component/ingredient using the shared food identity resolver
+    // If not a single food with primaryRuling, evaluate composite dish / multiple ingredients:
     if (!primaryRuling) {
-       let items = ir.confirmedIngredients.length > 0 ? ir.confirmedIngredients : (ir.visibleComponents.length > 0 ? ir.visibleComponents : ir.likelyIngredients);
-       if (componentsToResolve.length > 1) items = componentsToResolve;
-       
-       // Step 1: Batch deterministic resolution of all image-extracted ingredients
-       const deterministicResolved = new Map<string, any>();
-       const unresolvedStrings: string[] = [];
+      // Separate visually confirmed components from AI-inferred components
+      const confirmedRaw = [
+        ...(ir.confirmedIngredients || []),
+        ...(ir.visibleComponents || []),
+        ...(ir.imageType === "MULTIPLE_FOODS" ? componentsToResolve : []),
+      ].map((s) => s.trim()).filter(Boolean);
 
-       for (const comp of items) {
-          const identity = resolveFoodIdentity(comp, knowledgeCache);
-          if (identity) {
-             deterministicResolved.set(comp, identity);
-          } else {
-             unresolvedStrings.push(comp);
-          }
-       }
+      const confirmedSet = new Set(confirmedRaw.map((s) => normalize(s)));
 
-       // Step 2: Controlled AI identity interpretation fallback for any unresolved ingredients (batched)
-       let aiResolved = new Map<string, any>();
-       if (unresolvedStrings.length > 0) {
-          aiResolved = await resolveUnresolvedTermsWithAI(unresolvedStrings, knowledgeCache, getOpenAIClient);
-       }
+      // Inferred ingredients: from likelyIngredients, excluding any already confirmed
+      const inferredRaw = (ir.likelyIngredients || [])
+        .map((s) => s.trim())
+        .filter((s) => Boolean(s) && !confirmedSet.has(normalize(s)));
 
-       // Step 3: Map each ingredient to its resolved DB food ruling
-       for (const comp of items) {
-          const identity = deterministicResolved.get(comp) || aiResolved.get(comp);
-          if (identity) {
-             const f = identity.food;
-             const st = f.status as IngredientStatus;
-             const resObj = { name: f.nameEn || comp, nameAr: comp, status: st, reason: f.reason || null, notes: f.notes || null };
-             if (st === "allowed") allowed.push(resObj);
-             else if (st === "forbidden") forbidden.push(resObj);
-             else if (st === "conditional") conditional.push(resObj);
-             else unknown.push(resObj);
-          } else {
-             unknown.push({ name: comp, nameAr: comp, status: "unknown", reason: null });
-          }
-       }
+      // Combined item list with provenance tracking
+      type IngredientItem = { name: string; isConfirmed: boolean };
+      const allItems: IngredientItem[] = [];
+      const seenItemNames = new Set<string>();
+
+      for (const name of confirmedRaw) {
+        const normKey = normalize(name);
+        if (!seenItemNames.has(normKey)) {
+          seenItemNames.add(normKey);
+          allItems.push({ name, isConfirmed: true });
+        }
+      }
+
+      for (const name of inferredRaw) {
+        const normKey = normalize(name);
+        if (!seenItemNames.has(normKey)) {
+          seenItemNames.add(normKey);
+          allItems.push({ name, isConfirmed: false });
+        }
+      }
+
+      // If no components were listed at all, fall back to top candidates
+      if (allItems.length === 0 && ir.candidates.length > 0) {
+        for (const cand of ir.candidates.slice(0, 3)) {
+          allItems.push({ name: cand.nameAr, isConfirmed: false });
+        }
+      }
+
+      // Step 1: Batch deterministic resolution against database
+      const deterministicResolved = new Map<string, any>();
+      const unresolvedStrings: string[] = [];
+
+      for (const item of allItems) {
+        const identity = resolveFoodIdentity(item.name, knowledgeCache);
+        if (identity) {
+          deterministicResolved.set(item.name, identity);
+        } else {
+          unresolvedStrings.push(item.name);
+        }
+      }
+
+      // Step 2: Controlled AI identity interpretation fallback for unresolved ingredients
+      let aiResolved = new Map<string, any>();
+      if (unresolvedStrings.length > 0) {
+        aiResolved = await resolveUnresolvedTermsWithAI(unresolvedStrings, knowledgeCache, getOpenAIClient);
+      }
+
+      // Step 3: Map each ingredient to its resolved DB food ruling
+      for (const item of allItems) {
+        const identity = deterministicResolved.get(item.name) || aiResolved.get(item.name);
+        const provenance = item.isConfirmed ? "confirmed" : "inferred";
+        const confidence = item.isConfirmed ? "HIGH" : "MEDIUM";
+
+        if (identity && identity.food) {
+          const f = identity.food;
+          const st = f.status as IngredientStatus;
+          const resObj: IngredientResult = {
+            name: f.nameEn || item.name,
+            nameAr: item.name,
+            nameEn: f.nameEn || undefined,
+            status: st,
+            reason: f.reason || null,
+            notes: f.notes || null,
+            confirmed: item.isConfirmed,
+            provenance,
+            isVisuallyConfirmed: item.isConfirmed,
+            confidence,
+          };
+          if (st === "allowed") allowed.push(resObj);
+          else if (st === "forbidden") forbidden.push(resObj);
+          else if (st === "conditional") conditional.push(resObj);
+          else unknown.push(resObj);
+        } else {
+          // Unresolved ingredient: ALWAYS unknown — AI is strictly prevented from inventing a ruling
+          const resObj: IngredientResult = {
+            name: item.name,
+            nameAr: item.name,
+            nameEn: item.name,
+            status: "unknown",
+            reason: "هذا المكون غير متوفر في قاعدة بيانات طيباتي",
+            confirmed: item.isConfirmed,
+            provenance,
+            isVisuallyConfirmed: item.isConfirmed,
+            confidence: "LOW",
+          };
+          unknown.push(resObj);
+        }
+      }
     }
 
     // SSoT: scoring delegated exclusively to DecisionEngine
-    const { compatibilityScore: finalScore, ingredientConfidence, scoreAvailable } = DecisionEngine.computeScores(
+    let { compatibilityScore: finalScore, ingredientConfidence, scoreAvailable } = DecisionEngine.computeScores(
       allowed.length, forbidden.length, conditional.length, unknown.length
     );
+
+    // Build transparent explanation distinguishing visually confirmed from AI-inferred ingredients
+    const confirmedForbidden = forbidden.filter((f) => f.confirmed);
+    const inferredForbidden = forbidden.filter((f) => !f.confirmed);
+    const confirmedConditional = conditional.filter((c) => c.confirmed);
+    const inferredConditional = conditional.filter((c) => !c.confirmed);
+
     let explanation = "تم التعرف على الطعام.";
 
-    if (forbidden.length > 0 || primaryRuling?.status === "forbidden") {
-       explanation = primaryRuling?.dbReason || "تحتوي الوجبة على مكونات ممنوعة.";
-    } else if (conditional.length > 0 || primaryRuling?.status === "conditional") {
-       explanation = primaryRuling?.dbReason || "تحتوي الوجبة على مكونات مشبوهة أو تعتمد على طريقة التحضير.";
-    } else if (unknown.length > 0 && !primaryRuling) {
-       explanation = "النتيجة غير مكتملة، نحتاج لمعلومات إضافية حول بعض المكونات.";
-    } else if (allowed.length > 0 || primaryRuling?.status === "allowed") {
-       explanation = primaryRuling?.dbReason || "مسموح حسب المعلومات المتوفرة.";
+    if (primaryRuling) {
+      if (primaryRuling.status === "forbidden") {
+        explanation = primaryRuling.dbReason || `${primaryRuling.nameAr}: ممنوع حسب قواعد البرنامج`;
+      } else if (primaryRuling.status === "allowed") {
+        explanation = primaryRuling.dbReason || `${primaryRuling.nameAr}: مسموح حسب قواعد البرنامج`;
+      } else {
+        explanation = primaryRuling.dbReason || `${primaryRuling.nameAr}: مشروط حسب قواعد البرنامج`;
+      }
+    } else {
+      const explanationParts: string[] = [];
+
+      if (confirmedForbidden.length > 0) {
+        explanationParts.push(`يحتوي على مكونات مرئية مؤكدة ممنوعة: ${confirmedForbidden.map((f) => f.nameAr).join("، ")}`);
+      }
+      if (inferredForbidden.length > 0) {
+        explanationParts.push(`قد يحتوي على مكونات محتملة ممنوعة (تقديرية بحسب طريقة التحضير): ${inferredForbidden.map((f) => f.nameAr).join("، ")}`);
+      }
+      if (confirmedConditional.length > 0) {
+        explanationParts.push(`مكونات مرئية مشروطة: ${confirmedConditional.map((c) => c.nameAr).join("، ")}`);
+      }
+      if (inferredConditional.length > 0) {
+        explanationParts.push(`مكونات محتملة مشروطة: ${inferredConditional.map((c) => c.nameAr).join("، ")}`);
+      }
+      if (unknown.length > 0) {
+        explanationParts.push(`النتيجة غير مؤكدة لعدم توفر بعض المكونات في قاعدة بيانات طيباتي (${unknown.map((u) => u.nameAr).join("، ")})`);
+      }
+      if (forbidden.length === 0 && conditional.length === 0 && allowed.length > 0) {
+        const hasInferred = allowed.some((a) => !a.confirmed);
+        explanationParts.push(
+          hasInferred
+            ? "جميع المكونات الموجودة في قاعدة البيانات مسموح بها (مع ملاحظة أن المكونات غير المرئية تقديرية بحسب الوصفة المعتادة)"
+            : "جميع المكونات المرئية في قاعدة البيانات مسموح بها"
+        );
+      }
+      if (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0 && unknown.length > 0) {
+        explanationParts.push("لم يتم العثور على أي من المكونات في قاعدة بيانات طيباتي بشكل موثوق");
+        resultMode = "UNKNOWN_FOOD";
+        scoreAvailable = false;
+        finalScore = null;
+      }
+
+      explanation = explanationParts.join(". ");
+    }
+
+    const isNoMatchAtAll = allowed.length === 0 && forbidden.length === 0 && conditional.length === 0;
+    if (isNoMatchAtAll && !primaryRuling) {
+      resultMode = "UNKNOWN_FOOD";
+      scoreAvailable = false;
+      finalScore = null;
+      if (!explanation) {
+        explanation = "لم نتمكن من التعرف على هذا الطعام أو العثور على معلومات كافية في قاعدة بيانات طيباتي لتحليل مدى ملاءمته.";
+      }
     }
 
     const report: AnalysisReport = {
@@ -1765,6 +1918,7 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
       unknown,
       explanation,
       suggestions: [],
+      notFound: isNoMatchAtAll && !primaryRuling,
       imageRecognition: { ...ir, status: "CONFIDENT", candidates: enrichedCandidates }
     };
 

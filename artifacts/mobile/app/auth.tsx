@@ -11,11 +11,14 @@ import {
   ScrollView,
   Platform,
   KeyboardAvoidingView,
+  ActivityIndicator,
+  AppState,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams, useFocusEffect } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Icon } from "@/components/Icon";
+import { GoogleIcon } from "@/components/GoogleIcon";
 import { BackButton } from "@/components/BackButton";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,7 +32,7 @@ import {
 } from "@react-native-google-signin/google-signin";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
-import { AuthError, getPublicConfig } from "@/lib/api";
+import { AuthError, getPublicConfig, BASE_URL } from "@/lib/api";
 
 const DEFAULT_GOOGLE_WEB_CLIENT_ID =
   "133601957570-tl1echnbnngfo7pnk25tfri72eun63r1.apps.googleusercontent.com";
@@ -45,15 +48,6 @@ const GOOGLE_ANDROID_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID_ANDROID?.trim() ||
   DEFAULT_GOOGLE_ANDROID_CLIENT_ID;
 
-const domain =
-  process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
-
-const BASE_URL = (
-  domain.startsWith("http://") || domain.startsWith("https://")
-    ? domain
-    : `https://${domain}`
-).replace(/\/+$/, "");
-
 const GOOGLE_LOGIN_ENABLED_STORAGE_KEY = "tayyibati_google_login_enabled";
 
 function isTruthyValue(val: unknown): boolean {
@@ -65,7 +59,7 @@ function isTruthyValue(val: unknown): boolean {
   return false;
 }
 
-async function fetchGoogleLoginEnabled(): Promise<boolean> {
+async function fetchGoogleLoginEnabled(): Promise<boolean | null> {
   try {
     const config = await getPublicConfig();
     return isTruthyValue(config?.google_login_enabled);
@@ -74,11 +68,11 @@ async function fetchGoogleLoginEnabled(): Promise<boolean> {
       const res = await fetch(`${BASE_URL}/api/config/public`, {
         headers: { "Cache-Control": "no-cache", Pragma: "no-cache" },
       });
-      if (!res.ok) return false;
+      if (!res.ok) return null;
       const config = await res.json();
       return isTruthyValue(config?.google_login_enabled);
     } catch {
-      return false;
+      return null;
     }
   }
 }
@@ -111,11 +105,13 @@ export default function AuthScreen() {
   const checkGoogleEnabled = React.useCallback(async () => {
     try {
       const enabled = await fetchGoogleLoginEnabled();
-      setGoogleEnabled(enabled);
-      AsyncStorage.setItem(
-        GOOGLE_LOGIN_ENABLED_STORAGE_KEY,
-        enabled ? "true" : "false"
-      ).catch(() => {});
+      if (enabled !== null) {
+        setGoogleEnabled(enabled);
+        AsyncStorage.setItem(
+          GOOGLE_LOGIN_ENABLED_STORAGE_KEY,
+          enabled ? "true" : "false"
+        ).catch(() => {});
+      }
     } catch {
       // Retain state on error
     }
@@ -126,6 +122,8 @@ export default function AuthScreen() {
       .then((val) => {
         if (val === "true") {
           setGoogleEnabled(true);
+        } else if (val === "false") {
+          setGoogleEnabled(false);
         }
       })
       .catch(() => {});
@@ -147,10 +145,19 @@ export default function AuthScreen() {
   );
 
   useEffect(() => {
-    if (!googleEnabled) {
-      checkGoogleEnabled();
-    }
-  }, [tab, googleEnabled, checkGoogleEnabled]);
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        checkGoogleEnabled();
+      }
+    });
+    return () => {
+      subscription.remove();
+    };
+  }, [checkGoogleEnabled]);
+
+  useEffect(() => {
+    checkGoogleEnabled();
+  }, [tab, checkGoogleEnabled]);
 
   useEffect(() => {
     if (lockedSecondsLeft === null || lockedSecondsLeft <= 0) return;
@@ -181,8 +188,11 @@ export default function AuthScreen() {
   };
 
   const handleGooglePress = async () => {
+    if (!googleEnabled) {
+      return;
+    }
     if (!GOOGLE_WEB_CLIENT_ID) {
-      setError("Google Sign-In is not configured.");
+      setError(isRTL() ? "تسجيل الدخول بـ Google غير متاح حالياً." : "Google Sign-In is not configured.");
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -303,18 +313,29 @@ export default function AuthScreen() {
            ]}
           keyboardShouldPersistTaps="handled"
         >
-          <View style={[styles.tabToggle, { backgroundColor: colors.muted, borderColor: colors.border }]}>
-            {(["login", "register"] as const).map((t) => (
-              <TouchableOpacity
-                key={t}
-                style={[styles.tabBtn, tab === t && { backgroundColor: colors.primary }]}
-                onPress={() => { setTab(t); setError(""); }}
-              >
-                <Text style={[styles.tabText, { color: tab === t ? "#fff" : colors.mutedForeground }]}>
-                  {t === "login" ? "تسجيل الدخول" : "إنشاء حساب"}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={[styles.tabToggle, { backgroundColor: "#F3F4F6", borderColor: "#E5E7EB" }]}>
+            {(["login", "register"] as const).map((t) => {
+              const isSelected = tab === t;
+              return (
+                <TouchableOpacity
+                  key={t}
+                  style={[
+                    styles.tabBtn,
+                    { backgroundColor: isSelected ? "#15803D" : "#F3F4F6" },
+                  ]}
+                  onPress={() => { setTab(t); setError(""); }}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      { color: isSelected ? "#FFFFFF" : "#374151" },
+                    ]}
+                  >
+                    {t === "login" ? "تسجيل الدخول" : "إنشاء حساب"}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </View>
 
           <Text
@@ -343,26 +364,34 @@ export default function AuthScreen() {
           {showGoogleBtn && (
             <>
               <TouchableOpacity
-                style={[styles.googleBtn, {
-                  backgroundColor: colors.card,
-                  borderColor: colors.border,
-                  opacity: googleLoading ? 0.6 : 1,
-                }]}
+                style={[
+                  styles.googleBtn,
+                  {
+                    opacity: googleLoading ? 0.7 : 1,
+                  },
+                ]}
                 onPress={handleGooglePress}
-                disabled={googleLoading || loading || !GOOGLE_WEB_CLIENT_ID}
-                activeOpacity={0.75}
+                disabled={googleLoading || loading || !GOOGLE_WEB_CLIENT_ID || !googleEnabled}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityLabel={isRTL() ? "المتابعة باستخدام Google" : "Continue with Google"}
+                accessibilityHint={isRTL() ? "تسجيل الدخول باستخدام حساب Google" : "Sign in using your Google account"}
               >
-                <View style={styles.googleIcon}>
-                  <Text style={styles.googleG}>G</Text>
-                </View>
-                <Text style={[styles.googleText, { color: colors.foreground }]}>
-                  {googleLoading ? "جاري التحقق..." : "تسجيل الدخول بـ Google"}
+                {googleLoading ? (
+                  <ActivityIndicator size="small" color="#15803D" />
+                ) : (
+                  <GoogleIcon size={21} />
+                )}
+                <Text style={styles.googleText}>
+                  {googleLoading
+                    ? (isRTL() ? "جاري التحقق..." : "Signing in...")
+                    : (isRTL() ? "المتابعة باستخدام Google" : "Continue with Google")}
                 </Text>
               </TouchableOpacity>
 
               <View style={styles.dividerRow}>
                 <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
-                <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>أو</Text>
+                <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>{isRTL() ? "أو" : "or"}</Text>
                 <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
               </View>
             </>
@@ -455,7 +484,7 @@ export default function AuthScreen() {
               style={[
                   styles.submitBtn,
                   {
-                      backgroundColor: colors.primary,
+                      backgroundColor: "#15803D",
                       opacity: loading ? 0.6 : 1,
                   },
               ]}
@@ -537,27 +566,29 @@ const styles = StyleSheet.create({
       fontFamily: "Tajawal_400Regular",
   },
   googleBtn: {
-    flexDirection: "row",
+    flexDirection: isRTL() ? "row-reverse" : "row",
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
+    borderColor: "#DADCE0",
+    backgroundColor: "#FFFFFF",
+    minHeight: 54,
     paddingVertical: 14,
     paddingHorizontal: 20,
     gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 1.5,
   },
-  googleIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: "#fff",
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#e5e5e5",
+  googleText: {
+    fontSize: 15.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#202124",
+    letterSpacing: 0.1,
   },
-  googleG: { fontSize: 14, fontFamily: "Tajawal_700Bold", color: "#4285F4" },
-  googleText: { fontSize: 15, fontFamily: "Tajawal_700Bold" },
   dividerRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   dividerLine: { flex: 1, height: 1 },
   dividerText: { fontSize: 13, fontFamily: "Tajawal_400Regular" },

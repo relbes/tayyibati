@@ -1,14 +1,22 @@
+import { Platform } from "react-native";
 import { setBaseUrl } from "@workspace/api-client-react";
 
 // Use environment variable if available, otherwise use production API.
-const domain =
+const rawDomain =
   process.env.EXPO_PUBLIC_DOMAIN?.trim() || "api.tayyibati.xyz";
 
-const BASE_URL = (
-  domain.startsWith("http://") || domain.startsWith("https://")
-    ? domain
-    : `https://${domain}`
-).replace(/\/+$/, "");
+export function resolveApiUrl(rawUrl?: string): string {
+  const d = rawUrl?.trim() || rawDomain;
+  let url = (d.startsWith("http://") || d.startsWith("https://") ? d : `https://${d}`).replace(/\/+$/, "");
+  // Map localhost to 10.0.2.2 when running inside Android emulator
+  if (Platform.OS === "android") {
+    url = url.replace(/:\/\/localhost(?=[:/]|$)/i, "://10.0.2.2")
+             .replace(/:\/\/127\.0\.0\.1(?=[:/]|$)/i, "://10.0.2.2");
+  }
+  return url;
+}
+
+export const BASE_URL = resolveApiUrl(rawDomain);
 
 setBaseUrl(BASE_URL);
 

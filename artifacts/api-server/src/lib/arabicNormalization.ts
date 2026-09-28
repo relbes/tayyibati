@@ -145,6 +145,67 @@ export const PROTEIN_DESCRIPTORS = new Set([
   "غنم",
 ]);
 
+/**
+ * Common culinary and food construct heads (annexation heads / المضاف في التراكيب الإضافية الغذائية).
+ * When these words appear as the first word in a multi-word food phrase (e.g., "عصير برتقال", "زيت زيتون", "خل تفاح", "حليب لوز"),
+ * the subsequent word/phrase is the substantive food identity (المضاف إليه / the core food substance),
+ * NOT a disposable modifier.
+ */
+export const FOOD_CONSTRUCT_HEADS = new Set([
+  "عصير",
+  "عصائر",
+  "زيت",
+  "زيوت",
+  "خل",
+  "حليب",
+  "لبن",
+  "مربى",
+  "دبس",
+  "طحين",
+  "دقيق",
+  "شاي",
+  "قهوة",
+  "قهوه",
+  "ماء",
+  "مياه",
+  "شوربة",
+  "شوربه",
+  "حساء",
+  "مرق",
+  "مرقة",
+  "مرقه",
+  "صلصة",
+  "صلصه",
+  "صوص",
+  "مخلل",
+  "مخللات",
+  "مسحوق",
+  "بودرة",
+  "بودره",
+  "حبوب",
+  "بذور",
+]);
+
+export const ENGLISH_CONSTRUCT_WORDS = new Set([
+  "juice",
+  "oil",
+  "vinegar",
+  "milk",
+  "jam",
+  "molasses",
+  "flour",
+  "tea",
+  "coffee",
+  "water",
+  "soup",
+  "broth",
+  "sauce",
+  "pickle",
+  "powder",
+  "seed",
+  "seeds",
+]);
+
 export interface BaseEntityExtractionResult {
   baseEntity: string;
   modifiers: string[];
@@ -155,6 +216,8 @@ export interface BaseEntityExtractionResult {
  * while PRESERVING the modifiers for downstream compatibility analysis.
  * Example: "رز بني" -> { baseEntity: "رز", modifiers: ["بني"] }
  * Example: "خبز أسمر" -> { baseEntity: "خبز", modifiers: ["اسمر"] }
+ * Example: "عصير برتقال" -> { baseEntity: "برتقال", modifiers: ["عصير"] }
+ * Example: "orange juice" -> { baseEntity: "orange", modifiers: ["juice"] }
  */
 export function extractBaseEntityWithModifiers(query: string | null | undefined): BaseEntityExtractionResult | null {
   if (!query || typeof query !== "string") return null;
@@ -162,6 +225,44 @@ export function extractBaseEntityWithModifiers(query: string | null | undefined)
   const normalized = normalize(query);
   const words = normalized.split(/\s+/).filter(Boolean);
   if (words.length <= 1) return null;
+
+  // 1. Check Arabic construct phrase head (e.g., "عصير برتقال", "زيت زيتون", "خل تفاح")
+  const firstWord = words[0];
+  const firstStripped = stripArticle(firstWord);
+  if (FOOD_CONSTRUCT_HEADS.has(firstWord) || FOOD_CONSTRUCT_HEADS.has(firstStripped)) {
+    const remainingWords = words.slice(1);
+    const subTokens: string[] = [];
+    const subModifiers: string[] = [firstWord];
+
+    for (const rw of remainingWords) {
+      const rwStripped = stripArticle(rw);
+      if (ARABIC_STOP_WORDS.has(rw)) continue;
+      if (GENERIC_DESCRIPTORS.has(rw) || GENERIC_DESCRIPTORS.has(rwStripped)) {
+        subModifiers.push(rw);
+      } else {
+        subTokens.push(rwStripped || rw);
+      }
+    }
+
+    if (subTokens.length > 0) {
+      return {
+        baseEntity: subTokens.join(" "),
+        modifiers: subModifiers,
+      };
+    }
+  }
+
+  // 2. Check English construct phrase tail (e.g., "orange juice", "olive oil", "apple vinegar")
+  const lastWord = words[words.length - 1];
+  if (ENGLISH_CONSTRUCT_WORDS.has(lastWord.toLowerCase())) {
+    const remainingWords = words.slice(0, -1);
+    if (remainingWords.length > 0) {
+      return {
+        baseEntity: remainingWords.join(" "),
+        modifiers: [lastWord],
+      };
+    }
+  }
 
   const baseTokens: string[] = [];
   const modifiers: string[] = [];

@@ -30,7 +30,7 @@ const TABS: TabConfig[] = [
   { name: "profile", label: "حسابي",    icon: "person-outline", iconFocused: "person" },
 ];
 
-const PRIMARY = "#16A34A";
+const PRIMARY = "#15803D";
 const INACTIVE = "#64748B";
 
 export function CustomTabBar({ state, navigation }: BottomTabBarProps) {

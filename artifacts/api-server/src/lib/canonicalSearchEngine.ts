@@ -31,6 +31,8 @@ import {
   PROTEIN_DESCRIPTORS,
   formatAmbiguityQuestion,
   hasRecognizedDescriptor,
+  FOOD_CONSTRUCT_HEADS,
+  ENGLISH_CONSTRUCT_WORDS,
 } from "./arabicNormalization";
 import { expandSearchQuery, generateSmartSuggestions, loadDbSynonyms, getQuerySynonymTargets } from "./searchExpansion";
 
@@ -263,10 +265,48 @@ export function computeRankingScore(
 
   // 4. Substring / Contains Match (Score 600)
   if (cNorm.includes(qNorm) || cStripped.includes(qStripped) || (aNorm && aNorm.includes(qNorm))) {
+    // Construct Head Guard: If query is an annexation phrase (e.g. "عصير برتقال"), reject if candidate does not match the substance
+    const qWords = qStripped.split(/\s+/).filter(Boolean);
+    if (qWords.length >= 2 && FOOD_CONSTRUCT_HEADS.has(qWords[0])) {
+      const substance = qWords.slice(1).join(" ");
+      const cTokens = cStripped.split(/\s+/).filter(Boolean);
+      const aTokens = aStripped ? aStripped.split(/\s+/).filter(Boolean) : [];
+      const matchesSubstance = cTokens.some(t => substance.includes(t) || t.includes(substance)) ||
+        aTokens.some(t => substance.includes(t) || t.includes(substance)) ||
+        cStripped.includes(substance) || (aStripped && aStripped.includes(substance));
+      if (!matchesSubstance) {
+        return 0;
+      }
+    }
+    if (qWords.length >= 2 && ENGLISH_CONSTRUCT_WORDS.has(qWords[qWords.length - 1].toLowerCase())) {
+      const substance = qWords.slice(0, -1).join(" ").toLowerCase();
+      const cLower = (cNorm || "").toLowerCase();
+      const aLower = (aNorm || "").toLowerCase();
+      if (!cLower.includes(substance) && !aLower.includes(substance)) {
+        return 0;
+      }
+    }
     return 600;
   }
 
   // 5. Fuzzy Match (Score 400)
+  // If query is a construct phrase, do not award fuzzy points if substance is not matched
+  const qWords = qStripped.split(/\s+/).filter(Boolean);
+  if (qWords.length >= 2 && FOOD_CONSTRUCT_HEADS.has(qWords[0])) {
+    const substance = qWords.slice(1).join(" ");
+    const cTokens = cStripped.split(/\s+/).filter(Boolean);
+    const matchesSubstance = cTokens.some(t => substance.includes(t) || t.includes(substance));
+    if (!matchesSubstance) {
+      return 0;
+    }
+  }
+  if (qWords.length >= 2 && ENGLISH_CONSTRUCT_WORDS.has(qWords[qWords.length - 1].toLowerCase())) {
+    const substance = qWords.slice(0, -1).join(" ").toLowerCase();
+    const cLower = (cNorm || "").toLowerCase();
+    if (!cLower.includes(substance)) {
+      return 0;
+    }
+  }
   return 400;
 }
 
@@ -319,7 +359,7 @@ export function rankCandidates(
   });
 
   const ranked = scored.map((s) => {
-    s.candidate.searchConfidence = Math.min(100, Math.max(60, Math.round(s.score / 10)));
+    s.candidate.searchConfidence = Math.min(100, Math.max(0, Math.round((s.score / 1200) * 100)));
     return s.candidate;
   });
 
@@ -569,16 +609,27 @@ export class CanonicalSearchEngine {
         }
 
         const enParts = cleanEn.split(/[/,]+/);
+        const isEnJuice = cleanEn.toLowerCase().includes("juice") || (f.category && f.category.toLowerCase().includes("juice"));
         for (const ep of enParts) {
           const epNorm = normalize(ep.trim());
           if (epNorm && epNorm.length >= 2) {
             addExactFood(epNorm, f);
             addPrefix(foodPrefixIndex, epNorm, f);
+            if (isEnJuice && !epNorm.includes("juice")) {
+              addExactFood(epNorm + " juice", f);
+              addPrefix(foodPrefixIndex, epNorm + " juice", f);
+            }
           }
+        }
+
+        if (cleanEn.toLowerCase().includes("cider vinegar")) {
+          const directVinegar = cleanEn.toLowerCase().replace(/cider\s+vinegar/i, "vinegar");
+          addExactFood(normalize(directVinegar), f);
+          addPrefix(foodPrefixIndex, normalize(directVinegar), f);
         }
       }
 
-      // Split compound food names & true constituent synonyms (e.g. "كمثرى / انجاص / اجاص", "بطاطس / بطاطا", "لبن / حليب", "سمك / أسماك", "الجوز (عين الجمل)", "دجاج و فراخ")
+      // Split compound food names & true constituent synonyms (e.g. "كمثرى / انجاص / اجاص", "بطاطس / بطاطا", "لبن / حليب", "سمك / أسماك", "الجوز (عين الجمل)", "دجاج و فراخ", "برتقال، ليمون، يوسفي،مندلينا")
       addEntityHead(f.nameAr);
 
       // Handle head noun + parenthetical qualifier (e.g. "شاي أحمر (أسود)" -> "شاي أسود")
@@ -598,7 +649,13 @@ export class CanonicalSearchEngine {
         }
       }
 
-      const rawParts = f.nameAr.split(/\/|\s+و\s+|[/—,()]+/);
+      const rawParts = f.nameAr.split(/\/|\s+و\s+|[/—,()،\u060C]+/);
+      const isJuiceRecord = Boolean(
+        (f.category && (f.category.toLowerCase().includes("juice") || f.category.includes("عصير"))) ||
+        f.nameAr.includes("عصير") ||
+        (f.nameEn && f.nameEn.toLowerCase().includes("juice"))
+      );
+
       for (const part of rawParts) {
         addEntityHead(part);
         const pTrimmed = part.trim();
@@ -622,6 +679,17 @@ export class CanonicalSearchEngine {
         }
         if (pNoAlef && pNoAlef.length >= 2) {
           addExactFood(pNoAlef, f);
+        }
+
+        // For juice category records (such as Food 1677 "برتقال، ليمون، يوسفي،مندلينا"):
+        // Index every constituent fruit with "عصير " prefix as well
+        if (isJuiceRecord && pStrip.length >= 2 && !pStrip.startsWith("عصير")) {
+          const juiceNorm = "عصير " + pStrip;
+          const juiceAl = "عصير ال" + pStrip;
+          addExactFood(juiceNorm, f);
+          addExactFood(juiceAl, f);
+          addPrefix(foodPrefixIndex, juiceNorm, f);
+          addPrefix(foodPrefixIndex, juiceAl, f);
         }
 
         // Handle quantifier phrases like "بكل أنواعها" or "بجميع أشكاله" (e.g. "سلطة بكل أنواعها", "الأرز بجميع أشكاله")
@@ -664,14 +732,21 @@ export class CanonicalSearchEngine {
       }
 
       // Multi-word variants (e.g. "طماطم شيري", "شاي أخضر", "بطاطا حلوة")
-      const primaryParts = f.nameAr.split(/\/|\s+و\s+/).map((p: string) => p.trim()).filter(Boolean);
+      const primaryParts = f.nameAr.split(/\/|\s+و\s+|[/—,()،\u060C]+/).map((p: string) => p.trim()).filter(Boolean);
       for (const part of primaryParts) {
         const pWords = part.split(/\s+/).filter(Boolean);
         if (pWords.length > 1 && pWords.length <= 3) {
           const firstWord = normalize(pWords[0]);
           const firstStrip = stripArticle(firstWord);
-          if (firstWord && firstWord.length >= 2) addBaseFood(firstWord, f);
-          if (firstStrip && firstStrip.length >= 2) addBaseFood(firstStrip, f);
+          if (!FOOD_CONSTRUCT_HEADS.has(firstStrip)) {
+            if (firstWord && firstWord.length >= 2) addBaseFood(firstWord, f);
+            if (firstStrip && firstStrip.length >= 2) addBaseFood(firstStrip, f);
+          } else {
+            const substance = pWords.slice(1).map((w: string) => stripArticle(normalize(w))).join(" ");
+            if (substance && substance.length >= 2) {
+              addBaseFood(substance, f);
+            }
+          }
         }
       }
 

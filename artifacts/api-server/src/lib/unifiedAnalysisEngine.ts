@@ -16,10 +16,17 @@ import { resolveWithInheritance, getKnowledgeCache, UserIntent, aggregateFoodFam
 import { CanonicalSearchEngine, printStructuredSearchDebugLog } from "./canonicalSearchEngine";
 import { getAIProvider } from "./ai/aiProvider";
 import { captureUnknownIngredient } from "./ai/knowledgeReviewService";
-import type { AnalysisReport, IngredientResult } from "../routes/analysis";
+import type { AnalysisReport, IngredientResult, IngredientStatus } from "../routes/analysis";
 import { extractBaseEntity, isMeaningfulQuery, formatAmbiguityQuestion } from "./arabicNormalization";
 import { FoodResolutionEngine } from "./foodResolutionEngine";
 import { SmartFallbackEngine } from "./smartFallbackEngine";
+
+export function normalizeFoodStatus(rawStatus: unknown): IngredientStatus {
+  if (rawStatus === "allowed" || rawStatus === "forbidden" || rawStatus === "conditional") {
+    return rawStatus;
+  }
+  return "unknown";
+}
 
 export interface UnifiedAnalysisRequest {
   context?: Readonly<AnalysisContext>;
@@ -122,11 +129,12 @@ export class UnifiedAnalysisEngine {
 
       if (targetFood) {
         const proteinInfo = getProteinFields(targetFood.nameAr);
+        const resolvedStatus = normalizeFoodStatus(targetFood.status);
         const itemResult: IngredientResult = {
           name: targetFood.nameEn || targetFood.nameAr,
           nameAr: targetFood.nameAr,
           nameEn: targetFood.nameEn || targetFood.nameAr,
-          status: (targetFood.status as any) || "allowed",
+          status: resolvedStatus,
           frequency: null,
           reason: targetFood.reason,
           notes: targetFood.notes,
@@ -135,10 +143,10 @@ export class UnifiedAnalysisEngine {
           priority: targetFood.priority !== "none" ? targetFood.priority : undefined,
         };
 
-        const allowed = targetFood.status === "allowed" ? [itemResult] : [];
-        const forbidden = targetFood.status === "forbidden" ? [itemResult] : [];
-        const conditional = targetFood.status === "conditional" ? [itemResult] : [];
-        const unknown: IngredientResult[] = [];
+        const allowed = resolvedStatus === "allowed" ? [itemResult] : [];
+        const forbidden = resolvedStatus === "forbidden" ? [itemResult] : [];
+        const conditional = resolvedStatus === "conditional" ? [itemResult] : [];
+        const unknown = resolvedStatus === "unknown" ? [itemResult] : [];
 
         const { compatibilityScore: score, ingredientConfidence, scoreAvailable } = DecisionEngine.computeScores(
           allowed.length, forbidden.length, conditional.length, unknown.length
@@ -146,22 +154,24 @@ export class UnifiedAnalysisEngine {
 
         let explanation = targetFood.reason || "";
         if (!explanation) {
-          explanation = targetFood.status === "allowed"
+          explanation = resolvedStatus === "allowed"
             ? "مسموح حسب قواعد البرنامج"
-            : targetFood.status === "forbidden"
+            : resolvedStatus === "forbidden"
             ? "محظور حسب قواعد البرنامج"
-            : "مشروط حسب قواعد البرنامج";
+            : resolvedStatus === "conditional"
+            ? "مشروط حسب قواعد البرنامج"
+            : "حالة الغذاء غير محددة حسب قواعد البرنامج وتتطلب مراجعة";
         }
 
         const directFoodReport: AnalysisReport = {
           query: targetFood.nameAr,
           displayQuery: input.displayQuery || targetFood.nameAr,
-          dish: targetFood.nameAr,
+          dish: undefined,
           proteinCategory: proteinInfo.proteinCategory,
           proteinSpecificity: proteinInfo.proteinSpecificity,
           resultMode: "EXACT_FOOD",
           primaryRuling: {
-            status: targetFood.status as any,
+            status: resolvedStatus,
             nameAr: targetFood.nameAr,
             nameEn: targetFood.nameEn || targetFood.nameAr,
             dbReason: targetFood.reason,
@@ -1105,82 +1115,164 @@ export class UnifiedAnalysisEngine {
 
       if (singleResolved && singleResolved.food) {
         const f = singleResolved.food;
-        const familySafety = aggregateFoodFamilySafety(f, knowledgeCache, singleResolved.candidates);
+        const pInfo = getProteinFields(f.nameAr);
 
-        const primaryStatus = familySafety.familyStatus === "mixed" ? (f.status as any) : familySafety.familyStatus;
+        const hasExceptions = Boolean(
+          singleResolved.exceptions &&
+          (singleResolved.exceptions.allowed.length > 0 ||
+           singleResolved.exceptions.forbidden.length > 0 ||
+           singleResolved.exceptions.conditional.length > 0)
+        );
 
-        const allowedItems: IngredientResult[] = [];
-        const forbiddenItems: IngredientResult[] = [];
-        const conditionalItems: IngredientResult[] = [];
+        const isGeneralCategory =
+          f.foodType === "general_category" ||
+          singleResolved.resultMode === "GENERAL_RULE" ||
+          singleResolved.resultMode === "GENERAL_RULE_EXCEPTIONS" ||
+          hasExceptions;
+
+        const isExactFood =
+          !isGeneralCategory &&
+          (singleResolved.resultMode === "EXACT_FOOD" || f.foodType === "exact_food");
+
+        const resolvedStatus = normalizeFoodStatus(f.status);
 
         const mainItem: IngredientResult = {
           name: f.nameEn || f.nameAr,
           nameAr: f.nameAr,
           nameEn: f.nameEn || f.nameAr,
-          status: f.status,
+          status: resolvedStatus,
           reason: f.reason,
           notes: f.notes,
-        };
-
-        if (f.status === "allowed") allowedItems.push(mainItem);
-        else if (f.status === "forbidden") forbiddenItems.push(mainItem);
-        else if (f.status === "conditional") conditionalItems.push(mainItem);
-
-        for (const exc of familySafety.allowedExceptions) {
-          if (!allowedItems.some((i) => i.nameAr === exc.nameAr)) {
-            allowedItems.push({ name: exc.nameEn || exc.nameAr, nameAr: exc.nameAr, nameEn: exc.nameEn || exc.nameAr, status: "allowed", reason: exc.reason });
-          }
-        }
-        for (const exc of familySafety.forbiddenExceptions) {
-          if (!forbiddenItems.some((i) => i.nameAr === exc.nameAr)) {
-            forbiddenItems.push({ name: exc.nameEn || exc.nameAr, nameAr: exc.nameAr, nameEn: exc.nameEn || exc.nameAr, status: "forbidden", reason: exc.reason });
-          }
-        }
-        for (const exc of familySafety.conditionalExceptions) {
-          if (!conditionalItems.some((i) => i.nameAr === exc.nameAr)) {
-            conditionalItems.push({ name: exc.nameEn || exc.nameAr, nameAr: exc.nameAr, nameEn: exc.nameEn || exc.nameAr, status: "conditional", reason: exc.reason });
-          }
-        }
-
-        const { compatibilityScore: _score, scoreAvailable: _scoreAvailable } = DecisionEngine.computeScores(
-          allowedItems.length, forbiddenItems.length, conditionalItems.length, 0
-        );
-
-        const pInfo = getProteinFields(f.nameAr);
-        const explanationText = familySafety.familySummaryAr + (f.reason ? ` — ${f.reason}` : "");
-
-        report = {
-          query: queryText,
-          displayQuery: input.displayQuery || queryText,
-          dish: extractBaseEntity(f.nameAr) || f.nameAr,
           proteinCategory: pInfo.proteinCategory,
           proteinSpecificity: pInfo.proteinSpecificity,
-          resultMode: (singleResolved.resultMode as any) || "EXACT_FOOD",
-          primaryRuling: {
-            status: primaryStatus,
-            nameAr: f.nameAr,
-            nameEn: f.nameEn || f.nameAr,
-            dbReason: explanationText,
-            dbNotes: f.notes,
-            isInherited: singleResolved.inherited || false,
-            inheritsFrom: singleResolved.inheritsFrom,
-          },
-          allowed: allowedItems,
-          forbidden: forbiddenItems,
-          conditional: conditionalItems,
-          unknown: [],
-          compatibilityScore: _score,
-          scoreAvailable: _scoreAvailable,
-          explanation: explanationText,
-          suggestions: [],
-          analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
-          notFound: false,
+          priority: f.priority !== "none" ? f.priority : undefined,
         };
 
-        (report as any).familySummary = familySafety.familySummaryAr;
-        (report as any).familyStatus = familySafety.familyStatus;
-        (report as any).allowedExceptions = familySafety.allowedExceptions;
-        (report as any).prohibitedExceptions = familySafety.forbiddenExceptions;
+        let explanation = f.reason || "";
+        if (!explanation) {
+          explanation = resolvedStatus === "allowed"
+            ? "مسموح حسب قواعد البرنامج"
+            : resolvedStatus === "forbidden"
+            ? "محظور حسب قواعد البرنامج"
+            : resolvedStatus === "conditional"
+            ? "مشروط حسب قواعد البرنامج"
+            : "حالة الغذاء غير محددة حسب قواعد البرنامج وتتطلب مراجعة";
+        }
+
+        if (isExactFood) {
+          // Authoritative exact food: return the food's ruling directly without ingredient decomposition
+          const allowedItems = resolvedStatus === "allowed" ? [mainItem] : [];
+          const forbiddenItems = resolvedStatus === "forbidden" ? [mainItem] : [];
+          const conditionalItems = resolvedStatus === "conditional" ? [mainItem] : [];
+          const unknownItems = resolvedStatus === "unknown" ? [mainItem] : [];
+
+          const { compatibilityScore: score, ingredientConfidence, scoreAvailable } = DecisionEngine.computeScores(
+            allowedItems.length, forbiddenItems.length, conditionalItems.length, unknownItems.length
+          );
+
+          report = {
+            query: queryText,
+            displayQuery: input.displayQuery || queryText,
+            dish: undefined,
+            proteinCategory: pInfo.proteinCategory,
+            proteinSpecificity: pInfo.proteinSpecificity,
+            resultMode: "EXACT_FOOD",
+            primaryRuling: {
+              status: resolvedStatus,
+              nameAr: f.nameAr,
+              nameEn: f.nameEn || f.nameAr,
+              dbReason: f.reason,
+              dbNotes: f.notes,
+              isInherited: singleResolved.inherited || false,
+              inheritsFrom: singleResolved.inheritsFrom,
+            },
+            allowed: allowedItems,
+            forbidden: forbiddenItems,
+            conditional: conditionalItems,
+            unknown: unknownItems,
+            compatibilityScore: score,
+            ingredientConfidence,
+            scoreAvailable,
+            explanation,
+            suggestions: [],
+            analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
+            notFound: false,
+          };
+        } else {
+          const familySafety = aggregateFoodFamilySafety(f, knowledgeCache, singleResolved.candidates);
+
+          const primaryStatus: IngredientStatus =
+            familySafety.familyStatus === "mixed"
+              ? resolvedStatus
+              : (familySafety.familyStatus === "allowed" || familySafety.familyStatus === "forbidden" || familySafety.familyStatus === "conditional"
+                  ? familySafety.familyStatus
+                  : resolvedStatus);
+
+          const allowedItems: IngredientResult[] = [];
+          const forbiddenItems: IngredientResult[] = [];
+          const conditionalItems: IngredientResult[] = [];
+          const unknownItems: IngredientResult[] = [];
+
+          if (resolvedStatus === "allowed") allowedItems.push(mainItem);
+          else if (resolvedStatus === "forbidden") forbiddenItems.push(mainItem);
+          else if (resolvedStatus === "conditional") conditionalItems.push(mainItem);
+          else unknownItems.push(mainItem);
+
+          for (const exc of familySafety.allowedExceptions) {
+            if (!allowedItems.some((i) => i.nameAr === exc.nameAr)) {
+              allowedItems.push({ name: exc.nameEn || exc.nameAr, nameAr: exc.nameAr, nameEn: exc.nameEn || exc.nameAr, status: "allowed", reason: exc.reason });
+            }
+          }
+          for (const exc of familySafety.forbiddenExceptions) {
+            if (!forbiddenItems.some((i) => i.nameAr === exc.nameAr)) {
+              forbiddenItems.push({ name: exc.nameEn || exc.nameAr, nameAr: exc.nameAr, nameEn: exc.nameEn || exc.nameAr, status: "forbidden", reason: exc.reason });
+            }
+          }
+          for (const exc of familySafety.conditionalExceptions) {
+            if (!conditionalItems.some((i) => i.nameAr === exc.nameAr)) {
+              conditionalItems.push({ name: exc.nameEn || exc.nameAr, nameAr: exc.nameAr, nameEn: exc.nameEn || exc.nameAr, status: "conditional", reason: exc.reason });
+            }
+          }
+
+          const { compatibilityScore: _score, scoreAvailable: _scoreAvailable } = DecisionEngine.computeScores(
+            allowedItems.length, forbiddenItems.length, conditionalItems.length, unknownItems.length
+          );
+
+          const explanationText = familySafety.familySummaryAr + (f.reason ? ` — ${f.reason}` : "");
+
+          report = {
+            query: queryText,
+            displayQuery: input.displayQuery || queryText,
+            dish: undefined,
+            proteinCategory: pInfo.proteinCategory,
+            proteinSpecificity: pInfo.proteinSpecificity,
+            resultMode: (singleResolved.resultMode as any) || "GENERAL_RULE",
+            primaryRuling: {
+              status: primaryStatus,
+              nameAr: f.nameAr,
+              nameEn: f.nameEn || f.nameAr,
+              dbReason: explanationText,
+              dbNotes: f.notes,
+              isInherited: singleResolved.inherited || false,
+              inheritsFrom: singleResolved.inheritsFrom,
+            },
+            allowed: allowedItems,
+            forbidden: forbiddenItems,
+            conditional: conditionalItems,
+            unknown: unknownItems,
+            compatibilityScore: _score,
+            scoreAvailable: _scoreAvailable,
+            explanation: explanationText,
+            suggestions: [],
+            analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
+            notFound: false,
+          };
+
+          (report as any).familySummary = familySafety.familySummaryAr;
+          (report as any).familyStatus = familySafety.familyStatus;
+          (report as any).allowedExceptions = familySafety.allowedExceptions;
+          (report as any).prohibitedExceptions = familySafety.forbiddenExceptions;
+        }
       } else {
         // Unknown Single Food Fallback
         const legacyUnknownItem: IngredientResult = {

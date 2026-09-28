@@ -10,7 +10,7 @@ export const TayyibatiTheme = {
     // ─────────────────────────────────────────────
     // Tayyibati Green
     // ─────────────────────────────────────────────
-    primary: "#16A34A",
+    primary: "#15803D",
     primaryDark: "#15803D",
     primaryDarker: "#166534",
     primarySoft: "#E8F7EE",

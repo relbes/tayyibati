@@ -28,7 +28,11 @@ interface ConfigRow {
 
 async function fetchConfig(): Promise<ConfigRow[]> {
   const base = API_BASE().replace(/\/+$/, "").replace(/\/api$/, "");
-  const res = await adminFetch(`${base}/api/config`);
+  const res = await adminFetch(`${base}/api/config`, {
+    headers: {
+      "Cache-Control": "no-cache",
+    },
+  });
 
   if (!res.ok) {
     throw new Error("Failed to fetch config");
@@ -37,11 +41,15 @@ async function fetchConfig(): Promise<ConfigRow[]> {
   return res.json();
 }
 
-async function patchConfig(key: string, value: string): Promise<ConfigRow> {
+async function patchConfig(key: string, value: string, isPublic?: boolean): Promise<ConfigRow> {
   const base = API_BASE().replace(/\/+$/, "").replace(/\/api$/, "");
+  const payload: { value: string; isPublic?: string } = { value };
+  if (typeof isPublic === "boolean") {
+    payload.isPublic = isPublic ? "true" : "false";
+  }
   const res = await adminFetch(`${base}/api/config/${key}`, {
     method: "PATCH",
-    body: JSON.stringify({ value }),
+    body: JSON.stringify(payload),
   });
 
   if (!res.ok) {
@@ -51,7 +59,19 @@ async function patchConfig(key: string, value: string): Promise<ConfigRow> {
   return res.json();
 }
 
-function Toggle({ enabled, onChange, label, desc }: { enabled: boolean; onChange: (v: boolean) => void; label: string; desc?: string; }) {
+function Toggle({
+  enabled,
+  onChange,
+  label,
+  desc,
+  disabled,
+}: {
+  enabled: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+  desc?: string;
+  disabled?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
       <div className="flex-1">
@@ -61,10 +81,17 @@ function Toggle({ enabled, onChange, label, desc }: { enabled: boolean; onChange
       <button
         role="switch"
         aria-checked={enabled}
-        onClick={() => onChange(!enabled)}
-        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${enabled ? "bg-primary" : "bg-muted"}`}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!enabled)}
+        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+          enabled ? "bg-primary" : "bg-muted"
+        } ${disabled ? "opacity-60 cursor-not-allowed" : ""}`}
       >
-        <span className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${enabled ? "translate-x-5" : "translate-x-0"}`} />
+        <span
+          className={`pointer-events-none block h-5 w-5 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+            enabled ? "translate-x-5" : "translate-x-0"
+          }`}
+        />
       </button>
     </div>
   );
@@ -470,8 +497,22 @@ export default function Settings() {
   const { data: configRows = [] } = useQuery({ queryKey: ["config"], queryFn: fetchConfig });
 
   const patchMut = useMutation({
-    mutationFn: ({ key, value }: { key: string; value: string }) => patchConfig(key, value),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["config"] }); toast({ title: "Setting saved" }); },
+    mutationFn: ({ key, value, isPublic }: { key: string; value: string; isPublic?: boolean }) =>
+      patchConfig(key, value, isPublic),
+    onSuccess: (savedRow) => {
+      queryClient.setQueryData<ConfigRow[]>(["config"], (old) => {
+        if (!old) return [savedRow];
+        const idx = old.findIndex((r) => r.key === savedRow.key);
+        if (idx >= 0) {
+          const updated = [...old];
+          updated[idx] = savedRow;
+          return updated;
+        }
+        return [...old, savedRow];
+      });
+      queryClient.invalidateQueries({ queryKey: ["config"] });
+      toast({ title: "Setting saved" });
+    },
     onError: () => toast({ title: "Failed to save setting", variant: "destructive" }),
   });
 
@@ -480,7 +521,8 @@ export default function Settings() {
     const row = configRows.find((r) => r.key === key);
     return Boolean(row && (row.isConfigured ?? (row.value && row.value.trim().length > 0)));
   };
-  const setConfig = (key: string, value: string) => patchMut.mutate({ key, value });
+  const setConfig = (key: string, value: string, isPublic?: boolean) =>
+    patchMut.mutate({ key, value, isPublic });
 
   const googleEnabled = getConfig("google_login_enabled") === "true";
   const freeMonthlyLimit = getConfig("free_monthly_limit") || "10";
@@ -855,7 +897,8 @@ export default function Settings() {
         <CardContent className="space-y-3">
           <Toggle
             enabled={googleEnabled}
-            onChange={(v) => setConfig("google_login_enabled", v ? "true" : "false")}
+            disabled={patchMut.isPending}
+            onChange={(v) => setConfig("google_login_enabled", v ? "true" : "false", true)}
             label="Google Sign-In"
             desc='Show "تسجيل الدخول بـ Google" button on the login screen'
           />

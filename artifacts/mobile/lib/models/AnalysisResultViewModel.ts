@@ -200,13 +200,14 @@ export function createAnalysisResultViewModel(
   ) {
     presentationMode = "AMBIGUOUS";
   } else if (
-    report.resultMode === "COMPOSITE_FOOD" ||
-    report.resultMode === "MULTIPLE_DISHES" ||
-    report.needsClarification ||
-    report.analysisType === "image" ||
-    report.analysisType === "label" ||
-    (report as any).entityType === "dish" ||
-    (report as any).dish !== undefined
+    report.resultMode !== "EXACT_FOOD" &&
+    (report.resultMode === "COMPOSITE_FOOD" ||
+      report.resultMode === "MULTIPLE_DISHES" ||
+      report.needsClarification ||
+      report.analysisType === "image" ||
+      report.analysisType === "label" ||
+      (report as any).entityType === "dish" ||
+      (report as any).dish !== undefined)
   ) {
     presentationMode = "DISH";
   } else if (report.resultMode === "EXACT_FOOD") {

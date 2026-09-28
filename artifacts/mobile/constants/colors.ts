@@ -1,7 +1,7 @@
 const colors = {
   light: {
     text: "#111827",
-    tint: "#16A34A",
+    tint: "#15803D",
 
     background: "#FAFAF8",
     foreground: "#111827",
@@ -9,7 +9,7 @@ const colors = {
     card: "#FFFFFF",
     cardForeground: "#111827",
 
-    primary: "#16A34A",
+    primary: "#15803D",
     primaryForeground: "#FFFFFF",
 
     secondary: "#E8F7EE",
@@ -27,16 +27,16 @@ const colors = {
     border: "#D1D5DB",
     input: "#D1D5DB",
 
-    success: "#16A34A",
+    success: "#15803D",
     warning: "#F59E0B",
     error: "#EF4444",
 
-    allowed: "#16A34A",
+    allowed: "#15803D",
     forbidden: "#EF4444",
     conditional: "#F59E0B",
     unknown: "#6B7280",
 
-    scoreHigh: "#16A34A",
+    scoreHigh: "#15803D",
     scoreMid: "#F59E0B",
     scoreLow: "#EF4444",
   },
