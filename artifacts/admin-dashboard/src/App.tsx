@@ -11,6 +11,7 @@ import KnowledgeReview from "@/pages/knowledge-review";
 import AiReview from "@/pages/ai-review";
 import AiMonitoring from "@/pages/ai-monitoring";
 import History from "@/pages/history";
+import Feedback from "@/pages/feedback";
 import Settings from "@/pages/settings";
 import Plans from "@/pages/plans";
 import Users from "@/pages/users";
@@ -27,6 +28,7 @@ import {
   Bot,
   Activity,
   History as HistoryIcon,
+  ThumbsUp,
   Settings as SettingsIcon,
   Star,
   Users as UsersIcon,
@@ -68,6 +70,7 @@ function Sidebar({ open, onClose, onLogout }: { open: boolean; onClose: () => vo
     { path: "/ai-monitoring", label: lang === "ar" ? "مراقبة الذكاء الاصطناعي" : "AI Monitoring", icon: Activity },
     { path: "/contact-requests", label: lang === "ar" ? "طلبات التواصل" : "Contact Requests", icon: MessageSquare, badge: newLeadsCount },
     { path: "/history", label: lang === "ar" ? "سجل البحث" : "Search History", icon: HistoryIcon },
+    { path: "/feedback", label: lang === "ar" ? "التقييمات" : "Feedback", icon: ThumbsUp },
     { path: "/users", label: tr(lang, "users"), icon: UsersIcon },
     { path: "/subscription-plans", label: lang === "ar" ? "باقات الاشتراك" : "Subscription Plans", icon: Star },
     { path: "/settings", label: tr(lang, "settings"), icon: SettingsIcon },
@@ -185,6 +188,7 @@ function Layout({ onLogout }: { onLogout: () => void }) {
             <Route path="/ai-monitoring" component={AiMonitoring} />
             <Route path="/contact-requests" component={ContactRequests} />
             <Route path="/history" component={History} />
+            <Route path="/feedback" component={Feedback} />
             <Route path="/users" component={Users} />
             <Route path="/subscription-plans" component={Plans} />
             <Route path="/settings" component={Settings} />

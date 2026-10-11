@@ -271,3 +271,68 @@ export async function fetchUserSearches(
   }
   return res.json();
 }
+
+export interface FeedbackItem {
+  id: number;
+  userId: string;
+  rating: "positive" | "negative";
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+  analysisHistoryId: number | null;
+  user?: {
+    id: string;
+    email: string | null;
+    name: string | null;
+  } | null;
+  userEmail?: string | null;
+  userName?: string | null;
+  analysis?: {
+    id: number;
+    query: string | null;
+    analysisType: string | null;
+    compatibilityScore: number | null;
+    createdAt: string | null;
+  } | null;
+  query?: string | null;
+  analysisType?: string | null;
+  compatibilityScore?: number | null;
+  analysisCreatedAt?: string | null;
+}
+
+export interface FetchFeedbackResponse {
+  success: boolean;
+  feedback: FeedbackItem[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+export async function fetchAdminFeedback(params: {
+  page?: number;
+  limit?: number;
+  rating?: string;
+  reason?: string;
+  search?: string;
+} = {}): Promise<FetchFeedbackResponse> {
+  const query = new URLSearchParams();
+  if (params.page) query.set("page", String(params.page));
+  if (params.limit) query.set("limit", String(params.limit));
+  if (params.rating && params.rating !== "all") query.set("rating", params.rating);
+  if (params.reason && params.reason !== "all") query.set("reason", params.reason);
+  if (params.search && params.search.trim()) query.set("search", params.search.trim());
+
+  const base = getApiBaseUrl();
+  const queryString = query.toString() ? `?${query.toString()}` : "";
+  const canonicalUrl = `${base}/api/admin/feedback${queryString}`;
+
+  const res = await adminFetch(canonicalUrl);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || err.message || `HTTP ${res.status}: فشل في تحميل التقييمات`);
+  }
+  return res.json();
+}

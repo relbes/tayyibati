@@ -23,6 +23,8 @@ router.use(foodsRouter);
 router.use(dishesRouter);
 router.use(analysisRouter);
 router.use(historyRouter);
+router.use(feedbackRouter);
+router.use(adminFeedbackRouter);
 router.use(adminUserHistoryRouter);
 router.use(usersRouter);
 router.use(adminRouter);
