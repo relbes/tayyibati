@@ -13,6 +13,8 @@ import { adminAiCacheRouter } from "./adminAiCache";
 import leadsRouter from "./leads";
 import adminAiMonitoringRouter from "./adminAiMonitoring";
 import adminUserHistoryRouter from "./adminUserHistory";
+import feedbackRouter from "./feedback";
+import adminFeedbackRouter from "./adminFeedback";
 
 const router: IRouter = Router();
 
