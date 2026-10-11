@@ -76,7 +76,7 @@ export async function ensureLeadsTable(): Promise<void> {
 // ---------------------------------------------------------------------------
 // 1. PUBLIC LEAD CREATION API: POST /api/leads
 // ---------------------------------------------------------------------------
-router.post("/api/leads", async (req: Request, res: Response) => {
+router.post("/leads", async (req: Request, res: Response) => {
   try {
     const { name, email, phone, interest, message, source } = req.body || {};
 
@@ -118,7 +118,7 @@ router.post("/api/leads", async (req: Request, res: Response) => {
 // ---------------------------------------------------------------------------
 // 2. ADMIN GET LEADS API: GET /api/admin/leads
 // ---------------------------------------------------------------------------
-router.get("/api/admin/leads", requireAdmin, async (req: Request, res: Response) => {
+router.get("/admin/leads", requireAdmin, async (req: Request, res: Response) => {
   try {
     await ensureLeadsTable();
 
@@ -183,7 +183,7 @@ router.get("/api/admin/leads", requireAdmin, async (req: Request, res: Response)
 // ---------------------------------------------------------------------------
 // 3. ADMIN UPDATE LEAD STATUS API: PATCH /api/admin/leads/:id
 // ---------------------------------------------------------------------------
-router.patch("/api/admin/leads/:id", requireAdmin, async (req: Request, res: Response) => {
+router.patch("/admin/leads/:id", requireAdmin, async (req: Request, res: Response) => {
   try {
     const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const leadId = parseInt(rawId, 10);
