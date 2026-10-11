@@ -97,8 +97,15 @@ async function readAnalysisError(res: Response, fallback: string): Promise<Analy
   try {
     const body = await res.json();
     if (body?.message) message = body.message;
-    if (body?.code) code = body.code;
-    if (body?.error === "limit_reached" || res.status === 429) limitReached = true;
+    if (
+      body?.error === "limit_reached" ||
+      body?.error === "premium_required" ||
+      body?.code === "PREMIUM_REQUIRED" ||
+      res.status === 429 ||
+      res.status === 403
+    ) {
+      limitReached = true;
+    }
   } catch {
     // ignore non-JSON bodies
   }
@@ -138,27 +145,27 @@ export async function analyzeText(
   if (!res.ok) {
     throw await readAnalysisError(res, "حدث خطأ أثناء تحليل النص، يرجى المحاولة مرة أخرى.");
   }
- const data = await res.json();
-
-
-
-return data.report || data;
-
-  
+  const data = await res.json();
+  const report = data.report || data;
+  const analysisHistoryId = data.analysisHistoryId ?? report?.analysisHistoryId;
+  if (analysisHistoryId !== undefined && report && typeof report === "object") {
+    report.analysisHistoryId = analysisHistoryId;
+  }
+  return report;
 }
 
 export async function analyzeDish(dishId: number, variantName?: string) {
   const base = BASE_URL;
   if (__DEV__) {
-  console.log(
-    "[Tayyibati DEBUG] analyzeDish REQUEST:",
-    JSON.stringify({
-      dishId,
-      variantName,
-      query: variantName,
-    })
-  );
-}
+    console.log(
+      "[Tayyibati DEBUG] analyzeDish REQUEST:",
+      JSON.stringify({
+        dishId,
+        variantName,
+        query: variantName,
+      })
+    );
+  }
   const res = await fetchWithRetry(`${base}/api/analysis/dish`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeader() },
@@ -166,9 +173,12 @@ export async function analyzeDish(dishId: number, variantName?: string) {
   });
   if (!res.ok) throw await readAnalysisError(res, "حدث خطأ أثناء تحليل الطبق، يرجى المحاولة مرة أخرى.");
   const data = await res.json();
-  
-
-  return data.report || data;
+  const report = data.report || data;
+  const analysisHistoryId = data.analysisHistoryId ?? report?.analysisHistoryId;
+  if (analysisHistoryId !== undefined && report && typeof report === "object") {
+    report.analysisHistoryId = analysisHistoryId;
+  }
+  return report;
 }
 
 export async function analyzeImage(
@@ -184,7 +194,29 @@ export async function analyzeImage(
   });
   if (!res.ok) throw await readAnalysisError(res, "تعذر تحليل الصورة، يرجى المحاولة مرة أخرى.");
   const data = await res.json();
-  return data.report || data;
+  const report = data.report || data;
+  const analysisHistoryId = data.analysisHistoryId ?? report?.analysisHistoryId;
+  if (analysisHistoryId !== undefined && report && typeof report === "object") {
+    report.analysisHistoryId = analysisHistoryId;
+  }
+  return report;
+}
+
+export async function analyzeBarcode(barcode: string) {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/analysis/barcode`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeader() },
+    body: JSON.stringify({ barcode }),
+  });
+  if (!res.ok) throw await readAnalysisError(res, "حدث خطأ أثناء فحص الباركود، يرجى المحاولة مرة أخرى.");
+  const data = await res.json();
+  const report = data.report || data;
+  const analysisHistoryId = data.analysisHistoryId ?? report?.analysisHistoryId;
+  if (analysisHistoryId !== undefined && report && typeof report === "object") {
+    report.analysisHistoryId = analysisHistoryId;
+  }
+  return report;
 }
 
 // ---------------------------------------------------------------------------
@@ -581,5 +613,41 @@ export async function getSubscriptionDetails(): Promise<SubscriptionDetailsRespo
     headers: authHeader(),
   });
   if (!res.ok) throw new Error("تعذر تحميل معلومات الاشتراك.");
+  return res.json();
+}
+
+// ---------------------------------------------------------------------------
+// Feedback
+// ---------------------------------------------------------------------------
+
+export type FeedbackRating = "positive" | "negative";
+export type FeedbackReason =
+  | "INCORRECT_RESULT"
+  | "INCORRECT_INGREDIENTS"
+  | "NOT_CLEAR"
+  | "WRONG_FOOD"
+  | "OTHER";
+
+export interface SubmitFeedbackPayload {
+  analysisHistoryId: number;
+  rating: FeedbackRating;
+  reason?: FeedbackReason | null;
+  comment?: string | null;
+}
+
+export async function submitFeedback(payload: SubmitFeedbackPayload): Promise<{ success: boolean; id?: number }> {
+  const base = BASE_URL;
+  const res = await fetchWithRetry(`${base}/api/feedback`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeader(),
+    },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => null);
+    throw new Error(errorBody?.message || errorBody?.error || "تعذر إرسال التقييم، حاول مرة أخرى.");
+  }
   return res.json();
 }

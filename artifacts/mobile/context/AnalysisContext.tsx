@@ -71,7 +71,14 @@ export interface ReportIngredientDecision {
 
 export interface AnalysisReport {
   query: string;
-  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND" | "MULTIPLE_DISHES";
+  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND" | "MULTIPLE_DISHES" | "LIST_ALLOWED" | "LIST_RESTRICTED";
+  action?: {
+    type: "NAVIGATE_BROWSE" | "CLARIFY" | "DIRECT_EVALUATE";
+    filter?: "allowed" | "forbidden" | "conditional" | "all";
+    category?: string;
+    route?: string;
+    label?: string;
+  };
   dishAnalysis?: DishAnalysisPayload;
 
   primaryRuling?: {
@@ -113,7 +120,7 @@ export interface AnalysisReport {
     proteinCategory?: string;
     proteinSpecificity?: string;
   }>;
-  analysisType: "text" | "image" | "label";
+  analysisType: "text" | "image" | "label" | "barcode";
   notFound?: boolean;
   overallConfidence?: "HIGH" | "MEDIUM" | "LOW";
   overallConfidenceReasonCode?: string;
@@ -183,11 +190,13 @@ export interface AnalysisReport {
     nameAr: string;
     nameEn: string;
   }>;
+  analysisHistoryId?: number;
 }
 
 interface AnalysisContextType {
   currentReport: AnalysisReport | null;
   setCurrentReport: (r: AnalysisReport | null) => void;
+  analysisHistoryId?: number;
   isAnalyzing: boolean;
   setIsAnalyzing: (v: boolean) => void;
 }
@@ -198,8 +207,10 @@ export function AnalysisProvider({ children }: { children: React.ReactNode }) {
   const [currentReport, setCurrentReport] = useState<AnalysisReport | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
+  const analysisHistoryId = currentReport?.analysisHistoryId;
+
   return (
-    <AnalysisContext.Provider value={{ currentReport, setCurrentReport, isAnalyzing, setIsAnalyzing }}>
+    <AnalysisContext.Provider value={{ currentReport, setCurrentReport, analysisHistoryId, isAnalyzing, setIsAnalyzing }}>
       {children}
     </AnalysisContext.Provider>
   );

@@ -20,7 +20,8 @@ import * as Haptics from "expo-haptics";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { analyzeImage, analyzeText, AnalysisError, NetworkError } from "@/lib/api";
+import { CameraView, useCameraPermissions, type BarcodeScanningResult } from "expo-camera";
+import { analyzeImage, analyzeText, analyzeBarcode, AnalysisError, NetworkError } from "@/lib/api";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { UsageWarningBanner } from "@/components/UsageWarningBanner";
@@ -45,7 +46,15 @@ export default function CameraScreen() {
   const [pickedImageData, setPickedImageData] = useState<{ base64: string; mimeType: string } | null>(null);
   const [result, setResult] = useState<any>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
-  const { action } = useLocalSearchParams<{ action?: string }>();
+  const { action, mode } = useLocalSearchParams<{ action?: string; mode?: string }>();
+  const [cameraMode, setCameraMode] = useState<"food" | "barcode">(
+    mode === "barcode" || action === "barcode" ? "barcode" : "food"
+  );
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [isBarcodeProcessing, setIsBarcodeProcessing] = useState(false);
+  const [torchEnabled, setTorchEnabled] = useState(false);
+  const [scannedBarcode, setScannedBarcode] = useState<string | null>(null);
+
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const rtl = isRTL();
 
@@ -77,14 +86,99 @@ export default function CameraScreen() {
   }
 
   React.useEffect(() => {
-    // Only auto-launch if we haven't picked an image yet, and an action is requested
-    if (action && !pickedImage && !isAnalyzing) {
+    if (mode === "barcode" || action === "barcode") {
+      if (!user) {
+        setAuthModalVisible(true);
+        setCameraMode("food");
+      } else if (!user.isPremium) {
+        Alert.alert(
+          "ميزة خاصة بالباقة المميزة",
+          "فحص وتحليل الباركود متاح حصرياً لمشتركي الباقة المميزة.\nقم بالترقية للوصول إلى فحص وقراءة المنتجات التجارية.",
+          [
+            { text: "لاحقاً", style: "cancel" },
+            { text: "ترقية الحساب", onPress: () => router.push("/pricing") },
+          ]
+        );
+        setCameraMode("food");
+      } else {
+        setCameraMode("barcode");
+        setPickedImage(null);
+        setPickedImageData(null);
+        setResult(null);
+        setIsBarcodeProcessing(false);
+      }
+    } else if (action && !pickedImage && !isAnalyzing && cameraMode === "food") {
       setTimeout(() => {
         if (action === "camera") pickImage("camera");
         if (action === "gallery") pickImage("library");
       }, 300);
     }
-  }, [action]);
+  }, [action, mode, user]);
+
+  const handleSwitchMode = (targetMode: "food" | "barcode") => {
+    if (targetMode === "barcode") {
+      if (!user) {
+        setAuthModalVisible(true);
+        return;
+      }
+      if (!user.isPremium) {
+        Alert.alert(
+          "ميزة خاصة بالباقة المميزة",
+          "فحص وتحليل الباركود متاح حصرياً لمشتركي الباقة المميزة.\nقم بالترقية للوصول إلى فحص وقراءة المنتجات التجارية.",
+          [
+            { text: "لاحقاً", style: "cancel" },
+            { text: "ترقية الحساب", onPress: () => router.push("/pricing") },
+          ]
+        );
+        return;
+      }
+    }
+    resetAll();
+    setCameraMode(targetMode);
+  };
+
+  const handleBarcodeScanned = async (scanningResult: BarcodeScanningResult) => {
+    const rawData = scanningResult?.data;
+    if (!rawData || typeof rawData !== "string") return;
+    const barcodeStr = rawData.trim();
+    if (!barcodeStr || isBarcodeProcessing || isAnalyzing) return;
+
+    setIsBarcodeProcessing(true);
+    setScannedBarcode(barcodeStr);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setIsAnalyzing(true);
+
+    try {
+      const report = await analyzeBarcode(barcodeStr);
+      setResult(report);
+      if (refreshUsage) refreshUsage();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.error("[Barcode Scan Error]", err);
+      }
+      if (err instanceof NetworkError || err?.isNetworkError) {
+        Alert.alert("خطأ في الاتصال", (err as Error).message);
+      } else if (err instanceof AnalysisError && (err.limitReached || err.status === 403)) {
+        Alert.alert(
+          "تنبيه",
+          err.status === 403
+            ? "ميزة فحص الباركود مخصصة لمشتركي الباقة المميزة.\nقم بالترقية للاستمرار."
+            : "لقد انتهت محاولاتك المتاحة حالياً.\nقم بالترقية إلى الباقة المميزة للاستمرار في استخدام التحليل والبحث.",
+          [
+            { text: "لاحقاً", style: "cancel" },
+            { text: "الترقية", onPress: () => router.push("/pricing") },
+          ]
+        );
+      } else {
+        Alert.alert("خطأ", "تعذر فحص الباركود. حاول مجدداً.");
+      }
+      setIsBarcodeProcessing(false);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const pickImage = async (source: "camera" | "library") => {
     if (isAnalyzing) return;
@@ -215,6 +309,8 @@ export default function CameraScreen() {
     setPickedImageData(null);
     setImageDimensions(null);
     setResult(null);
+    setIsBarcodeProcessing(false);
+    setScannedBarcode(null);
   };
 
   const hasResult = !!result;
@@ -225,7 +321,11 @@ export default function CameraScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: "#F8FEF9" }]}>
-      {isAnalyzing && <LoadingOverlay message="جاري تحليل الصورة..." />}
+      {isAnalyzing && (
+        <LoadingOverlay
+          message={cameraMode === "barcode" ? "جاري فحص الباركود..." : "جاري تحليل الصورة..."}
+        />
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -234,14 +334,215 @@ export default function CameraScreen() {
       >
         {/* Standardized Botanical Header */}
         <PageHeader
-          title="تحليل بالصورة"
-          subtitle="صوّر الطعام لتحصل على تحليل فوري ودقيق"
+          title={cameraMode === "barcode" ? "مسح الباركود" : "تحليل بالصورة"}
+          subtitle={
+            cameraMode === "barcode"
+              ? "امسح باركود المنتج التجاري للتحقق الفوري من مكوناته"
+              : "صوّر الطعام لتحصل على تحليل فوري ودقيق"
+          }
           badgeType="camera"
         />
 
         <View style={styles.content}>
-          {/* Proactive usage warning */}
-          <UsageWarningBanner type="image" />
+          {/* Mode Switcher Tabs */}
+          <View style={[styles.modeTabsContainer, { flexDirection: rtl ? "row-reverse" : "row" }]}>
+            <TouchableOpacity
+              style={[styles.modeTab, cameraMode === "food" && styles.modeTabActive]}
+              onPress={() => handleSwitchMode("food")}
+              activeOpacity={0.75}
+            >
+              <Icon
+                name="camera"
+                size={18}
+                color={cameraMode === "food" ? "#FFFFFF" : colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  styles.modeTabText,
+                  cameraMode === "food" ? styles.modeTabTextActive : { color: colors.mutedForeground },
+                ]}
+              >
+                تصوير طعام
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modeTab, cameraMode === "barcode" && styles.modeTabActive]}
+              onPress={() => handleSwitchMode("barcode")}
+              activeOpacity={0.75}
+            >
+              <Icon
+                name="scan-barcode"
+                size={18}
+                color={cameraMode === "barcode" ? "#FFFFFF" : colors.mutedForeground}
+              />
+              <Text
+                style={[
+                  styles.modeTabText,
+                  cameraMode === "barcode" ? styles.modeTabTextActive : { color: colors.mutedForeground },
+                ]}
+              >
+                مسح باركود
+              </Text>
+              {!user?.isPremium && (
+                <View style={styles.proPillBadge}>
+                  <Text style={styles.proPillText}>PRO</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {cameraMode === "barcode" ? (
+            /* ── Barcode Mode UI ── */
+            result ? (
+              result.notFound ? (
+                /* Barcode Not Found State */
+                <View style={styles.barcodeNotFoundCard}>
+                  <View style={styles.barcodeNotFoundIconBox}>
+                    <Icon name="search-outline" size={38} color="#D97706" />
+                  </View>
+                  <Text style={styles.barcodeNotFoundTitle}>المنتج غير مسجل</Text>
+                  <View style={styles.barcodeBadgeBox}>
+                    <Text style={styles.barcodeBadgeLabel}>رمز الباركود:</Text>
+                    <Text style={styles.barcodeBadgeValue}>{scannedBarcode || result.query}</Text>
+                  </View>
+                  <Text style={styles.barcodeNotFoundDesc}>
+                    لم يتم العثور على هذا المنتج في قاعدة بيانات طيباتي للتحقق من المنتجات التجارية.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.primaryActionBtn, { backgroundColor: "#008C5A", marginTop: 8 }]}
+                    onPress={resetAll}
+                    activeOpacity={0.85}
+                  >
+                    <Icon name="refresh" size={20} color="#FFFFFF" />
+                    <Text style={styles.primaryActionBtnText}>مسح باركود آخر</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                /* Barcode Analysis Result */
+                <View style={{ width: "100%", gap: 16 }}>
+                  <AnalysisResultCard
+                    report={result}
+                    onRetry={resetAll}
+                    onGoHome={() => {
+                      try {
+                        router.dismissTo("/(tabs)");
+                      } catch {
+                        router.navigate("/(tabs)");
+                      }
+                    }}
+                    isAnalyzing={isAnalyzing}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.retakeBtn,
+                      {
+                        backgroundColor: "#F0FDF4",
+                        borderColor: "#86EFAC",
+                        flexDirection: rtl ? "row-reverse" : "row",
+                        width: "100%",
+                        height: 52,
+                      },
+                    ]}
+                    onPress={resetAll}
+                    activeOpacity={0.7}
+                  >
+                    <Icon name="refresh" size={18} color="#008C5A" />
+                    <Text style={[styles.retakeText, { color: "#008C5A" }]}>
+                      مسح باركود آخر
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )
+            ) : !cameraPermission?.granted ? (
+              /* Camera Permission Required */
+              <View style={styles.permissionCard}>
+                <View style={[styles.infoIconBox, { backgroundColor: "#E6F6F0", width: 64, height: 64, borderRadius: 32 }]}>
+                  <Icon name="camera" size={32} color="#008C5A" />
+                </View>
+                <Text style={styles.permissionTitle}>إذن الكاميرا مطلوب</Text>
+                <Text style={styles.permissionSubtitle}>
+                  يرجى منح إذن استخدام الكاميرا لتتمكن من مسح وقراءة الباركود للمنتجات التجارية تلقائياً.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.primaryActionBtn, { backgroundColor: "#008C5A", marginTop: 12 }]}
+                  onPress={requestCameraPermission}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.primaryActionBtnText}>منح إذن الكاميرا</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* Live Barcode Scanner View */
+              <View style={{ width: "100%", gap: 14 }}>
+                <View style={[styles.barcodeScannerFrame, { height: Math.min(Math.max(Math.round(windowHeight * 0.48), 320), 420) }]}>
+                  <CameraView
+                    style={StyleSheet.absoluteFillObject}
+                    facing="back"
+                    enableTorch={torchEnabled}
+                    barcodeScannerSettings={{
+                      barcodeTypes: ["ean13", "ean8", "upc_a", "upc_e", "code128", "code39"],
+                    }}
+                    onBarcodeScanned={isBarcodeProcessing || isAnalyzing ? undefined : handleBarcodeScanned}
+                  />
+
+                  {/* Scanner Reticle Overlay */}
+                  <View style={styles.scannerOverlay} pointerEvents="none">
+                    <View style={styles.reticleBox}>
+                      <View style={[styles.cornerBracket, styles.cornerTL, { borderColor: "#00DC82" }]} />
+                      <View style={[styles.cornerBracket, styles.cornerTR, { borderColor: "#00DC82" }]} />
+                      <View style={[styles.cornerBracket, styles.cornerBL, { borderColor: "#00DC82" }]} />
+                      <View style={[styles.cornerBracket, styles.cornerBR, { borderColor: "#00DC82" }]} />
+                      <View style={styles.aimLaserLine} />
+                    </View>
+                  </View>
+
+                  {/* Floating Torch Toggle Button */}
+                  <TouchableOpacity
+                    style={[styles.floatingTorchBtn, torchEnabled && styles.floatingTorchBtnActive]}
+                    onPress={() => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                      setTorchEnabled((t) => !t);
+                    }}
+                    activeOpacity={0.75}
+                  >
+                    <Icon name={torchEnabled ? "flash" : "flash-off"} size={18} color={torchEnabled ? "#F59E0B" : "#FFFFFF"} />
+                    <Text style={[styles.floatingTorchText, torchEnabled && { color: "#F59E0B" }]}>
+                      {torchEnabled ? "إطفاء الفلاش" : "الفلاش"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Guidance Banner */}
+                <View
+                  style={[
+                    styles.infoCard,
+                    {
+                      backgroundColor: "#E6F6F0",
+                      borderColor: "#A3E2CB",
+                      flexDirection: rtl ? "row-reverse" : "row",
+                    },
+                  ]}
+                >
+                  <View style={[styles.infoIconBox, { backgroundColor: "#C7EDE0" }]}>
+                    <Icon name="scan-barcode" size={22} color="#008C5A" />
+                  </View>
+                  <Text
+                    style={[
+                      styles.infoCardText,
+                      { color: "#008C5A", textAlign: rtl ? "right" : "left", flex: 1 },
+                    ]}
+                  >
+                    وجّه الكاميرا نحو الباركود المطبوع على عبوة المنتج للمسح والتحليل الفوري
+                  </Text>
+                </View>
+              </View>
+            )
+          ) : (
+            /* ── Food Mode (Original Experience) ── */
+            <>
+              {/* Proactive usage warning */}
+              <UsageWarningBanner type="image" />
 
           {/* Information Banner */}
           {!pickedImage && (
@@ -526,6 +827,8 @@ export default function CameraScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
+            </>
+          )}
             </>
           )}
         </View>
@@ -818,5 +1121,179 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,
+  },
+  modeTabsContainer: {
+    backgroundColor: "#EBF5F0",
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 16,
+    gap: 6,
+  },
+  modeTab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    borderRadius: 10,
+    gap: 8,
+  },
+  modeTabActive: {
+    backgroundColor: "#008C5A",
+    shadowColor: "#008C5A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  modeTabText: {
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 14,
+  },
+  modeTabTextActive: {
+    color: "#FFFFFF",
+  },
+  proPillBadge: {
+    backgroundColor: "#F59E0B",
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  proPillText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontFamily: "Tajawal_700Bold",
+  },
+  barcodeScannerFrame: {
+    width: "100%",
+    borderRadius: 20,
+    overflow: "hidden",
+    backgroundColor: "#000000",
+    position: "relative",
+  },
+  scannerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  reticleBox: {
+    width: 250,
+    height: 180,
+    position: "relative",
+  },
+  aimLaserLine: {
+    position: "absolute",
+    left: 8,
+    right: 8,
+    top: "50%",
+    height: 2,
+    backgroundColor: "rgba(0, 220, 130, 0.8)",
+    shadowColor: "#00DC82",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  floatingTorchBtn: {
+    position: "absolute",
+    bottom: 16,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.65)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  floatingTorchBtnActive: {
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderColor: "#F59E0B",
+  },
+  floatingTorchText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontFamily: "Tajawal_700Bold",
+  },
+  barcodeNotFoundCard: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 24,
+    alignItems: "center",
+    gap: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  barcodeNotFoundIconBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: "#FEF3C7",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  barcodeNotFoundTitle: {
+    fontSize: 18,
+    fontFamily: "Tajawal_700Bold",
+    color: "#1E293B",
+  },
+  barcodeBadgeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8FAFC",
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  barcodeBadgeLabel: {
+    fontSize: 13,
+    fontFamily: "Tajawal_500Medium",
+    color: "#64748B",
+  },
+  barcodeBadgeValue: {
+    fontSize: 15,
+    fontFamily: "Tajawal_700Bold",
+    color: "#0F172A",
+    letterSpacing: 1,
+  },
+  barcodeNotFoundDesc: {
+    fontSize: 14,
+    fontFamily: "Tajawal_500Medium",
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  permissionCard: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    padding: 24,
+    alignItems: "center",
+    gap: 12,
+  },
+  permissionTitle: {
+    fontSize: 18,
+    fontFamily: "Tajawal_700Bold",
+    color: "#1E293B",
+  },
+  permissionSubtitle: {
+    fontSize: 14,
+    fontFamily: "Tajawal_500Medium",
+    color: "#64748B",
+    textAlign: "center",
+    lineHeight: 22,
   },
 });

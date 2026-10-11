@@ -72,7 +72,10 @@ export default function HistoryScreen() {
   };
 
   const handleView = (item: any) => {
-    setCurrentReport(item.report);
+    const reportWithHistoryId = item.report
+      ? { ...item.report, analysisHistoryId: item.id }
+      : item.report;
+    setCurrentReport(reportWithHistoryId);
     router.push("/result");
   };
 

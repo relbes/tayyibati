@@ -10,7 +10,7 @@ import {
   Platform,
   FlatList,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Icon } from "@/components/Icon";
 import { BackButton } from "@/components/BackButton";
@@ -121,14 +121,32 @@ export default function BrowseScreen() {
   const [error, setError] = useState<string | null>(null);
   const [authModalVisible, setAuthModalVisible] = useState(false);
 
+  const params = useLocalSearchParams<{ status?: string; category?: string; search?: string }>();
+
   // Premium Filter States
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [selectedStatus, setSelectedStatus] = useState("all");
+  const [searchQuery, setSearchQuery] = useState(params.search || "");
+  const [selectedCategory, setSelectedCategory] = useState(params.category || "all");
+  const [selectedStatus, setSelectedStatus] = useState(
+    params.status && ["allowed", "forbidden", "conditional", "all"].includes(params.status)
+      ? params.status
+      : "all"
+  );
   const categoryScrollRef = useRef<ScrollView>(null);
 
   const rtl = isRTL();
   const topPadding = Platform.OS === "web" ? 16 : Math.max(insets.top, 12);
+
+  useEffect(() => {
+    if (params.status && ["allowed", "forbidden", "conditional", "all"].includes(params.status)) {
+      setSelectedStatus(params.status);
+    }
+    if (params.category) {
+      setSelectedCategory(params.category);
+    }
+    if (params.search) {
+      setSearchQuery(params.search);
+    }
+  }, [params.status, params.category, params.search]);
 
   // Read Cache First (0ms), then Sync in Background
   useEffect(() => {

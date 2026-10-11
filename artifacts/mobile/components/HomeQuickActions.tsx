@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Alert, Image } from "react-na
 import { Icon } from "@/components/Icon";
 import { isRTL } from "@/lib/i18n";
 import { useRouter } from "expo-router";
+import { useAuth } from "@/context/AuthContext";
 
 interface Props {
   focusSearch?: () => void;
@@ -10,6 +11,7 @@ interface Props {
 
 export function HomeQuickActions({ focusSearch }: Props) {
   const router = useRouter();
+  const { user } = useAuth();
   const rtl = isRTL();
 
   return (
@@ -43,10 +45,18 @@ export function HomeQuickActions({ focusSearch }: Props) {
           style={[styles.actionCard, styles.barcodeCard]}
           activeOpacity={0.82}
           onPress={() => {
-            Alert.alert(
-              "هذه الخاصية غير متاحة حاليا",
-              "قريباً سيتم تفعيل هذه الخاصية للاشتراك البريميوم"
-            );
+            if (!user?.isPremium) {
+              Alert.alert(
+                "ميزة خاصة بالباقة المميزة",
+                "فحص وتحليل الباركود متاح حصرياً لمشتركي الباقة المميزة.\nقم بالترقية للوصول إلى فحص وقراءة المنتجات التجارية.",
+                [
+                  { text: "لاحقاً", style: "cancel" },
+                  { text: "ترقية الحساب", onPress: () => router.push("/pricing") },
+                ]
+              );
+              return;
+            }
+            router.push("/(tabs)/camera?mode=barcode");
           }}
         >
           <View style={styles.iconContainer}>

@@ -45,7 +45,7 @@ export const AllowedPercentageCard = React.memo(function AllowedPercentageCard({
             styles.progressFill,
             {
               width: `${clampedPct}%`,
-              backgroundColor: "#16A34A",
+              backgroundColor: percentColor,
             },
           ]}
         />

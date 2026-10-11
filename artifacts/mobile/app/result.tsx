@@ -18,6 +18,7 @@ import { useColors } from "@/hooks/useColors";
 import { TayyibatiTheme } from "@/constants/tayyibatiTheme";
 import { useAnalysis } from "@/context/AnalysisContext";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
+import { AnalysisFeedbackCard } from "@/components/result/AnalysisFeedbackCard";
 import { analyzeText, AnalysisError, NetworkError } from "@/lib/api";
 import { useSubscription } from "@/lib/revenuecat";
 import { SubscriptionNoticeBanner } from "@/components/SubscriptionNoticeBanner";
@@ -27,7 +28,8 @@ export default function ResultScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { hasBillingIssue } = useSubscription();
-  const { currentReport, setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
+  const { currentReport, setCurrentReport, isAnalyzing, setIsAnalyzing, analysisHistoryId } = useAnalysis();
+  const effectiveHistoryId = currentReport?.analysisHistoryId ?? analysisHistoryId;
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
   const scrollRef = useRef<ScrollView>(null);
 
@@ -174,6 +176,10 @@ export default function ResultScreen() {
             onSelectSuggestion={handleSelectSuggestion}
             isAnalyzing={isAnalyzing}
           />
+
+          {effectiveHistoryId ? (
+            <AnalysisFeedbackCard analysisHistoryId={effectiveHistoryId} />
+          ) : null}
         </View>
       </ScrollView>
 

@@ -351,11 +351,23 @@ export function AnalysisResultCard({
     rawCanonical?.category_name_ar ||
     rawCanonical?.categoryNameAr ||
     "طبيعي";
+
+  const isAnimal =
+    (report as any)?.proteinCategory === "MEAT" ||
+    (report as any)?.proteinCategory === "POULTRY" ||
+    (report?.primaryRuling as any)?.proteinCategory === "MEAT" ||
+    (report?.primaryRuling as any)?.proteinCategory === "POULTRY" ||
+    (report?.primaryRuling as any)?.sourceType === "حيواني" ||
+    recognizedName.includes("لحم") ||
+    recognizedName.includes("دجاج") ||
+    recognizedName.includes("بقر") ||
+    recognizedName.includes("غنم");
+
   const sourceType =
     (report?.primaryRuling as any)?.sourceType ||
     rawCanonical?.source_type ||
     rawCanonical?.sourceType ||
-    "نباتي";
+    (isAnimal ? "حيواني" : "نباتي");
 
   // Ordered ingredients for direct list display: forbidden -> conditional -> allowed -> unknown
   const allIngredientsOrdered = [
@@ -407,12 +419,33 @@ export function AnalysisResultCard({
 
   return (
     <View style={styles.container}>
+      {/* SECTION 0: Browse Navigation Action Button (if requested by Intent Engine) */}
+      {report?.action?.type === "NAVIGATE_BROWSE" && (
+        <TouchableOpacity
+          style={styles.browseActionBtn}
+          onPress={() => {
+            if (report.action?.route) {
+              router.push(report.action.route as any);
+            } else if (report.action?.filter) {
+              router.push(`/(tabs)/browse?status=${report.action.filter}` as any);
+            }
+          }}
+          activeOpacity={0.8}
+        >
+          <Icon name="arrow-back" size={18} color="#FFFFFF" />
+          <Text style={styles.browseActionBtnText}>
+            {report.action.label || (report.action.filter === "allowed" ? "عرض دليل الأطعمة المسموحة" : "عرض دليل الأطعمة الممنوعة")}
+          </Text>
+          <Icon name="book-outline" size={20} color="#FFFFFF" />
+        </TouchableOpacity>
+      )}
+
       {/* SECTION 1: Result Hero Card */}
       <ResultStatusCard
         recognizedName={recognizedName}
         status={finalStatus}
         inputType={inputType}
-        analysisType={report?.analysisType || "text"}
+        analysisType={(report?.analysisType === "barcode" ? "label" : report?.analysisType) || "text"}
         isSingleFood={isSingleFood}
         summaryText={infoNote || undefined}
         confidence={backendConfidence}
@@ -605,5 +638,26 @@ const styles = StyleSheet.create({
   devItemText: {
     fontSize: 12,
     fontFamily: "Tajawal_400Regular",
+  },
+  browseActionBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#008C5A",
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    gap: 10,
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  browseActionBtnText: {
+    color: "#FFFFFF",
+    fontFamily: "Tajawal_700Bold",
+    fontSize: 15,
   },
 });

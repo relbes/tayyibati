@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { Alert } from "react-native";
+import { useRouter } from "expo-router";
 import * as Haptics from "expo-haptics";
 import { useAuth } from "@/context/AuthContext";
 import { useAnalysis } from "@/context/AnalysisContext";
-import { analyzeText, analyzeDish, fetchAutocomplete, AnalysisError } from "@/lib/api";
+import { analyzeText, analyzeDish, analyzeBarcode, fetchAutocomplete, AnalysisError } from "@/lib/api";
 
 export interface AutocompleteSuggestion {
   labelAr: string;
@@ -19,6 +21,7 @@ export interface UseFoodSearchOptions {
 }
 
 export function useFoodSearch(options?: UseFoodSearchOptions) {
+  const router = useRouter();
   const { user, refreshUsage } = useAuth();
   const { setCurrentReport, isAnalyzing, setIsAnalyzing } = useAnalysis();
 
@@ -168,6 +171,8 @@ export function useFoodSearch(options?: UseFoodSearchOptions) {
           !report ||
           report.notFound === true ||
           report.resultMode === "MULTIPLE_DISHES" ||
+          report.resultMode === "LIST_ALLOWED" ||
+          report.resultMode === "LIST_RESTRICTED" ||
           report.requiresSelection ||
           report.needsClarification;
 
@@ -196,9 +201,25 @@ export function useFoodSearch(options?: UseFoodSearchOptions) {
     async (overrideText?: string) => {
       const text = (typeof overrideText === "string" ? overrideText : query).trim();
       if (!text || isAnalyzing) return;
-      await _runAnalysis(() => analyzeText(text), `analyzeText("${text}")`);
+      const cleanedDigits = text.replace(/[-\s]/g, "");
+      if (/^\d{6}$|^\d{8}$|^\d{12,14}$/.test(cleanedDigits)) {
+        if (!user?.isPremium) {
+          Alert.alert(
+            "ميزة خاصة بالباقة المميزة",
+            "فحص وتحليل الباركود متاح حصرياً لمشتركي الباقة المميزة.\nقم بالترقية للوصول إلى فحص وقراءة المنتجات التجارية.",
+            [
+              { text: "لاحقاً", style: "cancel" },
+              { text: "ترقية الحساب", onPress: () => router.push("/pricing") },
+            ]
+          );
+          return;
+        }
+        await _runAnalysis(() => analyzeBarcode(cleanedDigits), `analyzeBarcode("${cleanedDigits}")`);
+      } else {
+        await _runAnalysis(() => analyzeText(text), `analyzeText("${text}")`);
+      }
     },
-    [query, isAnalyzing, _runAnalysis]
+    [query, isAnalyzing, user, router, _runAnalysis]
   );
 
   // ─── RULE 2 & 4: Direct dish selection → analyze by canonical ID ──────────
