@@ -38,7 +38,11 @@ export function HomeRecentAnalyses() {
 
   const handlePress = (entry: any) => {
     if (entry.itemData?.report) {
-      setCurrentReport(entry.itemData.report);
+      const reportWithHistoryId = {
+        ...entry.itemData.report,
+        analysisHistoryId: entry.itemData.id ?? entry.itemData.report?.analysisHistoryId,
+      };
+      setCurrentReport(reportWithHistoryId);
       router.push("/result");
     } else {
       router.push("/(tabs)/search");

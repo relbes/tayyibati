@@ -27,7 +27,11 @@ export function HomeRecentVerifications() {
 
   const handleView = (item: any) => {
     if (item?.report) {
-      setCurrentReport(item.report);
+      const reportWithHistoryId = {
+        ...item.report,
+        analysisHistoryId: item.id ?? item.report?.analysisHistoryId,
+      };
+      setCurrentReport(reportWithHistoryId);
       router.push("/result");
     }
   };

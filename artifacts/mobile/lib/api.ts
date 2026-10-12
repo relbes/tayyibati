@@ -629,13 +629,19 @@ export type FeedbackReason =
   | "OTHER";
 
 export interface SubmitFeedbackPayload {
-  analysisHistoryId: number;
+  analysisHistoryId?: number | null;
+  query?: string | null;
+  analysisType?: string | null;
+  compatibilityScore?: number | null;
+  report?: any;
   rating: FeedbackRating;
   reason?: FeedbackReason | null;
   comment?: string | null;
 }
 
-export async function submitFeedback(payload: SubmitFeedbackPayload): Promise<{ success: boolean; id?: number }> {
+export async function submitFeedback(
+  payload: SubmitFeedbackPayload,
+): Promise<{ success: boolean; id?: number; isUpdate?: boolean; feedback?: any }> {
   const base = BASE_URL;
   const res = await fetchWithRetry(`${base}/api/feedback`, {
     method: "POST",

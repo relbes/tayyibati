@@ -22,11 +22,13 @@ import { AnalysisFeedbackCard } from "@/components/result/AnalysisFeedbackCard";
 import { analyzeText, AnalysisError, NetworkError } from "@/lib/api";
 import { useSubscription } from "@/lib/revenuecat";
 import { SubscriptionNoticeBanner } from "@/components/SubscriptionNoticeBanner";
+import { useAuth } from "@/context/AuthContext";
 
 export default function ResultScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user } = useAuth();
   const { hasBillingIssue } = useSubscription();
   const { currentReport, setCurrentReport, isAnalyzing, setIsAnalyzing, analysisHistoryId } = useAnalysis();
   const effectiveHistoryId = currentReport?.analysisHistoryId ?? analysisHistoryId;
@@ -177,8 +179,18 @@ export default function ResultScreen() {
             isAnalyzing={isAnalyzing}
           />
 
-          {effectiveHistoryId ? (
-            <AnalysisFeedbackCard analysisHistoryId={effectiveHistoryId} />
+          {user ? (
+            <AnalysisFeedbackCard
+              analysisHistoryId={effectiveHistoryId}
+              query={
+                currentReport.query ||
+                (currentReport as any).displayQuery ||
+                foodName
+              }
+              analysisType={analysisType}
+              compatibilityScore={currentReport.compatibilityScore}
+              report={currentReport}
+            />
           ) : null}
         </View>
       </ScrollView>

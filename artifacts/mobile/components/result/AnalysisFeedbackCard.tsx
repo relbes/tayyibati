@@ -12,6 +12,10 @@ import { submitFeedback, type FeedbackReason } from "@/lib/api";
 
 export interface AnalysisFeedbackCardProps {
   analysisHistoryId?: number | null;
+  query?: string | null;
+  analysisType?: string | null;
+  compatibilityScore?: number | null;
+  report?: any;
 }
 
 const REASON_OPTIONS: Array<{ key: FeedbackReason; label: string }> = [
@@ -36,32 +40,50 @@ function isDuplicateFeedbackError(err: any): boolean {
 
 export const AnalysisFeedbackCard = React.memo(function AnalysisFeedbackCard({
   analysisHistoryId,
+  query,
+  analysisType,
+  compatibilityScore,
+  report,
 }: AnalysisFeedbackCardProps) {
-  // If no analysisHistoryId available (e.g. Guest user), do not render feedback UI at all
-  if (!analysisHistoryId) {
-    return null;
-  }
+  const [persistedHistoryId, setPersistedHistoryId] = useState<number | null | undefined>(analysisHistoryId);
+
+  React.useEffect(() => {
+    if (analysisHistoryId) {
+      setPersistedHistoryId(analysisHistoryId);
+    }
+  }, [analysisHistoryId]);
 
   const [rating, setRating] = useState<"positive" | "negative" | null>(null);
   const [selectedReason, setSelectedReason] = useState<FeedbackReason | null>(null);
   const [comment, setComment] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isUpdated, setIsUpdated] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
 
   const handlePositive = async () => {
-    if (isSubmitting || isSubmitted) return;
+    if (isSubmitting) return;
     setRating("positive");
     setIsSubmitting(true);
     setErrorMessage(null);
     setValidationError(null);
 
+    const targetId = persistedHistoryId ?? analysisHistoryId;
+
     try {
-      await submitFeedback({
-        analysisHistoryId,
+      const res = await submitFeedback({
+        analysisHistoryId: targetId,
+        query,
+        analysisType,
+        compatibilityScore,
+        report,
         rating: "positive",
       });
+      if (res?.feedback?.analysisHistoryId) {
+        setPersistedHistoryId(res.feedback.analysisHistoryId);
+      }
+      setIsUpdated(Boolean(res?.isUpdate));
       setIsSubmitted(true);
     } catch (err: any) {
       console.error("[Feedback Submission Error]", err);
@@ -82,14 +104,14 @@ export const AnalysisFeedbackCard = React.memo(function AnalysisFeedbackCard({
   };
 
   const handleNegativeSelect = () => {
-    if (isSubmitting || isSubmitted) return;
+    if (isSubmitting) return;
     setRating("negative");
     setErrorMessage(null);
     setValidationError(null);
   };
 
   const handleNegativeSubmit = async () => {
-    if (isSubmitting || isSubmitted) return;
+    if (isSubmitting) return;
 
     if (!selectedReason) {
       setValidationError("يرجى اختيار سبب المشكلة");
@@ -100,13 +122,23 @@ export const AnalysisFeedbackCard = React.memo(function AnalysisFeedbackCard({
     setErrorMessage(null);
     setValidationError(null);
 
+    const targetId = persistedHistoryId ?? analysisHistoryId;
+
     try {
-      await submitFeedback({
-        analysisHistoryId,
+      const res = await submitFeedback({
+        analysisHistoryId: targetId,
+        query,
+        analysisType,
+        compatibilityScore,
+        report,
         rating: "negative",
         reason: selectedReason,
         comment: comment.trim() || null,
       });
+      if (res?.feedback?.analysisHistoryId) {
+        setPersistedHistoryId(res.feedback.analysisHistoryId);
+      }
+      setIsUpdated(Boolean(res?.isUpdate));
       setIsSubmitted(true);
     } catch (err: any) {
       console.error("[Feedback Submission Error]", err);
@@ -134,7 +166,17 @@ export const AnalysisFeedbackCard = React.memo(function AnalysisFeedbackCard({
           <Text style={styles.successTitle}>
             ✓ شكرًا! تقييمك يساعدنا على تحسين طيباتي ❤️
           </Text>
-          <Text style={styles.successSub}>تم إرسال تقييمك</Text>
+          <Text style={styles.successSub}>
+            {isUpdated ? "تم تحديث تقييمك بنجاح" : "تم إرسال تقييمك"}
+          </Text>
+          <TouchableOpacity
+            style={styles.editRatingBtn}
+            onPress={() => setIsSubmitted(false)}
+            activeOpacity={0.7}
+          >
+            <Icon name="create-outline" size={15} color="#15803D" />
+            <Text style={styles.editRatingText}>تعديل التقييم</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
@@ -514,5 +556,22 @@ const styles = StyleSheet.create({
     fontFamily: "Tajawal_500Medium",
     color: "#475569",
     textAlign: "center",
+  },
+  editRatingBtn: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: "#F0FDF4",
+    borderWidth: 1,
+    borderColor: "#DCFCE7",
+  },
+  editRatingText: {
+    fontSize: 13.5,
+    fontFamily: "Tajawal_700Bold",
+    color: "#15803D",
   },
 });

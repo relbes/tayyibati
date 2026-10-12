@@ -7,12 +7,14 @@ import {
   type FeedbackRating,
   type FeedbackReason,
 } from "@workspace/db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, desc, gte, isNull, sql } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
 
 const router = Router();
 
 let tableChecked = false;
+
+const RECENT_UNRATED_WINDOW_MS = 5 * 60 * 1000; // 5 minutes narrow recent window
 
 /**
  * Idempotent helper ensuring the analysis_feedback table and unique index exist.
@@ -47,23 +49,132 @@ export async function ensureAnalysisFeedbackTable(): Promise<void> {
 /**
  * POST /feedback (served at /api/feedback via router mounting)
  * Allows authenticated users to optionally submit feedback (thumbs up / thumbs down)
- * on their own analysis history results.
+ * on their analysis results.
+ * Supports re-rating (updating existing feedback) and auto-resolving history records.
  */
 router.post("/feedback", requireAuth, async (req: Request, res: Response) => {
   try {
     await ensureAnalysisFeedbackTable();
 
     const userId = req.userId!;
-    const { analysisHistoryId, rating, reason, comment } = req.body || {};
+    const {
+      analysisHistoryId,
+      query,
+      analysisType,
+      compatibilityScore,
+      report,
+      rating,
+      reason,
+      comment,
+    } = req.body || {};
 
-    // 1. Validate analysisHistoryId
-    const parsedHistoryId = Number(analysisHistoryId);
+    // 1. Resolve target analysis history record
+    let targetHistoryId: number | null = null;
+
     if (
-      analysisHistoryId === undefined ||
-      analysisHistoryId === null ||
-      !Number.isInteger(parsedHistoryId) ||
-      parsedHistoryId <= 0
+      analysisHistoryId !== undefined &&
+      analysisHistoryId !== null &&
+      analysisHistoryId !== ""
     ) {
+      const parsedHistoryId = Number(analysisHistoryId);
+      if (!Number.isInteger(parsedHistoryId) || parsedHistoryId <= 0) {
+        return void res.status(400).json({
+          error: "analysisHistoryId must be a valid positive integer",
+          code: "INVALID_ANALYSIS_HISTORY_ID",
+        });
+      }
+
+      // Verify analysis existence
+      const [historyItem] = await db
+        .select({ id: analysisHistoryTable.id, userId: analysisHistoryTable.userId })
+        .from(analysisHistoryTable)
+        .where(eq(analysisHistoryTable.id, parsedHistoryId))
+        .limit(1);
+
+      if (!historyItem) {
+        return void res.status(404).json({
+          error: "Analysis history record not found",
+          code: "ANALYSIS_NOT_FOUND",
+        });
+      }
+
+      // Verify ownership (cannot rate another user's analysis)
+      if (historyItem.userId !== userId) {
+        return void res.status(403).json({
+          error: "Forbidden: You can only provide feedback for your own analysis results",
+          code: "FORBIDDEN_OWNERSHIP",
+        });
+      }
+
+      targetHistoryId = historyItem.id;
+    } else if (query && typeof query === "string" && query.trim().length > 0) {
+      const trimmedQuery = query.trim();
+      const normalizedType =
+        analysisType === "image" || analysisType === "label"
+          ? analysisType
+          : analysisType === "barcode"
+          ? "label"
+          : "text";
+
+      // 1b. Check for recent, unrated analysis-history candidates
+      const recentWindowStart = new Date(Date.now() - RECENT_UNRATED_WINDOW_MS);
+
+      const matchingCandidates = await db
+        .select({
+          id: analysisHistoryTable.id,
+        })
+        .from(analysisHistoryTable)
+        .leftJoin(
+          analysisFeedbackTable,
+          eq(analysisHistoryTable.id, analysisFeedbackTable.analysisHistoryId),
+        )
+        .where(
+          and(
+            eq(analysisHistoryTable.userId, userId),
+            eq(analysisHistoryTable.query, trimmedQuery),
+            eq(analysisHistoryTable.analysisType, normalizedType),
+            gte(analysisHistoryTable.createdAt, recentWindowStart),
+            isNull(analysisFeedbackTable.id), // strictly unrated
+          ),
+        )
+        .orderBy(desc(analysisHistoryTable.createdAt))
+        .limit(2);
+
+      if (matchingCandidates.length > 1) {
+        // Multiple ambiguous candidates: do not guess
+        return void res.status(400).json({
+          error: "Multiple matching recent analyses found. Please provide analysisHistoryId to specify which analysis to rate.",
+          code: "AMBIGUOUS_ANALYSIS_HISTORY",
+        });
+      }
+
+      if (matchingCandidates.length === 1) {
+        // Unambiguous candidate found: reuse without creating duplicate row
+        targetHistoryId = matchingCandidates[0].id;
+      } else {
+        // No existing candidate: create a dedicated analysis-history record
+        const parsedScore =
+          typeof compatibilityScore === "number" && !isNaN(compatibilityScore)
+            ? Math.round(compatibilityScore)
+            : null;
+
+        const reportPayload =
+          report && typeof report === "object" ? report : { query: trimmedQuery };
+
+        const [createdHistory] = await db
+          .insert(analysisHistoryTable)
+          .values({
+            userId,
+            query: trimmedQuery,
+            analysisType: normalizedType,
+            compatibilityScore: parsedScore,
+            report: reportPayload as any,
+          })
+          .returning({ id: analysisHistoryTable.id });
+
+        targetHistoryId = createdHistory.id;
+      }
+    } else {
       return void res.status(400).json({
         error: "analysisHistoryId must be a valid positive integer",
         code: "INVALID_ANALYSIS_HISTORY_ID",
@@ -98,7 +209,6 @@ router.post("/feedback", requireAuth, async (req: Request, res: Response) => {
       }
       normalizedReason = reason as FeedbackReason;
     } else {
-      // Simplest consistent behavior: reason is ignored/cleared for positive ratings
       normalizedReason = null;
     }
 
@@ -115,54 +225,44 @@ router.post("/feedback", requireAuth, async (req: Request, res: Response) => {
       normalizedComment = trimmed.length > 0 ? trimmed : null;
     }
 
-    // 5. Verify analysis existence
-    const [historyItem] = await db
-      .select({ id: analysisHistoryTable.id, userId: analysisHistoryTable.userId })
-      .from(analysisHistoryTable)
-      .where(eq(analysisHistoryTable.id, parsedHistoryId))
-      .limit(1);
-
-    if (!historyItem) {
-      return void res.status(404).json({
-        error: "Analysis history record not found",
-        code: "ANALYSIS_NOT_FOUND",
-      });
-    }
-
-    // 6. Verify ownership (cannot rate another user's analysis)
-    if (historyItem.userId !== userId) {
-      return void res.status(403).json({
-        error: "Forbidden: You can only provide feedback for your own analysis results",
-        code: "FORBIDDEN_OWNERSHIP",
-      });
-    }
-
-    // 7. Duplicate prevention policy (return 409 Conflict if feedback already exists)
+    // 5. Re-rating & Persistence: Upsert feedback record
     const [existingFeedback] = await db
       .select({ id: analysisFeedbackTable.id })
       .from(analysisFeedbackTable)
       .where(
         and(
           eq(analysisFeedbackTable.userId, userId),
-          eq(analysisFeedbackTable.analysisHistoryId, parsedHistoryId),
+          eq(analysisFeedbackTable.analysisHistoryId, targetHistoryId),
         ),
       )
       .limit(1);
 
     if (existingFeedback) {
-      return void res.status(409).json({
-        error: "Feedback has already been submitted for this analysis result",
-        code: "FEEDBACK_EXISTS",
+      // Re-rating: update the existing feedback record
+      const [updated] = await db
+        .update(analysisFeedbackTable)
+        .set({
+          rating: normalizedRating,
+          reason: normalizedReason,
+          comment: normalizedComment,
+        })
+        .where(eq(analysisFeedbackTable.id, existingFeedback.id))
+        .returning();
+
+      return void res.status(200).json({
+        success: true,
+        feedback: updated,
+        isUpdate: true,
       });
     }
 
-    // 8. Insert feedback record
+    // 6. Insert feedback record
     try {
       const [inserted] = await db
         .insert(analysisFeedbackTable)
         .values({
           userId,
-          analysisHistoryId: parsedHistoryId,
+          analysisHistoryId: targetHistoryId,
           rating: normalizedRating,
           reason: normalizedReason,
           comment: normalizedComment,
@@ -172,13 +272,30 @@ router.post("/feedback", requireAuth, async (req: Request, res: Response) => {
       return void res.status(201).json({
         success: true,
         feedback: inserted,
+        isUpdate: false,
       });
     } catch (insertErr: any) {
-      // Concurrency safety against race condition duplicates
+      // Concurrency race: if record was created concurrently, update it
       if (insertErr?.code === "23505" || insertErr?.message?.includes("unique")) {
-        return void res.status(409).json({
-          error: "Feedback has already been submitted for this analysis result",
-          code: "FEEDBACK_EXISTS",
+        const [updated] = await db
+          .update(analysisFeedbackTable)
+          .set({
+            rating: normalizedRating,
+            reason: normalizedReason,
+            comment: normalizedComment,
+          })
+          .where(
+            and(
+              eq(analysisFeedbackTable.userId, userId),
+              eq(analysisFeedbackTable.analysisHistoryId, targetHistoryId),
+            ),
+          )
+          .returning();
+
+        return void res.status(200).json({
+          success: true,
+          feedback: updated,
+          isUpdate: true,
         });
       }
       throw insertErr;
