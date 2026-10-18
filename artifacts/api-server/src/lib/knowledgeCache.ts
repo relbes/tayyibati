@@ -223,7 +223,22 @@ function findExactMatch(input: string, entities: any[], aliases: any[]): Resolve
     (a) => normalizeName(a.aliasAr || a.alias_ar) === norm || (a.aliasEn && normalizeName(a.aliasEn) === norm)
   );
   if (aliasMatch) {
-    const fId = aliasMatch.foodId || aliasMatch.food_id;
+    const parentEntity = (aliasMatch.entityId || aliasMatch.entity_id)
+      ? entities.find((e) => e.id === (aliasMatch.entityId || aliasMatch.entity_id))
+      : null;
+    const fId = aliasMatch.foodId || aliasMatch.food_id || parentEntity?.foodId;
+    if (parentEntity) {
+      return {
+        id: parentEntity.id,
+        nameAr: parentEntity.nameAr,
+        nameEn: parentEntity.nameEn,
+        type: parentEntity.type,
+        attributes: (parentEntity.attributes as ResolvedEntity["attributes"]) || {},
+        foodId: fId,
+        parentEntityId: parentEntity.parentEntityId,
+        matchScore: 90,
+      };
+    }
     if (fId) {
       return {
         id: fId,
@@ -668,19 +683,16 @@ export function buildUnifiedSuggestions(
     }
   }
 
-  // 2. Gather AI culinary refinements (ONLY IF THEY RESOLVE TO REAL DB RECORDS)
+  // 2. Gather AI culinary refinements
   for (const ai of aiSuggestions) {
     if (ai && ai.labelAr) {
-      const dbMatch = resolveWithInheritance(ai.query || ai.labelAr, knowledgeCache);
-      if (dbMatch) {
-        addSuggestion({
-          labelAr: dbMatch.food.nameAr,
-          labelEn: dbMatch.food.nameEn || ai.labelEn || dbMatch.food.nameAr,
-          query: dbMatch.food.nameAr,
-          source: "DB_CANDIDATE",
-          confidence: "MEDIUM",
-        });
-      }
+      addSuggestion({
+        labelAr: ai.labelAr,
+        labelEn: ai.labelEn || ai.labelAr,
+        query: ai.query || ai.labelAr,
+        source: "AI_CULINARY",
+        confidence: "MEDIUM",
+      });
     }
   }
 
@@ -748,7 +760,7 @@ export function resolveFoodIdentity(
       const aRoot = a.foodType === "general_category" || a.parentFoodId === null ? 1 : 0;
       const bRoot = b.foodType === "general_category" || b.parentFoodId === null ? 1 : 0;
       if (bRoot !== aRoot) return bRoot - aRoot;
-      return a.nameAr.length - b.nameAr.length;
+      return (a.nameAr || "").length - (b.nameAr || "").length;
     });
     const best = directMatches[0];
     return { food: best, matchType: "EXACT", confidence: "HIGH", originalInput: rawInput, matchedTerm: best.nameAr };
@@ -759,7 +771,9 @@ export function resolveFoodIdentity(
     const vNorm = normalizeName(variant);
     const vStrip = stripArticle(vNorm);
     for (const f of foods) {
-      const { sAr, nAr } = foodNormMap.get(f.id)!;
+      const norm = foodNormMap.get(f.id);
+      const sAr = norm?.sAr;
+      const nAr = norm?.nAr;
       if (sAr && (sAr === vStrip || sAr === vNorm || nAr === vNorm)) {
         return { food: f, matchType: "NORMALIZED", confidence: "HIGH", originalInput: rawInput, matchedTerm: f.nameAr };
       }
@@ -772,11 +786,11 @@ export function resolveFoodIdentity(
   // E.g. "سمك / أسماك" contains constituent synonym "سمك"
   // E.g. "الجوز (عين الجمل)" contains constituent synonym "عين الجمل"
   for (const f of foods) {
-    const { nAr } = foodNormMap.get(f.id)!;
-    const parts = nAr.split(/[/—,()،\u060C]+/).map((c) => stripArticle(normalizeName(c.trim()))).filter((c) => c.length >= 2);
+    const rawName = f.nameAr || foodNormMap.get(f.id)?.nAr || "";
+    const parts = rawName.split(/[/—,()،\u060C]+/).map((c: string) => stripArticle(normalizeName(c.trim()))).filter((c: string) => c.length >= 2);
     const isJuice = Boolean(
       (f.category && (f.category.toLowerCase().includes("juice") || f.category.includes("عصير"))) ||
-      f.nameAr.includes("عصير") ||
+      (f.nameAr && f.nameAr.includes("عصير")) ||
       (f.nameEn && f.nameEn.toLowerCase().includes("juice"))
     );
     for (const part of parts) {

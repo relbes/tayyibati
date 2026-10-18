@@ -298,7 +298,239 @@ export function AnalysisResultCard({
     );
   }
 
+  // Handle LIST_CATALOG Presentation Mode (e.g. "أكلات مسموح بيها", "أكلات ممنوعة")
+  if (viewModel.presentationMode === "LIST_CATALOG" && viewModel.listCatalogViewModel) {
+    const listVM = viewModel.listCatalogViewModel;
+    const isAllowed = listVM.catalogType === "allowed";
+    const isForbidden = listVM.catalogType === "forbidden";
+    const isCategory = listVM.catalogType === "category";
+    const headerBg = isAllowed ? "#008C5A" : isForbidden ? "#DC2626" : "#008C5A";
+    const badgeBg = isAllowed ? "#DCFCE7" : isForbidden ? "#FEE2E2" : "#DCFCE7";
+    const badgeText = isAllowed ? "#15803D" : isForbidden ? "#DC2626" : "#15803D";
+    const badgeBorder = isAllowed ? "#86EFAC" : isForbidden ? "#FECDD3" : "#86EFAC";
+
+    return (
+      <View style={styles.container}>
+        {/* Main Header / Navigation Card */}
+        <View style={[styles.listCatalogCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.listCatalogHeader}>
+            <View style={[styles.listCatalogIconContainer, { backgroundColor: isAllowed ? "#008C5A15" : isForbidden ? "#DC262615" : "#008C5A15" }]}>
+              <Icon name={isAllowed ? "checkmark-circle" : isForbidden ? "close-circle" : "leaf"} size={32} color={headerBg} />
+            </View>
+            <Text style={[styles.listCatalogTitle, { color: colors.foreground }]}>
+              {listVM.title}
+            </Text>
+            <Text style={[styles.listCatalogDesc, { color: colors.mutedForeground }]}>
+              {listVM.description}
+            </Text>
+          </View>
+
+          {/* Primary Action Button: Navigate to Browse with correct status filter or category */}
+          <TouchableOpacity
+            style={[styles.browseActionBtn, { backgroundColor: headerBg, marginHorizontal: 0 }]}
+            onPress={() => {
+              if (listVM.actionRoute) {
+                router.push(listVM.actionRoute as any);
+              } else if (isCategory) {
+                router.push("/(tabs)/browse" as any);
+              } else {
+                router.push(`/(tabs)/browse?status=${listVM.actionFilter}` as any);
+              }
+            }}
+            activeOpacity={0.8}
+          >
+            <Icon name="arrow-back" size={18} color="#FFFFFF" />
+            <Text style={styles.browseActionBtnText}>{listVM.actionLabel}</Text>
+            <Icon name="book-outline" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {/* Sample / Preview Foods Section */}
+          {listVM.sampleFoods.length > 0 && (
+            <View style={styles.sampleFoodsSection}>
+              <Text style={[styles.sampleFoodsSectionTitle, { color: colors.foreground }]}>
+                {isAllowed ? "أمثلة على الأطعمة المسموحة:" : isForbidden ? "أمثلة على الأطعمة الممنوعة:" : "أصناف من هذا القسم:"}
+              </Text>
+              <View style={styles.sampleFoodsList}>
+                {listVM.sampleFoods.map((item, idx) => (
+                  <View
+                    key={`sample_${idx}`}
+                    style={[
+                      styles.sampleFoodItem,
+                      { backgroundColor: colors.secondary, borderColor: colors.border },
+                    ]}
+                  >
+                    <View style={styles.sampleFoodRightPart}>
+                      <Text style={styles.sampleFoodBullet}>
+                        {item.status === "allowed" ? "🟢" : item.status === "forbidden" ? "🔴" : "🟡"}
+                      </Text>
+                      <View style={styles.sampleFoodTextContainer}>
+                        <Text style={[styles.sampleFoodName, { color: colors.foreground }]}>
+                          {item.nameAr}
+                        </Text>
+                        {item.reason ? (
+                          <Text style={[styles.sampleFoodReason, { color: colors.mutedForeground }]}>
+                            {item.reason}
+                          </Text>
+                        ) : null}
+                      </View>
+                    </View>
+                    <View style={[styles.sampleFoodBadge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+                      <Text style={[styles.sampleFoodBadgeText, { color: badgeText }]}>
+                        {isAllowed ? "مسموح" : "ممنوع"}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Category Suggestions / Chips if available */}
+          {listVM.categorySuggestions.length > 0 && (
+            <View style={styles.listSuggestionsRow}>
+              <Text style={[styles.listSuggestionsTitle, { color: colors.mutedForeground }]}>
+                أقسام مقترحة:
+              </Text>
+              <View style={styles.listChipsWrap}>
+                {listVM.categorySuggestions.map((cat, idx) => (
+                  <TouchableOpacity
+                    key={`cat_${idx}`}
+                    style={[styles.listChip, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}
+                    onPress={() => {
+                      if (onSelectSuggestion) {
+                        onSelectSuggestion(cat);
+                      }
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.listChipText, { color: colors.primary }]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+        </View>
+
+        <ResultActionButtons
+          onAnalyzeAnother={onRetry || (() => {})}
+          onGoHome={handleGoHome}
+          onShare={onShare}
+        />
+      </View>
+    );
+  }
+
+  // Handle MULTI_ITEM Presentation Mode (e.g. "بطيخ وشمام وتفاح وبرتقال", "الدجاج والبيض والورقيات والبقوليات")
+  if (viewModel.presentationMode === "MULTI_ITEM" && viewModel.multiItemViewModel) {
+    const multiVM = viewModel.multiItemViewModel;
+    return (
+      <View style={styles.container}>
+        <View style={[styles.listCatalogCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.listCatalogHeader}>
+            <View style={[styles.listCatalogIconContainer, { backgroundColor: colors.primary + "15" }]}>
+              <Icon name="layers-outline" size={32} color={colors.primary} />
+            </View>
+            <Text style={[styles.listCatalogTitle, { color: colors.foreground }]}>
+              {multiVM.title}
+            </Text>
+            <Text style={[styles.listCatalogDesc, { color: colors.mutedForeground }]}>
+              {multiVM.description}
+            </Text>
+          </View>
+
+          {/* Render Items */}
+          <View style={styles.sampleFoodsSection}>
+            {multiVM.items.map((item, idx) => {
+              const isAllowed = item.status === "allowed";
+              const isForbidden = item.status === "forbidden";
+              const isConditional = item.status === "conditional";
+
+              const badgeBg = isAllowed ? "#DCFCE7" : isForbidden ? "#FEE2E2" : isConditional ? "#FEF3C7" : "#F3F4F6";
+              const badgeText = isAllowed ? "#15803D" : isForbidden ? "#DC2626" : isConditional ? "#D97706" : "#6B7280";
+              const badgeBorder = isAllowed ? "#86EFAC" : isForbidden ? "#FECDD3" : isConditional ? "#FDE68A" : "#E5E7EB";
+              const statusLabel = isAllowed ? "مسموح" : isForbidden ? "ممنوع" : isConditional ? "مشروط" : "غير متوفر";
+              const bulletEmoji = isAllowed ? "🟢" : isForbidden ? "🔴" : isConditional ? "🟡" : "⚪";
+
+              return (
+                <View
+                  key={`multi_${idx}`}
+                  style={[
+                    styles.sampleFoodItem,
+                    { backgroundColor: colors.secondary, borderColor: colors.border },
+                  ]}
+                >
+                  <View style={styles.sampleFoodRightPart}>
+                    <Text style={styles.sampleFoodBullet}>{bulletEmoji}</Text>
+                    <View style={styles.sampleFoodTextContainer}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={[styles.sampleFoodName, { color: colors.foreground }]}>
+                          {item.nameAr}
+                        </Text>
+                        {item.itemType === "category" && (
+                          <View style={{ backgroundColor: colors.primary + "15", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 10, color: colors.primary, fontFamily: "Cairo-Bold" }}>قسم</Text>
+                          </View>
+                        )}
+                      </View>
+                      {item.reason ? (
+                        <Text style={[styles.sampleFoodReason, { color: colors.mutedForeground }]}>
+                          {item.reason}
+                        </Text>
+                      ) : null}
+                      {item.categoryStats?.exceptions && item.categoryStats.exceptions.length > 0 ? (
+                        <Text style={[styles.sampleFoodReason, { color: "#D97706", marginTop: 2 }]}>
+                          ⚠️ {item.categoryStats.exceptions.join(" | ")}
+                        </Text>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={[styles.sampleFoodBadge, { backgroundColor: badgeBg, borderColor: badgeBorder }]}>
+                    <Text style={[styles.sampleFoodBadgeText, { color: badgeText }]}>
+                      {statusLabel}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+
+        <ResultActionButtons
+          onAnalyzeAnother={onRetry || (() => {})}
+          onGoHome={handleGoHome}
+          onShare={onShare}
+        />
+      </View>
+    );
+  }
+
   const { inputType, recognizedName, ingredientDecisions, mealDecision, canonicalResult, analysis } = viewModel;
+
+  // Handle Unsupported Questions (Calorie calculation, diet planning, weight loss)
+  if (report?.resultMode === "UNSUPPORTED_QUESTION" || (report as any)?.queryIntent === "UNSUPPORTED_QUESTION") {
+    return (
+      <EmptyAnalysisState
+        title="استفسار خارج نطاق الخدمة"
+        message={report?.explanation || "تطبيق طيباتي مخصص لتحديد الأطعمة المسموحة والممنوعة والمشروطة وفق القواعد الغذائية المعتمدة، ولا يقدم حالياً خدمة حساب السعرات الحرارية أو وضع جداول الحميات الغذائية والتخسيس."}
+        retryLabel="بحث جديد"
+        onRetry={onRetry || (() => {})}
+        iconName="information-circle-outline"
+        suggestions={(report?.suggestions || []).map((s: any) => {
+          const name = typeof s === "string" ? s : s.label || s.query || "";
+          return {
+            canonicalId: 0,
+            canonicalEntityType: "food" as const,
+            nameAr: name,
+            nameEn: name,
+          };
+        })}
+        onSelectSuggestion={(suggestion) => {
+          if (onSelectSuggestion) onSelectSuggestion(suggestion);
+        }}
+        isAnalyzing={isAnalyzing}
+      />
+    );
+  }
 
   // Handle Empty Analysis State via presentation props
   if (!ingredientDecisions || ingredientDecisions.length === 0) {
@@ -659,5 +891,120 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontFamily: "Tajawal_700Bold",
     fontSize: 15,
+  },
+  listCatalogCard: {
+    borderRadius: 20,
+    borderWidth: 1.5,
+    padding: 20,
+    gap: 16,
+    marginBottom: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  listCatalogHeader: {
+    alignItems: "center",
+    gap: 8,
+  },
+  listCatalogIconContainer: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
+  },
+  listCatalogTitle: {
+    fontSize: 20,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "center",
+  },
+  listCatalogDesc: {
+    fontSize: 14,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "center",
+    lineHeight: 22,
+    paddingHorizontal: 8,
+  },
+  sampleFoodsSection: {
+    marginTop: 6,
+    gap: 10,
+  },
+  sampleFoodsSectionTitle: {
+    fontSize: 15,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "right",
+  },
+  sampleFoodsList: {
+    gap: 8,
+  },
+  sampleFoodItem: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  sampleFoodRightPart: {
+    flexDirection: "row-reverse",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  sampleFoodBullet: {
+    fontSize: 14,
+  },
+  sampleFoodTextContainer: {
+    flex: 1,
+    alignItems: "flex-end",
+  },
+  sampleFoodName: {
+    fontSize: 14.5,
+    fontFamily: "Tajawal_700Bold",
+    textAlign: "right",
+  },
+  sampleFoodReason: {
+    fontSize: 12,
+    fontFamily: "Tajawal_400Regular",
+    textAlign: "right",
+    marginTop: 2,
+  },
+  sampleFoodBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  sampleFoodBadgeText: {
+    fontSize: 12,
+    fontFamily: "Tajawal_500Medium",
+  },
+  listSuggestionsRow: {
+    marginTop: 6,
+    gap: 8,
+    alignItems: "flex-end",
+  },
+  listSuggestionsTitle: {
+    fontSize: 13,
+    fontFamily: "Tajawal_500Medium",
+    textAlign: "right",
+  },
+  listChipsWrap: {
+    flexDirection: "row-reverse",
+    flexWrap: "wrap",
+    gap: 6,
+  },
+  listChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  listChipText: {
+    fontSize: 13,
+    fontFamily: "Tajawal_500Medium",
   },
 });

@@ -44,8 +44,14 @@ export function useSubscriptionDetails(): UnifiedSubscriptionDetails {
   });
 
   return useMemo(() => {
-    // 1. Check if user is entirely free
-    const isUserPremium = user?.isPremium || isSubscribed;
+    // 1. Authoritative check: User is premium if their account is marked premium in backend,
+    // or if backend /me/subscription reports an active status,
+    // or if local RevenueCat has an active entitlement explicitly tied to this user's ID.
+    const isRcUserMatch = Boolean(user?.id && customerInfo?.originalAppUserId === user.id);
+    const hasValidNativeEntitlement = isSubscribed && isRcUserMatch;
+    const isBackendPremium = Boolean(user?.isPremium || (subscriptionQuery.data && subscriptionQuery.data.status !== "FREE"));
+    const isUserPremium = isBackendPremium || hasValidNativeEntitlement;
+
     if (!isUserPremium) {
       return {
         status: "FREE",
@@ -66,10 +72,10 @@ export function useSubscriptionDetails(): UnifiedSubscriptionDetails {
       };
     }
 
-    // 2. Extract entitlement info from native RevenueCat CustomerInfo
-    const activeEnt =
-      customerInfo?.entitlements?.active?.["premium"] ||
-      customerInfo?.entitlements?.all?.["premium"];
+    // 2. Extract entitlement info from native RevenueCat CustomerInfo (scoped to current user)
+    const activeEnt = isRcUserMatch
+      ? (customerInfo?.entitlements?.active?.["premium"] || customerInfo?.entitlements?.all?.["premium"])
+      : null;
 
     // 3. Extract dates & flags, prioritizing RevenueCat device receipt then server DB/sync
     const backendData = subscriptionQuery.data;

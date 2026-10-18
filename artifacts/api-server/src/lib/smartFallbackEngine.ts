@@ -291,6 +291,17 @@ function scoreCandidate(
       score += 55;
     } else {
       for (const ct of candTokens) {
+        const ctStripped = stripArticle(ct);
+        if (
+          GENERIC_DESCRIPTORS.has(ct) ||
+          GENERIC_DESCRIPTORS.has(ctStripped) ||
+          CULINARY_DESCRIPTORS.has(ct) ||
+          CULINARY_DESCRIPTORS.has(ctStripped) ||
+          PREPARATION_DESCRIPTORS.has(ct) ||
+          PREPARATION_DESCRIPTORS.has(ctStripped)
+        ) {
+          continue;
+        }
         const ctSkel = getArabicSkeleton(ct);
         if (ctSkel.length >= 3 && ctSkel === targetSkeleton) {
           score += 45;
@@ -322,6 +333,17 @@ function scoreCandidate(
   // accidental substitutions on short 4-5 letter words (e.g. "بازلا" vs "بازين")
   if (queryStripped.length >= 4) {
     for (const ct of candTokens) {
+      const ctStripped = stripArticle(ct);
+      if (
+        GENERIC_DESCRIPTORS.has(ct) ||
+        GENERIC_DESCRIPTORS.has(ctStripped) ||
+        CULINARY_DESCRIPTORS.has(ct) ||
+        CULINARY_DESCRIPTORS.has(ctStripped) ||
+        PREPARATION_DESCRIPTORS.has(ct) ||
+        PREPARATION_DESCRIPTORS.has(ctStripped)
+      ) {
+        continue;
+      }
       if (ct.length >= 4) {
         const prefixLen = countSharedPrefix(queryStripped, ct);
         const dist = levenshteinDistance(queryStripped, ct);

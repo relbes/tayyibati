@@ -65,7 +65,11 @@ export default function HomeScreen() {
     handleAnalyze,
     handleSelectDish,
     handleSelectSuggestion,
-  } = useFoodSearch();
+  } = useFoodSearch({
+    onDefinitiveResult: (_report) => {
+      router.push("/result");
+    },
+  });
 
   useEffect(() => {
     if (limitReached) {

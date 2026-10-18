@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,7 +9,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { Icon } from "@/components/Icon";
 import { HeaderNatureBackground } from "@/components/HeaderNatureBackground";
 import { PageHeader } from "@/components/PageHeader";
@@ -39,7 +39,7 @@ export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, signOut } = useAuth();
+  const { user, usage: authUsage, refreshUsage, signOut } = useAuth();
   const [usage, setUsage] = useState<UsageInfo | null>(null);
   const [subscriptionEnabled, setSubscriptionEnabled] = useState(true);
   const topPadding = Platform.OS === "web" ? 67 : insets.top;
@@ -61,21 +61,33 @@ export default function ProfileScreen() {
       .catch(() => {});
   }, []);
 
+  // Sync from AuthContext whenever global usage updates
   useEffect(() => {
-    if (user) {
-      getUserUsage().then(setUsage).catch(() => {});
+    if (authUsage) {
+      setUsage(authUsage);
     }
-  }, [user]);
+  }, [authUsage]);
+
+  // Refresh usage and user state every time Profile screen gains focus
+  useFocusEffect(
+    useCallback(() => {
+      if (user) {
+        refreshUsage().catch(() => {});
+        getUserUsage().then(setUsage).catch(() => {});
+      }
+    }, [user, refreshUsage])
+  );
 
   useEffect(() => {
     if (
+      user?.isPremium &&
       subscription &&
       subscription.status !== "FREE" &&
       subscription.status !== "ERROR"
     ) {
       evaluateSubscriptionNotifications(subscription);
     }
-  }, [subscription, evaluateSubscriptionNotifications]);
+  }, [user?.isPremium, subscription, evaluateSubscriptionNotifications]);
 
   const handleSignOut = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);

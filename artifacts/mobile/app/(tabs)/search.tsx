@@ -66,7 +66,7 @@ export default function SearchScreen() {
   // Single definitive results are routed to the dedicated /result screen.
   const showResultCard =
     !!result &&
-    (result.needsClarification || result.notFound || result.resultMode === "LIST_ALLOWED" || result.resultMode === "LIST_RESTRICTED");
+    (result.needsClarification || result.notFound || result.resultMode === "LIST_ALLOWED" || result.resultMode === "LIST_RESTRICTED" || result.resultMode === "CATEGORY_REPORT");
 
   return (
     <View style={styles.container}>

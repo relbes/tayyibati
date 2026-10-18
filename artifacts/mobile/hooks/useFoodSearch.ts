@@ -167,12 +167,29 @@ export function useFoodSearch(options?: UseFoodSearchOptions) {
         setCurrentReport(report);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
+        // Always refresh usage counters immediately after a search completes
+        refreshUsage().catch(() => {});
+
+        // Category Browsing Intent: Route directly to the existing category/catalog screen
+        if (
+          report?.action?.type === "NAVIGATE_BROWSE" &&
+          (report.action.category || report.queryIntent === "CATEGORY_SEARCH" || report.resultMode === "CATEGORY_REPORT")
+        ) {
+          const targetRoute =
+            report.action.route ||
+            `/(tabs)/browse?category=${encodeURIComponent(report.action.category || "خضروات")}`;
+          router.push(targetRoute as any);
+          return;
+        }
+
         const isAmbiguous =
           !report ||
           report.notFound === true ||
           report.resultMode === "MULTIPLE_DISHES" ||
           report.resultMode === "LIST_ALLOWED" ||
           report.resultMode === "LIST_RESTRICTED" ||
+          report.resultMode === "CATEGORY_REPORT" ||
+          report.queryIntent === "CATEGORY_SEARCH" ||
           report.requiresSelection ||
           report.needsClarification;
 
@@ -180,6 +197,9 @@ export function useFoodSearch(options?: UseFoodSearchOptions) {
           onDefinitiveResultRef.current(report);
         }
       } catch (err: unknown) {
+        // Always refresh usage counters when a limit error or any analysis error occurs
+        refreshUsage().catch(() => {});
+
         if (err instanceof AnalysisError && err.limitReached) {
           setLimitReached(true);
         } else {
@@ -193,7 +213,7 @@ export function useFoodSearch(options?: UseFoodSearchOptions) {
         setIsAnalyzing(false);
       }
     },
-    [user, setCurrentReport, setIsAnalyzing]
+    [user, refreshUsage, setCurrentReport, setIsAnalyzing, router]
   );
 
   // ─── RULE 1 & 3: Text search (user presses Search button) ────────────────

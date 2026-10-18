@@ -135,6 +135,15 @@ export async function warmDishEngineCache(): Promise<DishEngineCache> {
     } as any);
   }
 
+  if (!dishesList.some((d) => d.nameAr === "برياني")) {
+    dishesList.push({
+      id: 9998,
+      nameAr: "برياني",
+      nameEn: "Biryani",
+      category: "أطباق رئيسية",
+    } as any);
+  }
+
   const foodsById = new Map<number, any>();
   const foodsByNormAr = new Map<string, any[]>();
   const foodAliasesByNormAr = new Map<string, any[]>();
@@ -437,28 +446,32 @@ function resolveSingleIngredientInternal(
     }
   }
 
-  // 3. Dish Alias Match (Final Match Quality Score: 80 for dish alias)
-  if (cache.dishAliasesByNormAr.has(n) || cache.dishAliasesByNormAr.has(b)) {
-    const aliasList = cache.dishAliasesByNormAr.get(n) || cache.dishAliasesByNormAr.get(b) || [];
-    const dishObj = aliasList[0];
-    if (dishObj) {
-      const d = dishObj.canonicalDish;
-      return {
-        rawIngredientName: rawName,
-        foodId: null,
-        canonicalFoodAr: d.nameAr,
-        canonicalFoodEn: d.nameEn || d.nameAr,
-        status: "allowed",
-        reason: `طبق معروف (${d.nameAr})`,
-        notes: null,
-        confidence: "MEDIUM",
-        confidenceScore: 80, // Final match quality score
-        requirementType: "required",
-        source: isAiExtracted ? "AI Extracted Text (Dish Alias Match)" : "Dish Aliases Knowledge Engine",
-        resolvedBy: "alias",
-        provenance: "dish_recipe",
-      };
-    }
+  // 3. Dish & Dish Alias Detection:
+  // A dish or dish alias represents a composite culinary dish, NOT an individual allowed ingredient.
+  // Prevent ingredient dish alias leakage: do NOT automatically resolve a dish as an "allowed" ingredient!
+  const isDishAlias = cache.dishAliasesByNormAr.has(n) || cache.dishAliasesByNormAr.has(b);
+  const isDishName = cache.dishesByNormAr.has(n) || cache.dishesByNormAr.has(b);
+  if (isDishAlias || isDishName) {
+    const aliasList = cache.dishAliasesByNormAr.get(n) || cache.dishAliasesByNormAr.get(b);
+    const dishList = cache.dishesByNormAr.get(n) || cache.dishesByNormAr.get(b);
+    const targetDish = (aliasList && aliasList[0]?.canonicalDish) || (dishList && (Array.isArray(dishList) ? dishList[0] : dishList)) || null;
+    const dishName = targetDish?.nameAr || rawName;
+
+    return {
+      rawIngredientName: rawName,
+      foodId: null,
+      canonicalFoodAr: dishName,
+      canonicalFoodEn: targetDish?.nameEn || dishName,
+      status: "unknown",
+      reason: `طبق مركب (${dishName}) وليس مكوناً مفرداً — يتطلب تحليلاً كطبق مستقل`,
+      notes: "اسم طبق أو وجبة مركبة وليس مكوناً غذائياً في قاعدة البيانات",
+      confidence: "LOW",
+      confidenceScore: 0,
+      requirementType: "required",
+      source: isAiExtracted ? "AI Extracted Text (Dish Entity)" : "Dish Knowledge Engine",
+      resolvedBy: "unknown",
+      provenance: isAiExtracted ? "ai_extracted" : "dish_recipe",
+    };
   }
   // 3.5. Protein Category & Specificity Custom Resolver
   const proteinInfo = resolveProteinIngredient(rawName);
@@ -734,6 +747,28 @@ export async function analyzeDishCompatibility(
 
       traceBefore.push(rawName);
 
+      let reqType: "required" | "typical" | "optional" | "variation" = (ri.requirementType as any) || "required";
+      if (rawName.includes("حسب الرغبة") || rawName.includes("اختياري") || rawName.includes("حسب رغبة")) {
+        reqType = "optional";
+      }
+
+      // Check if ingredient specifies alternative protein choices (e.g. "قطع دجاج أو لحم مسلوق ومحمر")
+      const isAlternativeProtein =
+        (rawName.includes("دجاج") && rawName.includes("لحم")) ||
+        (rawName.includes(" أو ") && (rawName.includes("لحم") || rawName.includes("دجاج")));
+
+      if (isAlternativeProtein && queryProtein.proteinCategory !== "NONE") {
+        if (queryProtein.proteinCategory === "MEAT") {
+          // Isolate meat variant: include meat only, exclude chicken completely
+          rawName = "لحم";
+          foodId = undefined;
+        } else if (queryProtein.proteinCategory === "POULTRY") {
+          // Isolate poultry variant: include chicken only, exclude meat completely
+          rawName = "دجاج";
+          foodId = undefined;
+        }
+      }
+
       // Determine protein characteristics of the recipe ingredient
       const ingProtein = getProteinFields(rawName);
 
@@ -792,7 +827,7 @@ export async function analyzeDishCompatibility(
 
       recipeIngredientsToAnalyze.push({
         rawName,
-        reqType: (ri.requirementType as any) || "required",
+        reqType,
         foodId,
         isAi: false,
       });
@@ -1180,6 +1215,9 @@ export function getProteinFields(nameAr: string): { proteinCategory: string; pro
   }
 
   // 2. MEAT
+  if (hasProteinKeyword(n, ["خنزير", "خنزيرة", "pork", "bacon", "ham"])) {
+    return { proteinCategory: "MEAT", proteinSpecificity: "PORK" };
+  }
   if (hasProteinKeyword(n, ["ضان", "ضأن", "خروف", "غنم", "ماعز", "lamb", "mutton", "goat"])) {
     return { proteinCategory: "MEAT", proteinSpecificity: "LAMB" };
   }
@@ -1249,7 +1287,12 @@ export function resolveProteinIngredient(rawName: string) {
       reason = "نوع الطيور غير محدد. مسموح فقط الحمام والسمان، وممنوع الدجاج والبط والديك الرومي والنعام.";
     }
   } else if (info.proteinCategory === "MEAT") {
-    if (info.proteinSpecificity === "LAMB") {
+    if (info.proteinSpecificity === "PORK") {
+      status = "forbidden";
+      canonicalFoodAr = "لحم خنزير";
+      canonicalFoodEn = "Pork";
+      reason = "لحم الخنزير محظور وممنوع قطعيًا في نظام طيباتي.";
+    } else if (info.proteinSpecificity === "LAMB") {
       status = "allowed";
       canonicalFoodAr = "لحم غنم";
       canonicalFoodEn = "Lamb";
@@ -1274,10 +1317,11 @@ export function resolveProteinIngredient(rawName: string) {
       priority = "allowed_with_conditions";
       reason = "مسموح بشرط أن يكون بلديًا ومغذى تغذية طبيعية (بمعدل مرة أسبوعياً ومطهو جيداً بالغلْي).";
     } else {
-      status = "forbidden";
+      status = "allowed";
       canonicalFoodAr = rawName;
-      canonicalFoodEn = "Unspecified Meat";
-      reason = "نوع اللحم غير محدد. مسموح فقط لحم الضأن، ولحم البقر والجاموس والجمل البلدي المغذى طبيعياً.";
+      canonicalFoodEn = "Meat";
+      priority = "allowed_with_conditions";
+      reason = "اللحم مسموح في نظام طيباتي مع تفضيل لحم الضأن (الخروف والماعز) ولحم البقر البلدي.";
     }
   }
 
@@ -1334,7 +1378,7 @@ export function detectDishProteinInfo(
 export function isPureProteinQuery(query: string): boolean {
   const n = norm(query);
   const pureProteinKeywords = [
-    "لحم", "لحوم", "طيور", "دواجن", "طير", "حمام", "سمان", "دجاج", "دجاجه",
+    "لحم", "طيور", "دواجن", "طير", "حمام", "سمان", "دجاج", "دجاجه",
     "جاج", "فراخ", "بط", "رومي", "ديك رومي", "حبش", "نعام", "لحم غنم", "لحم ضأن", "لحم بقر",
     "لحم جاموس", "لحم جمل", "غنم", "بقر", "جاموس", "جمل"
   ];

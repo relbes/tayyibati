@@ -10,12 +10,14 @@ import { logger } from "./lib/logger";
 import cookieParser from "cookie-parser";
 import { seedInitialAdmin } from "./lib/adminAuth";
 import { ensureLeadsTable } from "./routes/leads";
+import { ensureAnalysisFeedbackTable } from "./routes/feedback";
 
 const app: Express = express();
 
 // Seed initial local admin account idempotently on app startup
 seedInitialAdmin().catch(console.error);
 ensureLeadsTable().catch(console.error);
+ensureAnalysisFeedbackTable().catch(console.error);
 
 
 const isDev = process.env.NODE_ENV !== "production";

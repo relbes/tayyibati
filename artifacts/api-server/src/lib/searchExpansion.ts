@@ -32,8 +32,12 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
   روب: ["لبن", "اللبن", "زبادي"],
   جوانح: ["أجنحة دجاج", "اجنحة دجاج"],
   كاتشب: ["صلصة طماطم", "كاتشاب"],
-  تمر: ["التمر"],
-  التمر: ["تمر"],
+  تمر: ["التمر", "بلح", "رطب"],
+  التمر: ["تمر", "بلح", "رطب"],
+  بلح: ["تمر", "التمر", "رطب"],
+  البلح: ["تمر", "التمر", "رطب"],
+  معكرون: ["معكرونة", "المعكرونة", "مكرونة", "المكرونة", "باستا"],
+  المعكرون: ["معكرونة", "المعكرونة", "مكرونة", "المكرونة", "باستا"],
   ضأن: ["ضان", "لحم ضأن", "لحم ضان"],
   ضان: ["ضأن", "لحم ضأن", "لحم ضان"],
   شاورمه: ["شاورما", "الشاورما"],
@@ -43,36 +47,52 @@ const BASELINE_SYNONYMS: Record<string, string[]> = {
   بتزا: ["بيتزا", "البيتزا"],
   // Colloquial/childspeak alternate for طماطم (tomato) widely used across Arabic dialects
   طمطم: ["طماطم", "الطماطم"],
+  // Biscuit, Cookie & Digestive synonyms (Food 1447 is "بسكوت", Food 1453 is "بسكوت شوفان", Food 1454 is "بسكوت دايجستف")
+  بسكويت: ["بسكوت", "البسكوت", "البسكويت"],
+  البسكويت: ["بسكوت", "البسكوت", "بسكويت"],
+  بسكوت: ["بسكويت", "البسكوت", "البسكويت"],
+  البسكوت: ["بسكوت", "بسكويت", "البسكويت"],
+  بسكويتة: ["بسكوت", "بسكويت", "بسكوتة"],
+  بسكوتة: ["بسكوت", "بسكويت", "بسكويتة"],
+  دايجستيف: ["دايجستف", "الدايجستف"],
+  الدايجستيف: ["دايجستف", "الدايجستف"],
+  دايجستف: ["دايجستيف", "الدايجستيف"],
+  "بسكوت دايجستيف": ["بسكوت دايجستف", "بسكويت دايجستف"],
+  "بسكويت دايجستف": ["بسكوت دايجستف", "بسكوت دايجستيف"],
+  "بسكويت دايجستيف": ["بسكوت دايجستف", "بسكوت دايجستيف"],
+  "بسكويت شوفان": ["بسكوت شوفان"],
+  "بسكويت الشوفان": ["بسكوت شوفان"],
+  "بسكوت الشوفان": ["بسكوت شوفان"],
   // Black tea canonical synonyms (Food 1471 is "شاي أحمر (أسود)")
   "شاي اسود": ["شاي أحمر", "شاي أحمر (أسود)"],
   "شاي أسود": ["شاي أحمر", "شاي أحمر (أسود)"],
   "الشاي الاسود": ["شاي أحمر", "شاي أحمر (أسود)"],
   "الشاي الأسود": ["شاي أحمر", "شاي أحمر (أسود)"],
-  // Orange & Citrus Juice synonyms (mapping to Food 1499 & Food 1677)
-  "عصير برتقال": ["برتقال", "عصير البرتقال", "برتقال، ليمون، يوسفي،مندلينا", "orange juice"],
-  "عصير البرتقال": ["برتقال", "عصير برتقال", "برتقال، ليمون، يوسفي،مندلينا", "orange juice"],
-  "orange juice": ["orange", "برتقال", "عصير برتقال"],
-  "عصير ليمون": ["ليمون", "عصير الليمون", "lemon juice"],
-  "عصير الليمون": ["ليمون", "عصير ليمون", "lemon juice"],
-  "lemon juice": ["lemon", "ليمون", "عصير ليمون"],
-  "عصير يوسفي": ["يوسفي", "عصير مندلينا", "عصير كلمنتينا", "مندلينا", "برتقال، ليمون، يوسفي،مندلينا"],
-  "عصير مندلينا": ["مندلينا", "عصير يوسفي", "يوسفي", "برتقال، ليمون، يوسفي،مندلينا"],
-  "عصير تفاح": ["تفاح", "عصير التفاح", "apple juice"],
-  "عصير التفاح": ["تفاح", "عصير تفاح", "apple juice"],
-  "apple juice": ["apple", "تفاح", "عصير تفاح"],
+  // Orange & Citrus Juice synonyms (mapping to Food 1499 & Food 1677, decoupled from whole raw fruit)
+  "عصير برتقال": ["عصير البرتقال", "orange juice"],
+  "عصير البرتقال": ["عصير برتقال", "orange juice"],
+  "orange juice": ["عصير برتقال", "عصير البرتقال"],
+  "عصير ليمون": ["عصير الليمون", "lemon juice"],
+  "عصير الليمون": ["عصير ليمون", "lemon juice"],
+  "lemon juice": ["عصير ليمون", "عصير الليمون"],
+  "عصير يوسفي": ["عصير مندلينا", "عصير كلمنتينا"],
+  "عصير مندلينا": ["عصير يوسفي", "عصير كلمنتينا"],
+  "عصير تفاح": ["عصير التفاح", "apple juice"],
+  "عصير التفاح": ["عصير تفاح", "apple juice"],
+  "apple juice": ["عصير تفاح", "عصير التفاح"],
   "خل تفاح": ["خل التفاح", "apple cider vinegar", "apple vinegar"],
   "خل التفاح": ["خل تفاح", "apple cider vinegar", "apple vinegar"],
   "apple vinegar": ["خل تفاح", "خل التفاح", "apple cider vinegar"],
   "apple cider vinegar": ["خل تفاح", "خل التفاح", "apple vinegar"],
-  "عصير رمان": ["عصير رمان طبيعي", "رمان", "عصير الرمان", "pomegranate juice"],
-  "عصير الرمان": ["عصير رمان طبيعي", "رمان", "عصير رمان", "pomegranate juice"],
-  "عصير عنب": ["عصير عنب طبيعي", "عنب", "عصير العنب", "grape juice"],
-  "عصير العنب": ["عصير عنب طبيعي", "عنب", "عصير عنب", "grape juice"],
-  "عصير فراولة": ["فراولة", "عصير الفراولة", "strawberry juice"],
-  "عصير الفراولة": ["فراولة", "عصير فراولة", "strawberry juice"],
-  "عصير مانجو": ["عصير المانجو، المنجا", "عصير المانجو", "عصير مانجا", "مانجو"],
-  "عصير مانجا": ["عصير المانجو، المنجا", "عصير المانجو", "عصير مانجو", "مانجو"],
-  "عصير المنجا": ["عصير المانجو، المنجا", "عصير المانجو", "عصير مانجو", "مانجو"],
+  "عصير رمان": ["عصير رمان طبيعي", "عصير الرمان", "pomegranate juice"],
+  "عصير الرمان": ["عصير رمان طبيعي", "عصير رمان", "pomegranate juice"],
+  "عصير عنب": ["عصير عنب طبيعي", "عصير العنب", "grape juice"],
+  "عصير العنب": ["عصير عنب طبيعي", "عصير عنب", "grape juice"],
+  "عصير فراولة": ["عصير الفراولة", "strawberry juice"],
+  "عصير الفراولة": ["عصير فراولة", "strawberry juice"],
+  "عصير مانجو": ["عصير المانجو، المنجا", "عصير المانجو", "عصير مانجا"],
+  "عصير مانجا": ["عصير المانجو، المنجا", "عصير المانجو", "عصير مانجو"],
+  "عصير المنجا": ["عصير المانجو، المنجا", "عصير المانجو", "عصير مانجو"],
   "عصير قصب": ["عصير القصب", "قصب السكر"],
 };
 
@@ -117,6 +137,11 @@ export const DIALECT_REGIONAL_SYNONYMS: Record<string, string> = {
   // Citrus / Tangerine regional synonyms
   مندلينا: "يوسفي",
   كلمنتينا: "يوسفي",
+  // Modern Standard Arabic <-> Popular dialect biscuit equivalence (Food 1447 is "بسكوت")
+  بسكويت: "بسكوت",
+  بسكويتة: "بسكوت",
+  بسكوتة: "بسكوت",
+  دايجستيف: "دايجستف",
 
   // ─── REMOVED after audit ─────────────────────────────────────────────────
   // طرشي → مخلل  REMOVED: مخلل resolves to 2 foods (ID:1326, ID:1599); no single canonical target
@@ -230,10 +255,12 @@ export function expandSearchQuery(query: string): string[] {
       variants.add(`الأ${withoutAlef}`);
     }
   } else if (!normQ.startsWith("ال") && normQ.length >= 2) {
-    variants.add(`ا${normQ}`);
-    variants.add(`أ${normQ}`);
     variants.add(`ال${normQ}`);
-    variants.add(`الأ${normQ}`);
+    if (normQ === "رز" || strippedQ === "رز") {
+      variants.add("ارز");
+      variants.add("أرز");
+      variants.add("الأرز");
+    }
   }
 
   // Systematic Arabic Orthographic Variation (e.g. "بازلاء" <-> "بازيلاء", "فاصوليا" <-> "فاصولياء", "باميا" <-> "بامية")
@@ -260,6 +287,20 @@ export function expandSearchQuery(query: string): string[] {
       variants.add(v.slice(0, -2) + "ية");
     } else if ((v.endsWith("يه") || v.endsWith("ية")) && v.length >= 4) {
       variants.add(v.slice(0, -2) + "يا");
+    }
+    // 4. "كوت" <-> "كويت" (e.g. بسكوت <-> بسكويت, بسكوتة <-> بسكويتة)
+    if (v.includes("كويت")) {
+      variants.add(v.replace(/كويت/g, "كوت"));
+    }
+    if (v.includes("كوت")) {
+      variants.add(v.replace(/كوت/g, "كويت"));
+    }
+    // 5. "ستيف" <-> "ستف" (e.g. دايجستيف <-> دايجستف)
+    if (v.includes("ستيف")) {
+      variants.add(v.replace(/ستيف/g, "ستف"));
+    }
+    if (v.includes("ستف")) {
+      variants.add(v.replace(/ستف/g, "ستيف"));
     }
   }
 
@@ -412,6 +453,20 @@ export function getQuerySynonymTargets(query: string): Set<string> {
       }
     }
   }
+
+  // Also include orthographic variations in synonym targets
+  const currentTargets = Array.from(targets);
+  for (const t of currentTargets) {
+    if (t.includes("كويت")) targets.add(t.replace(/كويت/g, "كوت"));
+    if (t.includes("كوت")) targets.add(t.replace(/كوت/g, "كويت"));
+    if (t.includes("ستيف")) targets.add(t.replace(/ستيف/g, "ستف"));
+    if (t.includes("ستف")) targets.add(t.replace(/ستف/g, "ستيف"));
+  }
+  if (normQ.includes("كويت")) targets.add(normQ.replace(/كويت/g, "كوت"));
+  if (normQ.includes("كوت")) targets.add(normQ.replace(/كوت/g, "كويت"));
+  if (normQ.includes("ستيف")) targets.add(normQ.replace(/ستيف/g, "ستف"));
+  if (normQ.includes("ستف")) targets.add(normQ.replace(/ستف/g, "ستيف"));
+
   return targets;
 }
 

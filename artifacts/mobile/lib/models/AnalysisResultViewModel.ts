@@ -5,7 +5,51 @@ import type { AnalysisReport, IngredientResult, ReportIngredientDecision, Report
 
 import { extractBaseEntityWithModifiers } from "../../../api-server/src/lib/arabicNormalization";
 
-export type ResultPresentationMode = "GENERIC_FOOD_FAMILY" | "SPECIFIC_FOOD" | "DISH" | "NOT_FOUND" | "AMBIGUOUS";
+export type ResultPresentationMode = "GENERIC_FOOD_FAMILY" | "SPECIFIC_FOOD" | "DISH" | "NOT_FOUND" | "AMBIGUOUS" | "LIST_CATALOG" | "MULTI_ITEM";
+
+export interface MultiItemResultVM {
+  nameAr: string;
+  nameEn?: string;
+  itemType: "food" | "dish" | "category" | "unknown";
+  status: "allowed" | "forbidden" | "conditional" | "unknown";
+  reason?: string;
+  notes?: string;
+  sourceType?: string;
+  categoryStats?: {
+    total: number;
+    allowedCount: number;
+    forbiddenCount: number;
+    conditionalCount: number;
+    exceptions: string[];
+  };
+}
+
+export interface MultiItemViewModel {
+  title: string;
+  description: string;
+  items: MultiItemResultVM[];
+  resolvedCount: number;
+  unresolvedCount: number;
+}
+
+export interface ListCatalogFoodItemVM {
+  nameAr: string;
+  nameEn?: string;
+  status: "allowed" | "forbidden" | "conditional";
+  reason?: string;
+  notes?: string;
+}
+
+export interface ListCatalogViewModel {
+  catalogType: "allowed" | "forbidden" | "category";
+  title: string;
+  description: string;
+  sampleFoods: ListCatalogFoodItemVM[];
+  actionLabel: string;
+  actionRoute: string;
+  actionFilter: "allowed" | "forbidden" | "all";
+  categorySuggestions: string[];
+}
 
 export interface FoodFamilyMemberVM {
   nameAr: string;
@@ -31,6 +75,8 @@ export interface AnalysisResultViewModel {
   presentationMode: ResultPresentationMode;
   familyViewModel?: FoodFamilyViewModel | null;
   familyData?: FoodFamilyViewModel | null;
+  listCatalogViewModel?: ListCatalogViewModel | null;
+  multiItemViewModel?: MultiItemViewModel | null;
   analysis?: AnalysisReport | null;
   ingredientDecisions: IngredientDecisionVM[];
   mealDecision: MealDecisionVM | null;
@@ -191,8 +237,93 @@ export function createAnalysisResultViewModel(
   // -------------------------------------------------------------------------
   let presentationMode: ResultPresentationMode = "SPECIFIC_FOOD";
   let familyViewModel: FoodFamilyViewModel | null = null;
+  let listCatalogViewModel: ListCatalogViewModel | null = null;
+  let multiItemViewModel: MultiItemViewModel | null = null;
 
-  if ((report.notFound || report.resultMode === "NOT_FOUND") && !report.needsClarification && !(report.suggestions && report.suggestions.length > 0)) {
+  const isListAllowed = report.resultMode === "LIST_ALLOWED" || report.queryIntent === "LIST_ALLOWED";
+  const isListRestricted = report.resultMode === "LIST_RESTRICTED" || report.queryIntent === "LIST_RESTRICTED";
+  const isListCatalog = isListAllowed || isListRestricted;
+
+  if (report.resultMode === "MULTI_ITEM" || Boolean(report.multiItemResults && report.multiItemResults.length > 0)) {
+    presentationMode = "MULTI_ITEM";
+    const rawMulti = report.multiItemResults || [];
+    const items: MultiItemResultVM[] = rawMulti.map((m: any) => ({
+      nameAr: m.nameAr || m.rawQuery || "",
+      nameEn: m.nameEn || undefined,
+      itemType: m.itemType || "food",
+      status: m.status || "conditional",
+      reason: m.reason || undefined,
+      notes: m.notes || undefined,
+      sourceType: m.sourceType || undefined,
+      categoryStats: m.categoryStats || undefined,
+    }));
+    const resolvedCount = items.filter((i) => i.status !== "unknown").length;
+    const unresolvedCount = items.length - resolvedCount;
+    multiItemViewModel = {
+      title: "تحليل الأصناف المتعددة",
+      description: `تم فحص ${items.length} أصناف بشكل مستقل وفق قواعد طيباتي:`,
+      items,
+      resolvedCount,
+      unresolvedCount,
+    };
+  } else if (isListCatalog) {
+    presentationMode = "LIST_CATALOG";
+    const catalogType: "allowed" | "forbidden" = isListAllowed ? "allowed" : "forbidden";
+    const rawItems: IngredientResult[] = isListAllowed ? (report.allowed || []) : (report.forbidden || []);
+    const sampleFoods: ListCatalogFoodItemVM[] = rawItems.map((i: IngredientResult) => ({
+      nameAr: i.nameAr || i.name || "",
+      nameEn: i.rawNameEn || (i as any).nameEn || undefined,
+      status: (i.status as any) || (isListAllowed ? "allowed" : "forbidden"),
+      reason: (i.dbReason || i.reason) || undefined,
+      notes: i.notes || undefined,
+    }));
+
+    listCatalogViewModel = {
+      catalogType,
+      title: isListAllowed ? "دليل الأطعمة المسموحة" : "دليل الأطعمة الممنوعة والمحظورة",
+      description:
+        report.explanation ||
+        (isListAllowed
+          ? "قائمة الأطعمة المسموحة في نظام طيباتي لتناولها بأمان."
+          : "قائمة الأطعمة المحظورة والممنوعة في نظام طيباتي لتجنبها والحفاظ على صحتك."),
+      sampleFoods,
+      actionFilter: catalogType,
+      actionRoute: report.action?.route || `/(tabs)/browse?status=${catalogType}`,
+      actionLabel: report.action?.label || (isListAllowed ? "عرض دليل الأطعمة المسموحة كاملة" : "عرض دليل الأطعمة الممنوعة كاملة"),
+      categorySuggestions: (report.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || ""),
+    };
+  } else if (report.resultMode === "CATEGORY_REPORT" || (report as any).queryIntent === "CATEGORY_SEARCH") {
+    presentationMode = "LIST_CATALOG";
+    const categoryName = (report as any).targetCategory || report.query || "القسم";
+    const targetKey = (report as any).action?.category || categoryName;
+    const allItems: IngredientResult[] = [
+      ...(report.allowed || []),
+      ...(report.conditional || []),
+      ...(report.forbidden || []),
+    ];
+    const sampleFoods: ListCatalogFoodItemVM[] = allItems.map((i: IngredientResult) => ({
+      nameAr: i.nameAr || i.name || "",
+      nameEn: i.rawNameEn || (i as any).nameEn || undefined,
+      status: (i.status as any) || "conditional",
+      reason: (i.dbReason || i.reason) || undefined,
+      notes: i.notes || undefined,
+    }));
+
+    listCatalogViewModel = {
+      catalogType: "category",
+      title: `دليل أصناف قسم ${categoryName}`,
+      description:
+        report.explanation ||
+        `استعرض أصناف قسم ${categoryName} المعتمدة في نظام طيباتي.`,
+      sampleFoods,
+      actionFilter: "all",
+      actionRoute: (report as any).action?.route || `/(tabs)/browse?category=${encodeURIComponent(targetKey)}`,
+      actionLabel: (report as any).action?.label || `عرض دليل قسم ${categoryName} كاملة`,
+      categorySuggestions: (report.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || ""),
+    };
+  } else if (report.resultMode === "UNSUPPORTED_QUESTION" || (report as any).queryIntent === "UNSUPPORTED_QUESTION") {
+    presentationMode = "NOT_FOUND";
+  } else if ((report.notFound || report.resultMode === "NOT_FOUND") && !report.needsClarification && !(report.suggestions && report.suggestions.length > 0)) {
     presentationMode = "NOT_FOUND";
   } else if (
     report.resultMode === "MULTIPLE_DISHES" &&
@@ -284,6 +415,8 @@ export function createAnalysisResultViewModel(
     presentationMode,
     familyViewModel,
     familyData: familyViewModel,
+    listCatalogViewModel,
+    multiItemViewModel,
     analysis: report,
     ingredientDecisions: finalDecisions,
     mealDecision,

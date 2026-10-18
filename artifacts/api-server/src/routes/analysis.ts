@@ -14,6 +14,7 @@ import { eq, and, or } from "drizzle-orm";
 import { requireAuth } from "../middleware/requireAuth";
 import { getFreeMonthlyLimit } from "../lib/config";
 import { UnifiedAnalysisEngine } from "../lib/unifiedAnalysisEngine";
+import { FoodResolutionEngine } from "../lib/foodResolutionEngine";
 import { analyzeDishCompatibility } from "../lib/dishCompatibilityEngine";
 import { CanonicalSearchEngine, MatchType } from "../lib/canonicalSearchEngine";
 import { normalize } from "../lib/arabicNormalization";
@@ -22,6 +23,9 @@ import crypto from "crypto";
 import { trackAIUsageNonBlocking } from "../lib/ai/aiUsageTracker";
 import { isFallbackEligibleError } from "../lib/ai/aiProvider";
 import { recordUserActivity } from "../lib/userActivityLogger";
+import { BarcodeEngine } from "../lib/barcodeEngine";
+import { ProductAnalysisEngine } from "../lib/productAnalysisEngine";
+import { MultiItemResultItem } from "../lib/multiItemEngine";
 
 const router = Router();
 
@@ -206,16 +210,45 @@ export interface IngredientResult {
   isVisuallyConfirmed?: boolean;
   confidence?: "HIGH" | "MEDIUM" | "LOW" | string;
   matchType?: string;
+  sourceType?: string;
 }
 
 export interface AnalysisReport {
   query: string;
   displayQuery?: string;
   canonicalResult?: any;
+  queryIntent?: "FOOD" | "DISH" | "COMPOSITE" | "UNKNOWN" | string;
+  selectedCandidate?: {
+    type: "food" | "dish" | "product";
+    id?: number | string;
+    nameAr: string;
+    reference: string;
+  } | null;
   dish?: string;
   proteinCategory?: string;
   proteinSpecificity?: string;
-  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND";
+  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND" | "MULTIPLE_DISHES" | "LIST_ALLOWED" | "LIST_RESTRICTED" | "CATEGORY_REPORT" | "UNSUPPORTED_QUESTION" | "MULTI_ITEM";
+  targetCategory?: string;
+  categoryStats?: {
+    total: number;
+    allowedCount: number;
+    forbiddenCount: number;
+    conditionalCount: number;
+    isFullyForbidden: boolean;
+    exceptions: string[];
+    hasMore: boolean;
+    isPremium: boolean;
+  };
+  needsRecipeVerification?: boolean;
+  recipeVerificationStatus?: "VERIFIED" | "NEEDS_RECIPE_VERIFICATION";
+  recipeWarning?: string;
+  action?: {
+    type: "NAVIGATE_BROWSE" | "CLARIFY" | "DIRECT_EVALUATE";
+    filter?: "allowed" | "forbidden" | "conditional" | "all";
+    category?: string;
+    route?: string;
+    label?: string;
+  };
   analysisSource?: "database" | "ai_fallback";
   aiProvider?: "openai" | "gemini";
   aiFallback?: boolean;
@@ -233,6 +266,8 @@ export interface AnalysisReport {
     dbNotes: string | null;
     isInherited: boolean;
     inheritsFrom?: { nameAr: string; nameEn: string };
+    categoryAr?: string;
+    sourceType?: string;
   };
 
   subtypes?: {
@@ -246,6 +281,8 @@ export interface AnalysisReport {
     forbidden: IngredientResult[];
     conditional: IngredientResult[];
   };
+
+  multiItemResults?: MultiItemResultItem[];
 
   ingredients?: IngredientResult[];
 
@@ -261,7 +298,7 @@ export interface AnalysisReport {
   explanation: string;
   suggestions: string[];
   suggestions_legacy?: string[];
-  analysisType: "text" | "image" | "label";
+  analysisType: "text" | "image" | "label" | "barcode";
   notFound?: boolean;
   /**
    * Smart fallback suggestions — present ONLY when notFound === true.
@@ -776,7 +813,7 @@ export function buildReportFromHypotheses(
     let matchType: MatchType = "EXACT";
     if (!foodRow && !h.inferredEntity) {
       matchType = "UNKNOWN";
-    } else if (h.observedEntity && h.inferredEntity && h.observedEntity.id !== h.inferredEntity.id) {
+    } else if (h.inferenceProvenance === Provenance.CONTEXT_INFERRED || h.recipeProvenance) {
       matchType = "RECIPE_INFERRED";
     } else if (h.observedEntity) {
       if (h.observedEntity.matchScore === 60) {
@@ -810,8 +847,8 @@ export function buildReportFromHypotheses(
     }
 
     const itemResult = {
-      name: h.rawNameEn || h.inferredEntity?.nameEn || h.rawNameAr,
-      nameAr: h.rawNameAr || h.inferredEntity?.nameAr || h.rawNameEn,
+      name: h.inferredEntity?.nameEn || h.resolvedFood?.nameEn || h.observedEntity?.nameEn || h.rawNameEn || h.rawNameAr,
+      nameAr: h.inferredEntity?.nameAr || h.resolvedFood?.nameAr || h.observedEntity?.nameAr || h.rawNameAr || h.rawNameEn,
       status: h.compatibilityStatus,
       frequency: null,
       reason: dbReason || (h.compatibilityStatus === "unknown" ? "هذا الطعام غير متوفر في قاعدة بيانات طيباتي" : null),
@@ -906,8 +943,8 @@ export function buildReportFromHypotheses(
     overallConfidenceReasonCode = "NO_FOOD_FOUND";
   }
 
-  const isUnknownFood = score === null || (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0);
-  const effectiveIsAmbiguous = isUnknownFood || (hypotheses.length === 0 && refinementSuggestions.length === 0) ? false : !!isAmbiguous;
+  const isUnknownFood = !resolvedEntity && refinementSuggestions.length === 0 && (score === null || (allowed.length === 0 && forbidden.length === 0 && conditional.length === 0));
+  const effectiveIsAmbiguous = !isUnknownFood && !!isAmbiguous;
 
   return {
     query: resolvedVariant?.nameAr || query,
@@ -959,6 +996,10 @@ function buildNotFoundReport(query: string, analysisType: AnalysisReport["analys
   };
 }
 
+// Rapid text search deduplication map (prevents duplicate billing/processing within 2 seconds)
+const recentTextSearches = new Map<string, { timestamp: number; response: any }>();
+const TEXT_DEDUP_WINDOW_MS = 2000;
+
 router.post("/analysis/text", requireAuth, async (req, res) => {
   const tStart = performance.now();
   let queryText = "";
@@ -976,6 +1017,14 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
 
     const userId = req.userId!;
 
+    const dedupKey = `${userId}:${queryText.toLowerCase()}:${displayQueryText.toLowerCase()}:${entityType || ""}:${canonicalId || ""}`;
+    const cachedTextSearch = recentTextSearches.get(dedupKey);
+    const nowMs = performance.now();
+    if (cachedTextSearch && nowMs - cachedTextSearch.timestamp < TEXT_DEDUP_WINDOW_MS) {
+      req.log.info({ dedupKey }, "Suppressing rapid duplicate text search (within 2s window)");
+      return void res.json(cachedTextSearch.response);
+    }
+
     const usage = await checkAndIncrementUsage(userId, "text");
     if (!usage.allowed) {
       return void res.status(429).json({
@@ -986,11 +1035,13 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
     }
 
     // Execute Universal Pipeline via UnifiedAnalysisEngine
+    const isPremiumUser = userId ? await isUserPremium(userId) : false;
     const unifiedResult = await UnifiedAnalysisEngine.analyze({
       query: queryText,
       displayQuery: displayQueryText,
       inputType: "text",
       userId,
+      isPremium: isPremiumUser,
       entityType: entityType as any,
       canonicalId,
       foodId: entityType === "food" && canonicalId ? Number(canonicalId) : undefined,
@@ -1000,14 +1051,23 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
     const report = unifiedResult.report;
     const durationMs = Math.round(performance.now() - tStart);
 
+    let analysisHistoryId: number | undefined;
+
     if (userId) {
-      db.insert(analysisHistoryTable).values({
-        userId,
-        query: report.query,
-        analysisType: "text",
-        compatibilityScore: report.compatibilityScore,
-        report: report as any,
-      }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+      try {
+        const [savedHistory] = await db.insert(analysisHistoryTable).values({
+          userId,
+          query: report.query,
+          analysisType: "text",
+          compatibilityScore: report.compatibilityScore,
+          report: report as any,
+        }).returning({ id: analysisHistoryTable.id });
+        if (savedHistory?.id) {
+          analysisHistoryId = savedHistory.id;
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to save history");
+      }
 
       recordUserActivity({
         userId,
@@ -1022,12 +1082,16 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
           status: (report as any).status,
           matchedFoodId: (report as any).matchedFoodId,
           matchedDishId: (report as any).matchedDishId,
+          queryIntent: report.queryIntent || null,
+          selectedCandidate: report.selectedCandidate?.reference || null,
+          needsClarification: Boolean(report.needsClarification),
         },
       });
     }
 
     const jsonResponse = {
       report,
+      analysisHistoryId,
       usage: { currentMonthCount: usage.count, limit: usage.limit, remaining: usage.remaining },
       performance: { durationMs, cacheHit: true },
     };
@@ -1088,8 +1152,16 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
       console.log(traceBlock);
     }
 
+    recentTextSearches.set(dedupKey, { timestamp: performance.now(), response: jsonResponse });
     return void res.json(jsonResponse);
   } catch (err) {
+    if (req.userId) {
+      try {
+        await rollbackUsage(req.userId, "text");
+      } catch (rbErr) {
+        req.log.warn({ rbErr }, "Failed to rollback usage on text analysis error");
+      }
+    }
     console.error("ANALYSIS_TEXT_ERROR", {
       query: queryText,
       error: err,
@@ -1097,6 +1169,221 @@ router.post("/analysis/text", requireAuth, async (req, res) => {
     });
     req.log.error({ err }, "Failed to analyze text");
     res.status(500).json({ error: "Analysis failed" });
+  }
+});
+
+// Rapid barcode scan deduplication map (prevents duplicate billing/processing within 2 seconds)
+const recentBarcodeScans = new Map<string, { timestamp: number; response: any }>();
+const BARCODE_DEDUP_WINDOW_MS = 2000;
+
+router.post("/analysis/barcode", requireAuth, async (req, res) => {
+  const tStart = performance.now();
+  try {
+    const { barcode, query } = req.body as { barcode?: string; query?: string };
+    const rawBarcode = typeof barcode === "string" ? barcode.trim() : typeof query === "string" ? query.trim() : "";
+
+    if (!rawBarcode) {
+      return void res.status(400).json({ error: "barcode is required" });
+    }
+
+    const userId = req.userId!;
+
+    // Rapid request deduplication
+    const dedupKey = `${userId}:${rawBarcode}`;
+    const now = Date.now();
+    const existingRecent = recentBarcodeScans.get(dedupKey);
+    if (existingRecent && (now - existingRecent.timestamp) < BARCODE_DEDUP_WINDOW_MS) {
+      return void res.json(existingRecent.response);
+    }
+
+    // Barcode format validation (preserves leading zeros as string)
+    const validation = BarcodeEngine.validateBarcode(rawBarcode);
+    if (!validation.isValid) {
+      return void res.status(400).json({
+        error: validation.error || "Invalid barcode format",
+        format: validation.format,
+      });
+    }
+
+    const normalizedBarcode = validation.normalizedBarcode;
+
+    // Premium entitlement gate: Barcode scanning/analysis is strictly a PREMIUM feature!
+    const premium = await isUserPremium(userId);
+    if (!premium) {
+      return void res.status(403).json({
+        error: "premium_required",
+        code: "PREMIUM_REQUIRED",
+        message: "ميزة فحص الباركود مخصصة لمشتركي الباقة المميزة. يرجى الترقية للاستفادة من هذه الميزة.",
+      });
+    }
+
+    // Check usage limits (uses "text" quota)
+    const usage = await checkAndIncrementUsage(userId, "text");
+    if (!usage.allowed) {
+      return void res.status(429).json({
+        error: "limit_reached",
+        code: "TEXT_LIMIT_REACHED",
+        message: "لقد وصلت إلى حد البحث لهذا الشهر. يتجدد في أول الشهر القادم. قم بالترقية إلى بريميوم للاستخدام غير المحدود.",
+      });
+    }
+
+    // Barcode lookup via BarcodeEngine -> ProviderRegistry -> ProductDatabase
+    const lookupResult = await BarcodeEngine.lookup(normalizedBarcode);
+
+    let report: AnalysisReport;
+
+    if (!lookupResult.product) {
+      // Barcode Modality Policy: NEVER call AI for barcodes!
+      report = {
+        query: normalizedBarcode,
+        resultMode: "NOT_FOUND",
+        queryIntent: "PRODUCT",
+        selectedCandidate: null,
+        primaryRuling: undefined,
+        allowed: [],
+        forbidden: [],
+        conditional: [],
+        unknown: [],
+        compatibilityScore: null,
+        scoreAvailable: false,
+        explanation: "لم يتم العثور على المنتج في قاعدة بيانات طيباتي.",
+        suggestions: [],
+        analysisType: "barcode",
+        notFound: true,
+      };
+    } else {
+      const product = lookupResult.product;
+      const analysis = await ProductAnalysisEngine.analyzeProduct({
+        barcode: product.barcode || normalizedBarcode,
+        productPayload: product,
+      });
+
+      const toLegacyItem = (item: any): IngredientResult => ({
+        name: item.canonicalFoodEn || item.canonicalFoodAr || item.rawName,
+        nameAr: item.canonicalFoodAr || item.rawName,
+        nameEn: item.canonicalFoodEn || item.canonicalFoodAr || item.rawName,
+        status: item.status,
+        reason: item.reason,
+        notes: item.notes ?? null,
+        confidence: item.confidence,
+        confidenceScore: item.confidenceScore,
+        resolvedBy: item.resolvedBy,
+      } as any);
+
+      const legacyAllowed = analysis.decisionOutput.decisionEvidence.allowedIngredients.map(toLegacyItem);
+      const legacyForbidden = analysis.decisionOutput.decisionEvidence.forbiddenIngredients.map(toLegacyItem);
+      const legacyConditional = analysis.decisionOutput.decisionEvidence.conditionalIngredients.map(toLegacyItem);
+      const legacyUnknown = analysis.decisionOutput.decisionEvidence.unknownIngredients.map(toLegacyItem);
+
+      const finalStatusMap: Record<string, "allowed" | "forbidden" | "conditional" | "unknown"> = {
+        ALLOWED: "allowed",
+        FORBIDDEN: "forbidden",
+        CONDITIONAL: "conditional",
+        UNKNOWN: "unknown",
+        NEEDS_REVIEW: "unknown",
+      };
+      const finalStatus = finalStatusMap[analysis.decisionOutput.finalDecision] || "unknown";
+
+      report = {
+        query: product.productName || normalizedBarcode,
+        resultMode: "COMPOSITE_FOOD",
+        queryIntent: "PRODUCT",
+        selectedCandidate: {
+          type: "product",
+          id: (product as any).id || product.productId,
+          nameAr: product.productName,
+          reference: `product: ${product.productName}`,
+        },
+        primaryRuling: {
+          status: finalStatus,
+          nameAr: product.productName,
+          nameEn: product.productName,
+          dbReason: analysis.explanationOutput?.summary || `منتج: ${product.productName}`,
+          dbNotes: null,
+          isInherited: false,
+        },
+        allowed: legacyAllowed,
+        forbidden: legacyForbidden,
+        conditional: legacyConditional,
+        unknown: legacyUnknown,
+        compatibilityScore: analysis.decisionOutput.compatibilityScore,
+        ingredientConfidence: analysis.decisionOutput.ingredientConfidence,
+        scoreAvailable: analysis.decisionOutput.scoreAvailable,
+        explanation: analysis.explanationOutput?.summary || (
+          finalStatus === "forbidden" ? "يحتوي هذا المنتج على مكونات محظورة." :
+          finalStatus === "allowed" ? "جميع مكونات هذا المنتج مسموحة." :
+          "تحقق من مكونات المنتج."
+        ),
+        suggestions: [],
+        analysisType: "barcode",
+        notFound: false,
+      };
+    }
+
+    let analysisHistoryId: number | undefined;
+
+    if (userId) {
+      try {
+        const [savedHistory] = await db.insert(analysisHistoryTable).values({
+          userId,
+          query: report.query,
+          analysisType: "label",
+          compatibilityScore: report.compatibilityScore,
+          report: report as any,
+        }).returning({ id: analysisHistoryTable.id });
+        if (savedHistory?.id) {
+          analysisHistoryId = savedHistory.id;
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to save history");
+      }
+
+      recordUserActivity({
+        userId,
+        category: "SEARCH",
+        eventType: "BARCODE_SCAN",
+        eventName: "Barcode Scan",
+        description: report.query || "Barcode scan",
+        actorType: "USER",
+        actorId: userId,
+        metadata: {
+          barcode: normalizedBarcode,
+          compatibilityScore: report.compatibilityScore,
+          status: report.primaryRuling?.status || "unknown",
+          productName: lookupResult.product?.productName,
+          queryIntent: report.queryIntent || "PRODUCT",
+          selectedCandidate: report.selectedCandidate?.reference || null,
+        },
+      });
+    }
+
+    const jsonResponse = {
+      report,
+      analysisHistoryId,
+      executionTrace: {
+        totalDurationMs: Math.round(performance.now() - tStart),
+        stagesExecuted: ["barcode_validation", "barcode_lookup", "product_analysis"],
+      },
+    };
+
+    // Cache for rapid deduplication
+    recentBarcodeScans.set(dedupKey, { timestamp: now, response: jsonResponse });
+    if (recentBarcodeScans.size > 200) {
+      for (const [k, v] of recentBarcodeScans.entries()) {
+        if (now - v.timestamp > BARCODE_DEDUP_WINDOW_MS) {
+          recentBarcodeScans.delete(k);
+        }
+      }
+    }
+
+    return void res.json(jsonResponse);
+  } catch (err) {
+    console.error("ANALYSIS_BARCODE_ERROR", {
+      error: err,
+      stack: err instanceof Error ? err.stack : undefined,
+    });
+    req.log.error({ err }, "Failed to analyze barcode");
+    res.status(500).json({ error: "Barcode analysis failed" });
   }
 });
 
@@ -1126,6 +1413,7 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
       ? query.trim()
       : undefined;
 
+    const isPremiumUser = userId ? await isUserPremium(userId) : false;
     const unifiedResult = await UnifiedAnalysisEngine.analyze({
       dishId: entityType === "food" ? undefined : targetId,
       foodId: entityType === "food" ? targetId : undefined,
@@ -1135,19 +1423,29 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
       displayQuery: effectiveQuery,
       inputType: "text",
       userId,
+      isPremium: isPremiumUser,
     });
 
     const report = unifiedResult.report;
     const durationMs = Math.round(performance.now() - tStart);
 
+    let analysisHistoryId: number | undefined;
+
     if (userId) {
-      db.insert(analysisHistoryTable).values({
-        userId,
-        query: report.query,
-        analysisType: "text",
-        compatibilityScore: report.compatibilityScore,
-        report: report as any,
-      }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+      try {
+        const [savedHistory] = await db.insert(analysisHistoryTable).values({
+          userId,
+          query: report.query,
+          analysisType: "text",
+          compatibilityScore: report.compatibilityScore,
+          report: report as any,
+        }).returning({ id: analysisHistoryTable.id });
+        if (savedHistory?.id) {
+          analysisHistoryId = savedHistory.id;
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to save history");
+      }
 
       recordUserActivity({
         userId,
@@ -1162,16 +1460,27 @@ router.post("/analysis/dish", requireAuth, async (req, res) => {
           status: (report as any).status,
           matchedFoodId: (report as any).matchedFoodId,
           matchedDishId: (report as any).matchedDishId,
+          queryIntent: report.queryIntent || "DISH",
+          selectedCandidate: report.selectedCandidate?.reference || null,
+          needsClarification: Boolean(report.needsClarification),
         },
       });
     }
 
     return void res.json({
       report,
+      analysisHistoryId,
       usage: { currentMonthCount: usage.count, limit: usage.limit, remaining: usage.remaining },
       performance: { durationMs, cacheHit: true },
     });
   } catch (err) {
+    if (req.userId) {
+      try {
+        await rollbackUsage(req.userId, "text");
+      } catch (rbErr) {
+        req.log.warn({ rbErr }, "Failed to rollback usage on dish analysis error");
+      }
+    }
     console.error("ANALYSIS_DISH_ERROR", err);
     res.status(500).json({ error: "Analysis by dishId failed" });
   }
@@ -1679,6 +1988,148 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
     let primaryRuling: AnalysisReport["primaryRuling"] = undefined;
     let resultMode: AnalysisReport["resultMode"] = "COMPOSITE_FOOD";
 
+    // Check if this is a single item recognition (e.g. dish variant, dish, or single food)
+    if (componentsToResolve.length === 1 && ir.imageType !== "MULTIPLE_FOODS") {
+      const candidateQuery = componentsToResolve[0];
+      const foodRes = await FoodResolutionEngine.resolve(
+        candidateQuery,
+        "camera",
+        ir.candidates[0]?.recognitionScore || 1.0,
+        ir.likelyIngredients || []
+      );
+
+      if (foodRes.needsClarification && foodRes.clarificationType === "DISH_VARIANT") {
+        const report: AnalysisReport = {
+          query: finalQuery,
+          analysisType: imageAnalysisType,
+          scoreAvailable: false,
+          compatibilityScore: null,
+          ingredientConfidence: null,
+          resultMode: "NOT_FOUND",
+          needsClarification: true,
+          clarificationType: foodRes.clarificationType,
+          questionAr: foodRes.questionAr,
+          suggestions: (foodRes.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || s.query || ""),
+          resolutionState: foodRes.state,
+          allowed: [],
+          forbidden: [],
+          conditional: [],
+          unknown: [],
+          explanation: foodRes.questionAr || "",
+          notFound: true,
+          imageRecognition: { ...ir, status: "CONFIDENT", candidates: enrichedCandidates }
+        };
+
+        let analysisHistoryId: number | undefined;
+
+        if (userId) {
+          try {
+            const [savedHistory] = await db.insert(analysisHistoryTable).values({
+              userId,
+              query: report.query,
+              analysisType: imageAnalysisType,
+              compatibilityScore: report.compatibilityScore ?? 0,
+              report: report as any,
+            }).returning({ id: analysisHistoryTable.id });
+            if (savedHistory?.id) {
+              analysisHistoryId = savedHistory.id;
+            }
+          } catch (err) {
+            req.log.warn({ err }, "Failed to save history");
+          }
+
+          recordUserActivity({
+            userId,
+            category: imageAnalysisType === "image" ? "IMAGE_ANALYSIS" : "INGREDIENT_ANALYSIS",
+            eventType: imageAnalysisType === "image" ? "IMAGE_ANALYSIS" : "LABEL_ANALYSIS",
+            eventName: imageAnalysisType === "image" ? "Image Analysis" : "Label Analysis",
+            description: report.query || (imageAnalysisType === "image" ? "Image analysis completed" : "Ingredient label analysis"),
+            actorType: "USER",
+            actorId: userId,
+            metadata: {
+              compatibilityScore: report.compatibilityScore,
+              status: (report as any).status,
+              analysisType: imageAnalysisType,
+              queryIntent: report.queryIntent || null,
+              selectedCandidate: report.selectedCandidate?.reference || null,
+            },
+          });
+        }
+
+        return void res.json({
+          ...report,
+          report,
+          analysisHistoryId,
+        });
+      }
+
+      let dishIdToAnalyze: number | undefined = foodRes.selectedCandidate?.type === "dish" ? foodRes.selectedCandidate.id : undefined;
+
+      if (!dishIdToAnalyze) {
+        const searchRes = await CanonicalSearchEngine.searchEntities(candidateQuery, { debug: false });
+        if (searchRes.primaryResult && (searchRes.primaryResult.canonicalEntityType === "dish" || (searchRes.primaryResult as any).entity_type === "dish")) {
+          dishIdToAnalyze = Number(searchRes.primaryResult.canonicalId || (searchRes.primaryResult as any).canonical_id);
+        }
+      }
+
+      if (dishIdToAnalyze) {
+        const unifiedOutput = await UnifiedAnalysisEngine.analyze({
+          dishId: dishIdToAnalyze,
+          query: candidateQuery,
+          inputType: "camera",
+          userId,
+          rawIngredientNames: ir.likelyIngredients || [],
+        });
+        const report: AnalysisReport = {
+          ...unifiedOutput.report,
+          analysisType: imageAnalysisType,
+          imageRecognition: { ...ir, status: "CONFIDENT", candidates: enrichedCandidates }
+        };
+
+        let analysisHistoryId: number | undefined;
+
+        if (userId) {
+          try {
+            const [savedHistory] = await db.insert(analysisHistoryTable).values({
+              userId,
+              query: report.query,
+              analysisType: imageAnalysisType,
+              compatibilityScore: report.compatibilityScore ?? 0,
+              report: report as any,
+            }).returning({ id: analysisHistoryTable.id });
+            if (savedHistory?.id) {
+              analysisHistoryId = savedHistory.id;
+            }
+          } catch (err) {
+            req.log.warn({ err }, "Failed to save history");
+          }
+
+          recordUserActivity({
+            userId,
+            category: imageAnalysisType === "image" ? "IMAGE_ANALYSIS" : "INGREDIENT_ANALYSIS",
+            eventType: imageAnalysisType === "image" ? "IMAGE_ANALYSIS" : "LABEL_ANALYSIS",
+            eventName: imageAnalysisType === "image" ? "Image Analysis" : "Label Analysis",
+            description: report.query || (imageAnalysisType === "image" ? "Image analysis completed" : "Ingredient label analysis"),
+            actorType: "USER",
+            actorId: userId,
+            metadata: {
+              compatibilityScore: report.compatibilityScore,
+              status: (report as any).status,
+              analysisType: imageAnalysisType,
+              queryIntent: report.queryIntent || null,
+              selectedCandidate: report.selectedCandidate?.reference || null,
+            },
+          });
+        }
+
+        return void res.json({
+          ...report,
+          report,
+          analysisHistoryId,
+        });
+      }
+    }
+
     // Check if this is a single item recognition (e.g. SINGLE_FOOD or top candidate when components are 1)
     const isSingleCandidate = componentsToResolve.length === 1 && ir.imageType !== "MULTIPLE_FOODS" && ir.imageType !== "DISH";
 
@@ -1922,14 +2373,23 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
       imageRecognition: { ...ir, status: "CONFIDENT", candidates: enrichedCandidates }
     };
 
+    let analysisHistoryId: number | undefined;
+
     if (userId) {
-      await db.insert(analysisHistoryTable).values({
-        userId,
-        query: report.query,
-        analysisType: imageAnalysisType,
-        compatibilityScore: report.compatibilityScore ?? 0,
-        report: report as any,
-      }).catch((err) => req.log.warn({ err }, "Failed to save history"));
+      try {
+        const [savedHistory] = await db.insert(analysisHistoryTable).values({
+          userId,
+          query: report.query,
+          analysisType: imageAnalysisType,
+          compatibilityScore: report.compatibilityScore ?? 0,
+          report: report as any,
+        }).returning({ id: analysisHistoryTable.id });
+        if (savedHistory?.id) {
+          analysisHistoryId = savedHistory.id;
+        }
+      } catch (err) {
+        req.log.warn({ err }, "Failed to save history");
+      }
 
       recordUserActivity({
         userId,
@@ -1943,11 +2403,17 @@ router.post("/analysis/image", requireAuth, async (req, res) => {
           compatibilityScore: report.compatibilityScore,
           status: (report as any).status,
           analysisType: imageAnalysisType,
+          queryIntent: report.queryIntent || null,
+          selectedCandidate: report.selectedCandidate?.reference || null,
         },
       });
     }
 
-    res.json(report);
+    res.json({
+      ...report,
+      report,
+      analysisHistoryId,
+    });
   } catch (err: any) {
     if (usageIncremented) {
       await rollbackUsage(userId, "image");

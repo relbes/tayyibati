@@ -51,14 +51,17 @@ export function stripArticle(input: string | null | undefined): string {
     if (word.startsWith("ال") && word.length > 3) {
       word = word.slice(2);
     }
+    if (word === "ارز" || word === "أرز" || word === "إرز" || word === "آرز") {
+      word = "رز";
+    }
     return word;
   });
 
   clean = words.join(" ").trim();
 
-  // Strip leading Alif (ا/أ/إ/آ) for short words like (أرز -> رز)
-  if ((clean.startsWith("ار") || clean.startsWith("أر")) && clean.length <= 4) {
-    clean = clean.replace(/^[اأإآ]/, "");
+  // Strip leading Alif (ا/أ/إ/آ) specifically for rice (أرز / ارز -> رز)
+  if (clean === "ارز" || clean === "أرز" || clean === "إرز" || clean === "آرز") {
+    clean = "رز";
   }
 
   return clean;

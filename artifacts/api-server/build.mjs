@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { access, rename, rm, stat } from "node:fs/promises";
+import { access, rename, rm, stat, cp } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -13,9 +13,10 @@ const artifactDir = path.dirname(fileURLToPath(import.meta.url));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
- * Windows-resilient directory rename.
+ * Windows-resilient directory rename with copy fallback.
  * On Windows, antivirus or search indexers may hold temporary handles on newly created files,
- * causing EPERM or EBUSY errors on immediate rename. Retrying with short backoff resolves this.
+ * causing EPERM or EBUSY errors on immediate rename. Retrying with short backoff and falling
+ * back to recursive copy resolves this reliably.
  */
 async function retryRename(src, dest, maxRetries = 10, delayMs = 150) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -26,6 +27,16 @@ async function retryRename(src, dest, maxRetries = 10, delayMs = 150) {
       if ((err.code === "EPERM" || err.code === "EBUSY" || err.code === "EACCES") && attempt < maxRetries) {
         await sleep(delayMs);
         continue;
+      }
+      if (err.code === "EPERM" || err.code === "EBUSY" || err.code === "EACCES") {
+        console.warn(`[build.mjs] Rename of '${src}' -> '${dest}' failed with ${err.code}. Falling back to recursive copy...`);
+        await cp(src, dest, { recursive: true, force: true });
+        try {
+          await rm(src, { recursive: true, force: true });
+        } catch {
+          // ignore cleanup error if handle held on source
+        }
+        return;
       }
       throw err;
     }

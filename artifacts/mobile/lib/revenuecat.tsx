@@ -71,6 +71,18 @@ export async function loginRevenueCat(userId: string): Promise<CustomerInfo | nu
   }
 }
 
+export async function logoutRevenueCat(): Promise<void> {
+  try {
+    const isAnonymous = await Purchases.isAnonymous();
+    if (!isAnonymous) {
+      console.log("[RevenueCat SDK] Logging out of RevenueCat");
+      await Purchases.logOut();
+    }
+  } catch (err: any) {
+    console.warn("[RevenueCat SDK] RevenueCat logOut failed:", err?.message);
+  }
+}
+
 function useSubscriptionContext() {
   const customerInfoQuery = useQuery({
     queryKey: ["revenuecat", "customer-info"],

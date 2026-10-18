@@ -27,6 +27,14 @@ export interface InAppNotification {
 
 const STORAGE_PREFIX = "@tayyibati_notifications_";
 
+export const SUBSCRIPTION_NOTIFICATION_TYPES: ReadonlySet<NotificationType> = new Set([
+  "RENEWAL_7_DAYS",
+  "RENEWAL_3_DAYS",
+  "RENEWAL_1_DAY",
+  "EXPIRING_TODAY",
+  "BILLING_FAILED",
+]);
+
 export function useInAppNotifications() {
   const { user } = useAuth();
   const userId = user?.id || "guest";
@@ -42,17 +50,28 @@ export function useInAppNotifications() {
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed)) {
-          setNotifications(parsed);
+          // Free accounts and guests must never see subscription expiration or renewal notifications
+          const isUserActivePremium = user?.isPremium === true;
+          const filtered = isUserActivePremium
+            ? parsed
+            : parsed.filter((n: InAppNotification) => !SUBSCRIPTION_NOTIFICATION_TYPES.has(n.type));
+
+          // If stale subscription notifications leaked into storage, purge them immediately
+          if (filtered.length !== parsed.length) {
+            await AsyncStorage.setItem(storageKey, JSON.stringify(filtered));
+          }
+
+          setNotifications(filtered);
+          return;
         }
-      } else {
-        setNotifications([]);
       }
+      setNotifications([]);
     } catch {
       // Graceful fallback
     } finally {
       setIsLoading(false);
     }
-  }, [storageKey]);
+  }, [storageKey, user?.isPremium]);
 
   useEffect(() => {
     loadNotifications();
@@ -93,7 +112,8 @@ export function useInAppNotifications() {
   // 6. Evaluate subscription renewal/expiration reminders with strict idempotency
   const evaluateSubscriptionNotifications = useCallback(
     async (sub: UnifiedSubscriptionDetails) => {
-      if (sub.status === "FREE" || sub.status === "ERROR") return;
+      // Free users, guests, or non-premium accounts must NEVER evaluate or receive subscription notifications
+      if (!user || !user.isPremium || sub.status === "FREE" || sub.status === "ERROR") return;
 
       const subId = sub.planName || "tayyibati_premium";
       const expDate = sub.expirationDate;
@@ -215,7 +235,7 @@ export function useInAppNotifications() {
         await saveNotifications(merged);
       }
     },
-    [notifications, storageKey]
+    [user, notifications, storageKey]
   );
 
   const unreadCount = notifications.filter((n) => !n.read).length;

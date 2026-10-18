@@ -28,9 +28,23 @@ interface HistoryItem {
   analysisType: "text" | "image" | "label";
   compatibilityScore: number;
   createdAt: string;
+  queryIntent?: string | null;
+  selectedCandidate?: {
+    type: string;
+    id?: number | string;
+    nameAr: string;
+    reference: string;
+  } | null;
   report: {
     status?: string;
     explanation?: string;
+    queryIntent?: string | null;
+    selectedCandidate?: {
+      type: string;
+      id?: number | string;
+      nameAr: string;
+      reference: string;
+    } | null;
     forbidden?: Array<{ name: string; nameAr?: string; reason?: string }>;
     conditional?: Array<{ name: string; nameAr?: string; reason?: string }>;
     allowed?: Array<{ name: string; nameAr?: string; reason?: string }>;
@@ -95,20 +109,26 @@ function HistoryDetailDialog({ item, open, onClose, lang }: {
         <div className="space-y-4 text-sm text-right">
           <div className="p-3 bg-muted/50 rounded-lg border text-xs space-y-2">
             <span className="font-semibold text-foreground block border-b pb-1">مخطط معالجة البحث (Search Flow):</span>
-            <div className="flex items-center justify-between text-muted-foreground gap-2 pt-1">
-              <div className="bg-background p-2 rounded border text-center flex-1">
+            <div className="grid grid-cols-4 items-center text-muted-foreground gap-2 pt-1 text-center">
+              <div className="bg-background p-2 rounded border">
                 <span className="text-[10px] text-muted-foreground block">استعلام المستخدم</span>
-                <span className="font-bold text-foreground text-xs">{item.query}</span>
+                <span className="font-bold text-foreground text-xs truncate block">{item.query}</span>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 rotate-180" />
-              <div className="bg-background p-2 rounded border text-center flex-1">
-                <span className="text-[10px] text-muted-foreground block">نوع البحث والوضع</span>
-                <span className="font-semibold text-primary uppercase text-xs">{item.analysisType}</span>
+              <div className="bg-background p-2 rounded border">
+                <span className="text-[10px] text-muted-foreground block">القصد المكتشف (Intent)</span>
+                <span className="font-bold text-blue-700 text-xs block font-mono">
+                  {item.queryIntent || report.queryIntent || "غير محدد"}
+                </span>
               </div>
-              <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0 rotate-180" />
-              <div className="bg-background p-2 rounded border text-center flex-1">
+              <div className="bg-background p-2 rounded border">
+                <span className="text-[10px] text-muted-foreground block">المرشح المختار (Candidate)</span>
+                <span className="font-bold text-purple-700 text-xs truncate block">
+                  {(item.selectedCandidate || report.selectedCandidate)?.nameAr || (item.selectedCandidate || report.selectedCandidate)?.reference || "لا يوجد / غير مؤكد"}
+                </span>
+              </div>
+              <div className="bg-background p-2 rounded border">
                 <span className="text-[10px] text-muted-foreground block">الحكم والنتيجة</span>
-                <span className="font-bold text-emerald-700 text-xs">{report.status || "محلل"}</span>
+                <span className="font-bold text-emerald-700 text-xs block">{report.status || "محلل"}</span>
               </div>
             </div>
           </div>
@@ -411,6 +431,7 @@ export default function History() {
                   <th className="px-4 py-3">التاريخ</th>
                   <th className="px-4 py-3">البريد الإلكتروني</th>
                   <th className="px-4 py-3">البحث (Query)</th>
+                  <th className="px-4 py-3">القصد (Intent)</th>
                   <th className="px-4 py-3">نوع التحليل</th>
                   <th className="px-4 py-3">الحكم</th>
                   <th className="px-4 py-3">درجة التوافق</th>
@@ -421,14 +442,14 @@ export default function History() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 8 }).map((__, j) => (
+                      {Array.from({ length: 9 }).map((__, j) => (
                         <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                       ))}
                     </tr>
                   ))
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
                       {tr(lang, "noHistory")}
                     </td>
                   </tr>
@@ -436,6 +457,8 @@ export default function History() {
                   items.map((item) => {
                     const isSelected = selectedIds.includes(item.id);
                     const verdictStatus = item.report?.status || "allowed";
+                    const resolvedCandidate = item.selectedCandidate || item.report?.selectedCandidate;
+                    const intent = item.queryIntent || item.report?.queryIntent;
                     return (
                       <tr key={item.id} className={cn("hover:bg-muted/20 transition-colors", isSelected && "bg-primary/5")}>
                         <td className="px-4 py-3 w-10 text-center">
@@ -452,6 +475,16 @@ export default function History() {
                         </td>
                         <td className="px-4 py-3 max-w-xs font-semibold">
                           <p className="truncate">{item.query}</p>
+                          {resolvedCandidate && (
+                            <p className="text-[11px] text-muted-foreground font-normal truncate mt-0.5">
+                              {resolvedCandidate.reference || resolvedCandidate.nameAr}
+                            </p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-xs">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-[11px] bg-slate-100 text-slate-800 border">
+                            {intent || "—"}
+                          </span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1.5 text-muted-foreground text-xs">

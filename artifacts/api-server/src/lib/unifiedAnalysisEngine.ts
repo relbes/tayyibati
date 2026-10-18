@@ -13,19 +13,30 @@ import { IntentClassificationEngine } from "./intentClassificationEngine";
 import { DecisionEngine } from "./decisionEngine";
 import { warmDishEngineCache, getDishEngineCache, detectMainProtein, analyzeDishCompatibility, resolveSingleIngredient, DishAnalysisResult, IngredientAnalysisItem, norm, stripAlefLam, detectDishProteinInfo, getProteinFields, isPureProteinQuery, resolveProteinIngredient, getClarificationData } from "./dishCompatibilityEngine";
 import { resolveWithInheritance, getKnowledgeCache, UserIntent, aggregateFoodFamilySafety } from "./knowledgeCache";
-import { CanonicalSearchEngine, printStructuredSearchDebugLog } from "./canonicalSearchEngine";
+import { CanonicalSearchEngine, printStructuredSearchDebugLog, type QueryIntent } from "./canonicalSearchEngine";
 import { getAIProvider } from "./ai/aiProvider";
 import { captureUnknownIngredient } from "./ai/knowledgeReviewService";
 import type { AnalysisReport, IngredientResult, IngredientStatus } from "../routes/analysis";
 import { extractBaseEntity, isMeaningfulQuery, formatAmbiguityQuestion } from "./arabicNormalization";
 import { FoodResolutionEngine } from "./foodResolutionEngine";
 import { SmartFallbackEngine } from "./smartFallbackEngine";
+import { MultiItemEngine } from "./multiItemEngine";
 
 export function normalizeFoodStatus(rawStatus: unknown): IngredientStatus {
   if (rawStatus === "allowed" || rawStatus === "forbidden" || rawStatus === "conditional") {
     return rawStatus;
   }
   return "unknown";
+}
+
+export function determineFoodSource(nameAr: string, proteinCat?: string, dbCategory?: string): "حيواني" | "نباتي" {
+  if (proteinCat === "MEAT" || proteinCat === "POULTRY") return "حيواني";
+  const c = (dbCategory || "").toLowerCase();
+  if (c.includes("meat") || c.includes("poultry") || c.includes("fish") || c.includes("dairy") || c.includes("egg") || c.includes("بيض") || c.includes("لحوم") || c.includes("اسماك")) return "حيواني";
+  const pInfo = getProteinFields(nameAr);
+  if (pInfo.proteinCategory === "MEAT" || pInfo.proteinCategory === "POULTRY") return "حيواني";
+  if (nameAr.includes("بيض") || nameAr.includes("جبن") || nameAr.includes("لبن") || nameAr.includes("حليب") || nameAr.includes("سمك") || nameAr.includes("تونة") || nameAr.includes("سردين")) return "حيواني";
+  return "نباتي";
 }
 
 export interface UnifiedAnalysisRequest {
@@ -57,6 +68,7 @@ export interface UnifiedAnalysisInput {
   rawOcrText?: string;
   barcode?: string;
   rawIngredientNames?: string[];
+  isPremium?: boolean;
 }
 
 export interface PipelineStageTrace {
@@ -177,6 +189,7 @@ export class UnifiedAnalysisEngine {
             dbReason: targetFood.reason,
             dbNotes: targetFood.notes,
             isInherited: false,
+            sourceType: determineFoodSource(targetFood.nameAr, proteinInfo.proteinCategory, targetFood.category),
           },
           allowed,
           forbidden,
@@ -205,7 +218,7 @@ export class UnifiedAnalysisEngine {
           confidence: 100,
           matchType: "EXACT",
           searchOutcome: "FOUND",
-        } as any, null);
+        } as any, null, "FOOD");
 
         return {
           report: finalizedDirectReport,
@@ -272,12 +285,24 @@ export class UnifiedAnalysisEngine {
         legacyAllowed.length, legacyForbidden.length, legacyConditional.length, legacyUnknown.length
       );
 
+      const isConflictingOrUnverifiedRecipe =
+        dishResult.dish?.id === 1009 ||
+        ((dishResult.dish?.nameAr.includes("خضار") || dishResult.dish?.nameAr.includes("خضروات")) &&
+          (dishResult.dish?.nameAr.toLowerCase().includes("برياني") || dishResult.proteinCategory !== "NONE" || legacyForbidden.some(f => f.nameAr.includes("دجاج") || f.nameAr.includes("لحم")) || legacyAllowed.some(a => a.nameAr.includes("دجاج") || a.nameAr.includes("لحم"))));
+
+      const recipeWarning = isConflictingOrUnverifiedRecipe
+        ? "تنبيه: وصفة هذا الطبق تحتوي على مكونات متضاربة في قاعدة البيانات الحالية (مثل اشتمال برياني الخضار على قطع دجاج أو لحم). تم تصنيف الوصفة بأنها تحتاج إلى مراجعة وتدقيق معتمد (NEEDS_RECIPE_VERIFICATION) دون تلفيق وصفة نظيفة أو تغيير حكمها تلقائياً."
+        : undefined;
+
       const directReport: AnalysisReport = {
         query: dishResult.dish?.nameAr || queryText || `Dish #${input.dishId}`,
         dish: dishResult.dish?.nameAr || queryText || undefined,
         proteinCategory: dishResult.proteinCategory,
         proteinSpecificity: dishResult.proteinSpecificity,
         resultMode: "COMPOSITE_FOOD",
+        needsRecipeVerification: isConflictingOrUnverifiedRecipe ? true : undefined,
+        recipeVerificationStatus: isConflictingOrUnverifiedRecipe ? "NEEDS_RECIPE_VERIFICATION" : undefined,
+        recipeWarning,
         primaryRuling: dishResult.dish
           ? {
               status: dishResult.finalCompatibility,
@@ -295,13 +320,15 @@ export class UnifiedAnalysisEngine {
         compatibilityScore: score,
         ingredientConfidence,
         scoreAvailable,
-        explanation: dishResult.explanation.detailedReasonAr,
+        explanation: recipeWarning
+          ? `${dishResult.explanation.detailedReasonAr}\n\n${recipeWarning}`
+          : dishResult.explanation.detailedReasonAr,
         suggestions: [],
         analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
         notFound: isUnknownOnly,
       };
 
-      const finalizedDirectReport = finalizeReport(directReport, null, dishResult);
+      const finalizedDirectReport = finalizeReport(directReport, null, dishResult, "DISH");
 
       const endTime = performance.now();
       return {
@@ -316,10 +343,79 @@ export class UnifiedAnalysisEngine {
       };
     }
 
-    if (isPureProteinQuery(queryText)) {
+    const earlyIntent = IntentClassificationEngine.detectQueryIntent(queryText);
+    const isCategoryOrUnsupported = earlyIntent.intent === "CATEGORY_SEARCH" || earlyIntent.intent === "UNSUPPORTED_QUESTION";
+
+    // Multi-Item Query Decomposition Gate
+    if (
+      !input.dishId &&
+      !input.foodId &&
+      earlyIntent.intent !== "LIST_ALLOWED" &&
+      earlyIntent.intent !== "LIST_RESTRICTED" &&
+      earlyIntent.intent !== "UNSUPPORTED_QUESTION"
+    ) {
+      const multiDecomp = await MultiItemEngine.decomposeAndEvaluate(queryText, Boolean(input.isPremium));
+      if (multiDecomp.isMultiItem) {
+        const allowedItems: IngredientResult[] = [];
+        const forbiddenItems: IngredientResult[] = [];
+        const conditionalItems: IngredientResult[] = [];
+        const unknownItems: IngredientResult[] = [];
+
+        for (const item of multiDecomp.items) {
+          const ingRes: IngredientResult = {
+            name: item.nameEn || item.nameAr,
+            nameAr: item.nameAr,
+            nameEn: item.nameEn || item.nameAr,
+            status: item.status,
+            frequency: null,
+            reason: item.reason || null,
+            notes: item.notes || null,
+            sourceType: item.sourceType,
+          };
+          if (item.status === "allowed") allowedItems.push(ingRes);
+          else if (item.status === "forbidden") forbiddenItems.push(ingRes);
+          else if (item.status === "conditional") conditionalItems.push(ingRes);
+          else unknownItems.push(ingRes);
+        }
+
+        const multiReport: AnalysisReport = {
+          query: queryText,
+          displayQuery: input.displayQuery || queryText,
+          resultMode: "MULTI_ITEM",
+          queryIntent: "MULTI_ITEM",
+          multiItemResults: multiDecomp.items,
+          allowed: allowedItems,
+          forbidden: forbiddenItems,
+          conditional: conditionalItems,
+          unknown: unknownItems,
+          compatibilityScore: null,
+          scoreAvailable: false,
+          explanation: `تم تحليل ${multiDecomp.items.length} أصناف بشكل مستقل وفق قواعد طيباتي.`,
+          suggestions: [],
+          analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+          notFound: false,
+        };
+
+        const finalizedReport = finalizeReport(multiReport, null, null, "MULTI_ITEM");
+        const endTime = performance.now();
+        recordStage("multi_item_decomposition", endTime - stage1Start, { itemCount: multiDecomp.items.length });
+
+        return {
+          report: finalizedReport,
+          executionTrace: {
+            totalDurationMs: Math.round(endTime - startTime),
+            orchestrationOverheadMs: 4,
+            stagesExecuted,
+            traces,
+          },
+        };
+      }
+    }
+
+    if (!isCategoryOrUnsupported && isPureProteinQuery(queryText)) {
       const proteinInfo = resolveProteinIngredient(queryText);
       if (proteinInfo) {
-        if (proteinInfo.proteinSpecificity === "UNSPECIFIED") {
+        if (proteinInfo.proteinSpecificity === "UNSPECIFIED" && proteinInfo.proteinCategory !== "MEAT") {
           const clar = getClarificationData(queryText, proteinInfo.proteinCategory);
           if (clar) {
             const report: AnalysisReport = {
@@ -344,7 +440,7 @@ export class UnifiedAnalysisEngine {
             const endTime = performance.now();
             recordStage("protein_resolution", performance.now() - startTime);
 
-            const reportWithCanonical = finalizeReport(report, null, null);
+            const reportWithCanonical = finalizeReport(report, null, null, "FOOD");
 
             return {
               report: reportWithCanonical,
@@ -391,6 +487,7 @@ export class UnifiedAnalysisEngine {
             dbReason: proteinInfo.reason,
             dbNotes: null,
             isInherited: false,
+            sourceType: (proteinInfo.proteinCategory === "MEAT" || proteinInfo.proteinCategory === "POULTRY") ? "حيواني" : "نباتي",
           },
           allowed,
           forbidden,
@@ -408,7 +505,7 @@ export class UnifiedAnalysisEngine {
         const endTime = performance.now();
         recordStage("protein_resolution", performance.now() - startTime);
 
-        const reportWithCanonical = finalizeReport(report, null, null);
+        const reportWithCanonical = finalizeReport(report, null, null, "FOOD");
 
         return {
           report: reportWithCanonical,
@@ -443,6 +540,8 @@ export class UnifiedAnalysisEngine {
         suggestions: [],
         analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
         notFound: true,
+        queryIntent: "UNKNOWN",
+        selectedCandidate: null,
       };
 
       const endTime = performance.now();
@@ -459,9 +558,337 @@ export class UnifiedAnalysisEngine {
       };
     }
 
+    // Stage 1.6: Intent Detection & Natural-Language Interception Gate
+    let effectiveQueryText = queryText;
+    const queryIntentRes = IntentClassificationEngine.detectQueryIntent(queryText);
+
+    // Unsupported Calorie Calculation & Diet Plan Gate
+    if (queryIntentRes.intent === "UNSUPPORTED_QUESTION") {
+      const unsupportedReport: AnalysisReport = {
+        query: queryText,
+        displayQuery: input.displayQuery || queryText,
+        resultMode: "UNSUPPORTED_QUESTION" as any,
+        queryIntent: "UNSUPPORTED_QUESTION",
+        selectedCandidate: null,
+        explanation: "تطبيق طيباتي مخصص لتحديد الأطعمة المسموحة والممنوعة والمشروطة وفق القواعد الغذائية المعتمدة، ولا يقدم حالياً خدمة حساب السعرات الحرارية أو وضع جداول الحميات الغذائية والتخسيس.",
+        allowed: [],
+        forbidden: [],
+        conditional: [],
+        unknown: [],
+        compatibilityScore: null,
+        scoreAvailable: false,
+        suggestions: ["هل البيض مسموح؟", "هل التمر مسموح؟", "شاورما دجاج", "خضروات", "فواكه"],
+        analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+        notFound: true,
+      };
+
+      const endTime = performance.now();
+      recordStage("intent_unsupported_question_gate", performance.now() - startTime, { query: queryText });
+
+      return {
+        report: unsupportedReport,
+        executionTrace: {
+          totalDurationMs: Math.round(endTime - startTime),
+          orchestrationOverheadMs: 1,
+          stagesExecuted: ["input_gateway", "intent_unsupported_question_gate"],
+          traces: [{ stage: "intent_unsupported_question_gate", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }],
+        },
+      };
+    }
+
+    // Category Search Intent Gate (خضروات، فواكه، بقوليات، حبوب، إلخ)
+    if (queryIntentRes.intent === "CATEGORY_SEARCH") {
+      const foodCache = await getKnowledgeCache();
+      const targetCategoryKey = queryIntentRes.targetCategory || "خضروات";
+      const targetCategoryAr = queryIntentRes.targetCategoryAr || targetCategoryKey;
+
+      const CATEGORY_DB_MAP: Record<string, string[]> = {
+        "خضروات": ["خضروات", "Forbidden Leafy Vegetables", "Forbidden Vegetables", "vegetables"],
+        "فواكه": ["فواكه", "Fruits & Natural Juices", "Forbidden Fruits", "fruits"],
+        "حبوب": ["حبوب", "Grains & Starches", "Processed Starches", "grains"],
+        "بقوليات": ["بقوليات", "legumes"],
+        "لحوم": ["لحوم", "Meat & Protein", "Meat & Poultry", "meat"],
+        "دواجن": ["Poultry & Eggs", "Poultry & Forbidden Birds", "Permitted Birds", "poultry"],
+        "ألبان": ["Dairy & Derivatives", "Dairy & Cheese", "Cheese", "Permitted Cheeses", "Forbidden Cheeses", "dairy"],
+        "مأكولات بحرية": ["Fish & Seafood", "Fish & Forbidden Seafood", "seafood"],
+        "مكسرات وبذور": ["مكسرات وبذور", "Nuts, Seeds & Oils", "Natural Seeds", "Forbidden Nuts", "nuts"],
+        "زيوت": ["زيوت", "دهون", "Natural Oils & Vinegar", "Natural Fats", "oils"],
+        "مشروبات": ["مشروبات", "Hot Drinks & Herbs", "Carbonated & Artificial Drinks", "Fresh Natural Juices", "Permitted Juices", "beverages"],
+      };
+
+      const matchedDbCats = CATEGORY_DB_MAP[targetCategoryKey] || [targetCategoryKey];
+      const allCategoryFoods = Array.from(foodCache.foodById.values()).filter((f) => {
+        if (!f.category) return false;
+        const normCat = norm(f.category);
+        return matchedDbCats.some((c) => {
+          const nc = norm(c);
+          return normCat === nc || normCat.includes(nc) || nc.includes(normCat);
+        });
+      });
+
+      const allowedFoods = allCategoryFoods.filter((f) => f.status === "allowed");
+      const forbiddenFoods = allCategoryFoods.filter((f) => f.status === "forbidden");
+      const conditionalFoods = allCategoryFoods.filter((f) => f.status === "conditional");
+
+      // Blanket Prohibition & Exception Evaluation:
+      // A category MUST NEVER be declared fully forbidden if there are allowed items, conditional items,
+      // or known approved exceptions.
+      const exceptions: string[] = [];
+      if (targetCategoryKey === "بقوليات") {
+        exceptions.push("شوربة العدس الأصفر (مسموحة بشروط خاصة وفق السياسة المعتمدة: مقشور ومطبوخ بطريقة محددة)");
+      }
+
+      const hasExceptions = exceptions.length > 0 || allowedFoods.length > 0 || conditionalFoods.length > 0;
+      const isFullyForbidden = !hasExceptions && allCategoryFoods.length > 0 && forbiddenFoods.length === allCategoryFoods.length;
+
+      // Free vs Premium Tier Limits:
+      // Free users get at most 10 items per status list and hasMore = true if more exist.
+      // Premium users receive the complete catalog without truncation.
+      const isPremium = Boolean(input.isPremium);
+      const limit = isPremium ? allCategoryFoods.length : 10;
+
+      const displayAllowed = allowedFoods.slice(0, limit).map((f) => ({
+        name: f.nameEn || f.nameAr,
+        nameAr: f.nameAr,
+        nameEn: f.nameEn || f.nameAr,
+        status: "allowed" as const,
+        reason: f.reason || "مسموح حسب قواعد البرنامج",
+        notes: f.notes,
+      }));
+
+      const displayForbidden = forbiddenFoods.slice(0, limit).map((f) => ({
+        name: f.nameEn || f.nameAr,
+        nameAr: f.nameAr,
+        nameEn: f.nameEn || f.nameAr,
+        status: "forbidden" as const,
+        reason: f.reason || "محظور حسب قواعد البرنامج",
+        notes: f.notes,
+      }));
+
+      const displayConditional = conditionalFoods.slice(0, limit).map((f) => ({
+        name: f.nameEn || f.nameAr,
+        nameAr: f.nameAr,
+        nameEn: f.nameEn || f.nameAr,
+        status: "conditional" as const,
+        reason: f.reason || "مشروط حسب قواعد البرنامج",
+        notes: f.notes,
+      }));
+
+      const hasMore = !isPremium && (
+        allowedFoods.length > limit ||
+        forbiddenFoods.length > limit ||
+        conditionalFoods.length > limit
+      );
+
+      let explanation = "";
+      if (targetCategoryKey === "بقوليات") {
+        explanation = "معظم أصناف البقوليات ممنوعة في نظام طيباتي، مع وجود استثناء مشروط لشوربة العدس الأصفر المحضرة وفق الضوابط المعتمدة. لا يُعد القسم ممنوعاً بالكامل لوجود هذا الاستثناء المشروط.";
+      } else if (isFullyForbidden) {
+        explanation = `جميع أصناف قسم ${targetCategoryAr} المسجلة في النظام ممنوعة وفق القواعد المعتمدة.`;
+      } else {
+        explanation = `دليل أصناف قسم ${targetCategoryAr} في نظام طيباتي: يوضح الأصناف المسموحة والممنوعة والمشروطة المسجلة في هذا القسم.`;
+      }
+
+      if (!isPremium && hasMore) {
+        explanation += ` (يتم عرض أول 10 أصناف من كل فئة في الحساب المجاني. الترقية إلى بريميوم تتيح استعراض الدليل الكامل بقسم ${targetCategoryAr}).`;
+      }
+
+      const categoryReport: AnalysisReport = {
+        query: queryText,
+        displayQuery: input.displayQuery || queryText,
+        resultMode: "CATEGORY_REPORT" as any,
+        queryIntent: "CATEGORY_SEARCH",
+        targetCategory: targetCategoryAr,
+        selectedCandidate: null,
+        explanation,
+        allowed: displayAllowed,
+        forbidden: displayForbidden,
+        conditional: displayConditional,
+        unknown: [],
+        compatibilityScore: isFullyForbidden ? 0 : (allowedFoods.length > 0 && forbiddenFoods.length === 0 ? 100 : 50),
+        scoreAvailable: true,
+        categoryStats: {
+          total: allCategoryFoods.length,
+          allowedCount: allowedFoods.length,
+          forbiddenCount: forbiddenFoods.length,
+          conditionalCount: conditionalFoods.length,
+          isFullyForbidden,
+          exceptions,
+          hasMore,
+          isPremium,
+        },
+        suggestions: exceptions.length > 0 ? exceptions : ["خضروات", "فواكه", "حبوب", "لحوم"],
+        analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+        notFound: false,
+        action: {
+          type: "NAVIGATE_BROWSE",
+          filter: "all",
+          category: targetCategoryKey,
+          route: `/(tabs)/browse?category=${encodeURIComponent(targetCategoryKey)}`,
+          label: `عرض دليل أصناف قسم ${targetCategoryAr} كاملة`,
+        },
+      };
+
+      const endTime = performance.now();
+      recordStage("intent_category_search_gate", performance.now() - startTime, { query: queryText, category: targetCategoryKey });
+
+      return {
+        report: categoryReport,
+        executionTrace: {
+          totalDurationMs: Math.round(endTime - startTime),
+          orchestrationOverheadMs: 1,
+          stagesExecuted: ["input_gateway", "intent_category_search_gate"],
+          traces: [{ stage: "intent_category_search_gate", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }],
+        },
+      };
+    }
+
+    if (queryIntentRes.intent === "LIST_ALLOWED") {
+      const foodCache = await getKnowledgeCache();
+      const allowedFoods = Array.from(foodCache.foodById.values())
+        .filter((f) => f.status === "allowed")
+        .slice(0, 10)
+        .map((f) => ({
+          name: f.nameEn || f.nameAr,
+          nameAr: f.nameAr,
+          nameEn: f.nameEn || f.nameAr,
+          status: "allowed" as const,
+          reason: f.reason || "مسموح حسب قواعد البرنامج",
+          notes: f.notes,
+        }));
+
+      const allowedReport: AnalysisReport = {
+        query: queryText,
+        displayQuery: input.displayQuery || queryText,
+        resultMode: "LIST_ALLOWED" as any,
+        queryIntent: "LIST_ALLOWED",
+        selectedCandidate: null,
+        explanation: "قائمة الأطعمة المسموحة في نظام طيباتي. يمكنك تصفح الدليل الكامل وتصفية الأطعمة حسب الأقسام.",
+        allowed: allowedFoods,
+        forbidden: [],
+        conditional: [],
+        unknown: [],
+        compatibilityScore: 100,
+        scoreAvailable: true,
+        suggestions: ["خضروات", "فواكه", "لحوم ودواجن", "حبوب وبقوليات"],
+        analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+        notFound: false,
+        action: {
+          type: "NAVIGATE_BROWSE",
+          filter: "allowed",
+          route: "/(tabs)/browse?status=allowed",
+          label: "عرض دليل الأطعمة المسموحة كاملة",
+        },
+      };
+
+      const endTime = performance.now();
+      recordStage("intent_list_allowed_gate", performance.now() - startTime, { query: queryText });
+
+      return {
+        report: allowedReport,
+        executionTrace: {
+          totalDurationMs: Math.round(endTime - startTime),
+          orchestrationOverheadMs: 1,
+          stagesExecuted: ["input_gateway", "intent_list_allowed_gate"],
+          traces: [{ stage: "intent_list_allowed_gate", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }],
+        },
+      };
+    }
+
+    if (queryIntentRes.intent === "LIST_RESTRICTED") {
+      const foodCache = await getKnowledgeCache();
+      const forbiddenFoods = Array.from(foodCache.foodById.values())
+        .filter((f) => f.status === "forbidden")
+        .slice(0, 10)
+        .map((f) => ({
+          name: f.nameEn || f.nameAr,
+          nameAr: f.nameAr,
+          nameEn: f.nameEn || f.nameAr,
+          status: "forbidden" as const,
+          reason: f.reason || "محظور حسب قواعد البرنامج",
+          notes: f.notes,
+        }));
+
+      const restrictedReport: AnalysisReport = {
+        query: queryText,
+        displayQuery: input.displayQuery || queryText,
+        resultMode: "LIST_RESTRICTED" as any,
+        queryIntent: "LIST_RESTRICTED",
+        selectedCandidate: null,
+        explanation: "قائمة الأطعمة المحظورة والممنوعة في نظام طيباتي لتجنبها والحفاظ على سلامتك.",
+        allowed: [],
+        forbidden: forbiddenFoods,
+        conditional: [],
+        unknown: [],
+        compatibilityScore: 0,
+        scoreAvailable: true,
+        suggestions: ["أطعمة مصنعة", "سكريات مضافة", "زيوت مهدرجة"],
+        analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+        notFound: false,
+        action: {
+          type: "NAVIGATE_BROWSE",
+          filter: "forbidden",
+          route: "/(tabs)/browse?status=forbidden",
+          label: "عرض دليل الأطعمة الممنوعة كاملة",
+        },
+      };
+
+      const endTime = performance.now();
+      recordStage("intent_list_restricted_gate", performance.now() - startTime, { query: queryText });
+
+      return {
+        report: restrictedReport,
+        executionTrace: {
+          totalDurationMs: Math.round(endTime - startTime),
+          orchestrationOverheadMs: 1,
+          stagesExecuted: ["input_gateway", "intent_list_restricted_gate"],
+          traces: [{ stage: "intent_list_restricted_gate", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }],
+        },
+      };
+    }
+
+    if (queryIntentRes.intent === "IS_FOOD_ALLOWED") {
+      if (queryIntentRes.targetFoodQuery) {
+        effectiveQueryText = queryIntentRes.targetFoodQuery;
+      } else {
+        const clarifyReport: AnalysisReport = {
+          query: queryText,
+          displayQuery: input.displayQuery || queryText,
+          resultMode: "NOT_FOUND" as any,
+          queryIntent: "IS_FOOD_ALLOWED",
+          selectedCandidate: null,
+          needsClarification: true,
+          questionAr: "ما هو الطعام أو المكون الذي ترغب في التحقق منه؟",
+          suggestions: ["تمر", "تفاح", "شاورما دجاج", "بيض", "أرز"],
+          explanation: "يرجى كتابة اسم طعام أو وجبة محددة لمعرفة حكمه في البرنامج (مسموح، ممنوع، أو مشروط).",
+          allowed: [],
+          forbidden: [],
+          conditional: [],
+          unknown: [],
+          compatibilityScore: null,
+          scoreAvailable: false,
+          analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+          notFound: true,
+        };
+
+        const endTime = performance.now();
+        recordStage("intent_clarify_gate", performance.now() - startTime, { query: queryText });
+
+        return {
+          report: clarifyReport,
+          executionTrace: {
+            totalDurationMs: Math.round(endTime - startTime),
+            orchestrationOverheadMs: 1,
+            stagesExecuted: ["input_gateway", "intent_clarify_gate"],
+            traces: [{ stage: "intent_clarify_gate", timestamp: Date.now(), durationMs: Math.round(endTime - startTime) }],
+          },
+        };
+      }
+    }
+
     // Stage 2: Canonical Search Engine Execution (Dual-Channel Structured Entity Search)
-    const structuredSearch = await CanonicalSearchEngine.searchEntities(queryText, { debug: true });
-    let canonicalSearchRes = structuredSearch.primaryResult || await CanonicalSearchEngine.search(queryText, { debug: true });
+    const structuredSearch = await CanonicalSearchEngine.searchEntities(effectiveQueryText, { debug: true });
+    let canonicalSearchRes = structuredSearch.primaryResult || await CanonicalSearchEngine.search(effectiveQueryText, { debug: true });
 
     // If explicit food entity selection or queryIntent is FOOD, force food primary result
     // MANDATE: NEVER overwrite AMBIGUOUS search outcome!
@@ -668,7 +1095,7 @@ export class UnifiedAnalysisEngine {
       (multiReport as any).refinementSuggestions = candNames;
       (multiReport as any).relevantVariants = candNames;
 
-      const finalizedMultiReport = finalizeReport(multiReport, canonicalSearchRes, null);
+      const finalizedMultiReport = finalizeReport(multiReport, canonicalSearchRes, null, structuredSearch?.queryIntent || "COMPOSITE");
 
       const endTime = performance.now();
       return {
@@ -707,7 +1134,7 @@ export class UnifiedAnalysisEngine {
           analysisType: "barcode" as any,
           notFound: true,
         };
-        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null);
+        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null, "PRODUCT");
         const endTime = performance.now();
         recordStage("barcode_unmapped_termination", performance.now() - startTime, { barcode: input.barcode });
         return {
@@ -757,7 +1184,7 @@ export class UnifiedAnalysisEngine {
           })),
         };
 
-        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null);
+        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null, structuredSearch?.queryIntent || "UNKNOWN");
         const endTime = performance.now();
         recordStage("smart_fallback_direct_termination", performance.now() - startTime, {
           query: queryText,
@@ -815,7 +1242,7 @@ export class UnifiedAnalysisEngine {
           undefined
         );
 
-        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null);
+        const finalizedReport = finalizeReport(notFoundReport, canonicalSearchRes, null, structuredSearch?.queryIntent || "UNKNOWN");
         const endTime = performance.now();
         recordStage("ai_fallback_low_confidence_termination", performance.now() - startTime, { query: queryText, aiConfidence: aiKnowledge.confidence });
 
@@ -942,7 +1369,12 @@ export class UnifiedAnalysisEngine {
         dishResult
       );
 
-      const reportWithCanonical = finalizeReport(finalizedReport, canonicalSearchRes, dishResult);
+      const reportWithCanonical = finalizeReport(
+        finalizedReport,
+        canonicalSearchRes,
+        dishResult,
+        structuredSearch?.queryIntent || "DISH"
+      );
 
       return {
         report: reportWithCanonical,
@@ -987,6 +1419,80 @@ export class UnifiedAnalysisEngine {
       const stage4Start = performance.now();
       const extractedIngredients = input.rawIngredientNames || [];
       recordStage("ingredient_extraction", performance.now() - stage4Start, { extractedCount: extractedIngredients.length });
+
+      // Preflight Dish Variant Clarification Gate:
+      // For ambiguous generic dishes (e.g., "شاورما") without explicit dishId or ingredients,
+      // intercept and return clarification immediately without running recipe compatibility analysis.
+      if (!input.dishId && (!input.rawIngredientNames || input.rawIngredientNames.length === 0)) {
+        const isDishEntity = Boolean(
+          canonicalSearchRes &&
+          ((canonicalSearchRes as any).canonicalEntityType === "dish" || (canonicalSearchRes as any).entity_type === "dish")
+        );
+        if (isDishEntity) {
+          const preflightResolution = await FoodResolutionEngine.resolve(
+            queryText,
+            (input.inputType || "text") as any,
+            1.0
+          );
+          if (preflightResolution.needsClarification && preflightResolution.clarificationType === "DISH_VARIANT") {
+            const preflightClarifyReport: AnalysisReport = {
+              query: queryText,
+              displayQuery: input.displayQuery || queryText,
+              resultMode: "NOT_FOUND",
+              needsClarification: true,
+              clarificationType: "DISH_VARIANT",
+              questionAr: preflightResolution.questionAr,
+              suggestions: (preflightResolution.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || s.query || ""),
+              resolutionState: preflightResolution.state,
+              allowed: [],
+              forbidden: [],
+              conditional: [],
+              unknown: [],
+              compatibilityScore: null,
+              scoreAvailable: false,
+              explanation: preflightResolution.questionAr || "",
+              suggestions_legacy: [],
+              analysisType: (input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text") as any,
+              notFound: true,
+            };
+
+            const finalizedReport = finalizeReport(
+              preflightClarifyReport,
+              canonicalSearchRes,
+              null,
+              structuredSearch?.queryIntent || "DISH"
+            );
+
+            recordStage("dish_variant_clarification_gate", performance.now() - stage4Start, { query: queryText });
+            const totalDurationMs = Math.round((performance.now() - startTime) * 100) / 100;
+            const engineWorkMs = traces.reduce((acc, t) => acc + t.durationMs, 0);
+            const orchestrationOverheadMs = Math.max(0, totalDurationMs - engineWorkMs);
+
+            printStructuredSearchDebugLog({
+              diagnostics,
+              decisionEngine: {
+                allowedCount: 0,
+                forbiddenCount: 0,
+                conditionalCount: 0,
+                unknownCount: 0,
+                compatibilityScore: null,
+                finalDecision: "needs_clarification",
+              },
+              totalExecutionTimeMs: totalDurationMs,
+            });
+
+            return {
+              report: finalizedReport,
+              executionTrace: {
+                totalDurationMs,
+                orchestrationOverheadMs: Math.round(orchestrationOverheadMs * 100) / 100,
+                stagesExecuted,
+                traces,
+              },
+            };
+          }
+        }
+      }
 
       // Stage 5 - 9: Execute Dish Compatibility Engine Pipeline
       const dishEngineStart = performance.now();
@@ -1064,12 +1570,24 @@ export class UnifiedAnalysisEngine {
           notFound: true,
         };
       } else {
+        const isConflictingOrUnverifiedRecipe =
+          dishResult.dish?.id === 1009 ||
+          ((dishResult.dish?.nameAr.includes("خضار") || dishResult.dish?.nameAr.includes("خضروات")) &&
+            (dishResult.dish?.nameAr.toLowerCase().includes("برياني") || dishResult.proteinCategory !== "NONE" || legacyForbidden.some(f => f.nameAr.includes("دجاج") || f.nameAr.includes("لحم")) || legacyAllowed.some(a => a.nameAr.includes("دجاج") || a.nameAr.includes("لحم"))));
+
+        const recipeWarning = isConflictingOrUnverifiedRecipe
+          ? "تنبيه: وصفة هذا الطبق تحتوي على مكونات متضاربة في قاعدة البيانات الحالية (مثل اشتمال برياني الخضار على قطع دجاج أو لحم). تم تصنيف الوصفة بأنها تحتاج إلى مراجعة وتدقيق معتمد (NEEDS_RECIPE_VERIFICATION) دون تلفيق وصفة نظيفة أو تغيير حكمها تلقائياً."
+          : undefined;
+
         report = {
           query: queryText,
           dish: dishResult.dish?.nameAr || queryText || undefined,
           proteinCategory: dishResult.proteinCategory,
           proteinSpecificity: dishResult.proteinSpecificity,
           resultMode: "COMPOSITE_FOOD",
+          needsRecipeVerification: isConflictingOrUnverifiedRecipe ? true : undefined,
+          recipeVerificationStatus: isConflictingOrUnverifiedRecipe ? "NEEDS_RECIPE_VERIFICATION" : undefined,
+          recipeWarning,
           primaryRuling: dishResult.dish
             ? {
                 status: dishResult.finalCompatibility,
@@ -1087,7 +1605,9 @@ export class UnifiedAnalysisEngine {
           compatibilityScore: score,
           ingredientConfidence,
           scoreAvailable,
-          explanation: dishResult.explanation.detailedReasonAr,
+          explanation: recipeWarning
+            ? `${dishResult.explanation.detailedReasonAr}\n\n${recipeWarning}`
+            : dishResult.explanation.detailedReasonAr,
           suggestions: [],
           analysisType: input.inputType === "ocr" ? "label" : input.inputType === "camera" ? "image" : "text",
           notFound: false,
@@ -1185,6 +1705,7 @@ export class UnifiedAnalysisEngine {
               dbNotes: f.notes,
               isInherited: singleResolved.inherited || false,
               inheritsFrom: singleResolved.inheritsFrom,
+              sourceType: determineFoodSource(f.nameAr, pInfo.proteinCategory, f.category),
             },
             allowed: allowedItems,
             forbidden: forbiddenItems,
@@ -1255,6 +1776,7 @@ export class UnifiedAnalysisEngine {
               dbNotes: f.notes,
               isInherited: singleResolved.inherited || false,
               inheritsFrom: singleResolved.inheritsFrom,
+              sourceType: determineFoodSource(f.nameAr, pInfo.proteinCategory, f.category),
             },
             allowed: allowedItems,
             forbidden: forbiddenItems,
@@ -1335,7 +1857,12 @@ export class UnifiedAnalysisEngine {
       dishResult
     );
 
-    const reportWithCanonical = finalizeReport(finalizedReport, canonicalSearchRes, dishResult);
+    const reportWithCanonical = finalizeReport(
+      finalizedReport,
+      canonicalSearchRes,
+      dishResult,
+      structuredSearch?.queryIntent || (dishResult?.dish ? "DISH" : "FOOD")
+    );
 
     return {
       report: reportWithCanonical,
@@ -1377,7 +1904,13 @@ async function checkAndApplyClarification(
     dishResult?.dish?.id != null &&
     (report.resultMode === "COMPOSITE_FOOD" || report.primaryRuling?.status != null);
 
-  if (resolution.needsClarification && !isValidFamilyReport && !isValidDishReport) {
+  const isDishVariantClarification =
+    resolution.needsClarification && resolution.clarificationType === "DISH_VARIANT";
+
+  if (
+    (resolution.needsClarification && !isValidFamilyReport && !isValidDishReport) ||
+    isDishVariantClarification
+  ) {
     return {
       ...report,
       resultMode: "NOT_FOUND",
@@ -1385,6 +1918,7 @@ async function checkAndApplyClarification(
       clarificationType: resolution.clarificationType,
       questionAr: resolution.questionAr,
       suggestions: (resolution.suggestions || []).map((s: any) => typeof s === "string" ? s : s.label || s.query || ""),
+      resolutionState: resolution.state,
       allowed: [],
       forbidden: [],
       conditional: [],
@@ -1402,8 +1936,28 @@ async function checkAndApplyClarification(
 function finalizeReport(
   report: AnalysisReport,
   canonicalSearchRes?: any,
-  dishResult?: any
+  dishResult?: any,
+  queryIntent?: QueryIntent | string
 ): AnalysisReport {
+  if (queryIntent && !report.queryIntent) {
+    report.queryIntent = queryIntent;
+  }
+  if (!report.queryIntent && canonicalSearchRes?.queryIntent) {
+    report.queryIntent = canonicalSearchRes.queryIntent;
+  }
+  if (!report.queryIntent) {
+    report.queryIntent =
+      report.resultMode === "LIST_ALLOWED"
+        ? "LIST_ALLOWED"
+        : report.resultMode === "LIST_RESTRICTED"
+        ? "LIST_RESTRICTED"
+        : report.resultMode === "COMPOSITE_FOOD" || dishResult?.dish
+        ? "DISH"
+        : report.resultMode === "EXACT_FOOD" || Boolean(report.primaryRuling?.nameAr)
+        ? "FOOD"
+        : "UNKNOWN";
+  }
+
   if (canonicalSearchRes) {
     report.canonicalResult = {
       canonicalId:
@@ -1442,5 +1996,44 @@ function finalizeReport(
       searchMethod: "direct_lookup",
     };
   }
+
+  // Selected Candidate determination:
+  // When search requires clarification (e.g. generic dish 'شاورما') or is not found,
+  // NO single candidate was selected, so we must NOT falsely record an arbitrary variant.
+  if (report.needsClarification || report.notFound) {
+    report.selectedCandidate = null;
+  } else if (report.resultMode === "COMPOSITE_FOOD" || dishResult?.dish) {
+    const dishName = dishResult?.dish?.nameAr || canonicalSearchRes?.canonicalName || report.dish || report.query;
+    const dishId = dishResult?.dish?.id ?? canonicalSearchRes?.canonicalId ?? 0;
+    report.selectedCandidate = {
+      type: "dish",
+      id: dishId,
+      nameAr: dishName,
+      reference: `dish: ${dishName}`,
+    };
+  } else if (report.primaryRuling?.nameAr) {
+    const candType = (canonicalSearchRes?.canonicalEntityType || canonicalSearchRes?.entity_type || (dishResult?.dish ? "dish" : "food")) as "food" | "dish" | "product";
+    const candId = canonicalSearchRes?.canonicalId ?? canonicalSearchRes?.canonical_id ?? dishResult?.dish?.id ?? 0;
+    const candName = report.primaryRuling.nameAr;
+    report.selectedCandidate = {
+      type: candType,
+      id: candId,
+      nameAr: candName,
+      reference: `${candType}: ${candName}`,
+    };
+  } else if (canonicalSearchRes && canonicalSearchRes.searchOutcome === "FOUND" && canonicalSearchRes.canonicalName) {
+    const candType = (canonicalSearchRes.canonicalEntityType || canonicalSearchRes.entity_type || "food") as "food" | "dish" | "product";
+    const candId = canonicalSearchRes.canonicalId ?? canonicalSearchRes.canonical_id ?? 0;
+    const candName = canonicalSearchRes.canonicalName;
+    report.selectedCandidate = {
+      type: candType,
+      id: candId,
+      nameAr: candName,
+      reference: `${candType}: ${candName}`,
+    };
+  } else {
+    report.selectedCandidate = null;
+  }
+
   return report;
 }

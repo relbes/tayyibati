@@ -17,7 +17,7 @@ import {
   getUserUsage,
   setSessionToken,
 } from "@/lib/api";
-import { loginRevenueCat } from "@/lib/revenuecat";
+import { loginRevenueCat, logoutRevenueCat } from "@/lib/revenuecat";
 
 interface User {
   id: string;
@@ -468,6 +468,7 @@ const refreshUser = useCallback(async () => {
     setSessionToken(null);
     setUser(null);
     setUsage(null);
+    await logoutRevenueCat();
   }, []);
 
   /**

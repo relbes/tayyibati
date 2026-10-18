@@ -8,6 +8,8 @@ import { requireAdmin } from "./admin";
 import { requireAuth } from "../middleware/requireAuth";
 
 import { getKnowledgeCache, normalizeName, stripArticle } from "../lib/knowledgeCache";
+import { normalize } from "../lib/arabicNormalization";
+import { expandSearchQuery } from "../lib/searchExpansion";
 import { CanonicalSearchEngine, SearchMode } from "../lib/canonicalSearchEngine";
 
 const router = Router();
@@ -404,13 +406,33 @@ router.get("/foods", async (req, res) => {
         conditions.push(inArray(foodsTable.category, possibleCategories));
       }
     }
-    if (search) {
-      conditions.push(
-        or(
-          ilike(foodsTable.nameAr, `%${search}%`),
-          ilike(foodsTable.nameEn, `%${search}%`)
-        )!
-      );
+    if (search && search.trim()) {
+      const cleanSearch = search.trim();
+      const normQ = normalize(cleanSearch);
+
+      const variants = new Set<string>();
+      if (cleanSearch) variants.add(cleanSearch);
+      if (normQ) variants.add(normQ);
+
+      const expanded = expandSearchQuery(cleanSearch);
+      for (const exp of expanded) {
+        const n = normalize(exp);
+        if (n) variants.add(n);
+      }
+
+      // Normalize Arabic letter shapes & diacritics in SQL (أإآ -> ا, ة -> ه, ى -> ي, strip tashkeel/tatweel)
+      const sqlNormNameAr = sql`translate(lower(${foodsTable.nameAr}), 'أإآةىًٌٍَُِّْـ', 'اااهي')`;
+
+      const searchConditions = [
+        ilike(foodsTable.nameEn, `%${cleanSearch}%`),
+        ilike(foodsTable.nameAr, `%${cleanSearch}%`),
+      ];
+
+      for (const v of variants) {
+        searchConditions.push(sql`${sqlNormNameAr} ILIKE ${`%${normalize(v)}%`}`);
+      }
+
+      conditions.push(or(...searchConditions)!);
     }
 
     const foods = await db

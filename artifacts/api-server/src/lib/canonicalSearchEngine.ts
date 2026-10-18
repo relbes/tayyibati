@@ -196,8 +196,13 @@ export function computeRankingScore(
     }
   }
 
-  // 1c. Exact Match on Alias / Synonym (Score 1200)
-  if (aNorm === qNorm || aStripped === qStripped) {
+  // 1c. Exact Match on Alias / Synonym (Score 1200 - 1245)
+  const synTargets = getQuerySynonymTargets(rawQuery);
+  const isDirectSynonym = synTargets.has(cNorm) || synTargets.has(cStripped) || (aNorm && synTargets.has(aNorm)) || (aStripped && synTargets.has(aStripped));
+  if (candParts.length === 1 && isDirectSynonym) {
+    return 1245;
+  }
+  if (aNorm === qNorm || aStripped === qStripped || isDirectSynonym) {
     return 1200;
   }
 
@@ -313,13 +318,19 @@ export function computeRankingScore(
 export function rankCandidates(
   candidates: SearchResult[],
   rawQuery: string,
-  profile: SearchRankingProfile = SearchRankingProfile.AUTOCOMPLETE
+  profile: SearchRankingProfile = SearchRankingProfile.AUTOCOMPLETE,
+  intentHint?: QueryIntent
 ): SearchResult[] {
-  const typeWeight: Record<EntityType, number> = {
-    dish: 30,
-    food: 20,
-    product: 10,
-  };
+  // Context-aware entity-type tie-break (applied ONLY on exact score ties).
+  // Driven by the existing searchEntities() QueryIntent instead of a global Dish > Food > Product bias.
+  // When intent is not clearly FOOD or DISH (UNKNOWN / COMPOSITE / not provided), no type preference
+  // is applied and the remaining neutral tie-breaks (descriptor, length, alphabetical) decide.
+  const typeWeight: Record<EntityType, number> | null =
+    intentHint === "DISH"
+      ? { dish: 30, food: 20, product: 10 }
+      : intentHint === "FOOD"
+        ? { food: 30, dish: 20, product: 10 }
+        : null;
 
   const scored = candidates.map((c) => {
     const score = computeRankingScore(c.canonicalName || "", rawQuery, c.canonicalEntityType || "food", c.matchedAlias || null);
@@ -332,11 +343,13 @@ export function rankCandidates(
     if (b.score !== a.score) {
       return b.score - a.score;
     }
-    // 2. Secondary: Entity Priority (Dish > Food > Product)
-    const wA = typeWeight[a.candidate.canonicalEntityType || "food"] || 0;
-    const wB = typeWeight[b.candidate.canonicalEntityType || "food"] || 0;
-    if (wB !== wA) {
-      return wB - wA;
+    // 2. Secondary: Intent-aware Entity Priority (DISH intent: Dish > Food; FOOD intent: Food > Dish)
+    if (typeWeight) {
+      const wA = typeWeight[a.candidate.canonicalEntityType || "food"] || 0;
+      const wB = typeWeight[b.candidate.canonicalEntityType || "food"] || 0;
+      if (wB !== wA) {
+        return wB - wA;
+      }
     }
     // 2b. Descriptor Penalty: When query lacks descriptors, prefer clean base entities over descriptor-laden candidates
     const qTokens = stripArticle(rawQuery).split(/\s+/);
@@ -800,9 +813,45 @@ export class CanonicalSearchEngine {
 
       // Index distinct named constituents separated by / or — into dishAliasIndex
       const dishParts = d.nameAr.split(/\/|—|\(|\)/);
-      for (const part of dishParts) {
+      const headPartWords = dishParts[0]?.trim().split(/\s+/) || [];
+      const headWord = headPartWords.length > 1 ? headPartWords[0] : "";
+
+      for (let pIdx = 0; pIdx < dishParts.length; pIdx++) {
+        const part = dishParts[pIdx];
         const pTrimmed = part.trim();
         if (pTrimmed.length < 3) continue;
+
+        // If this is a subsequent constituent with only 1 word while the first part had a head noun
+        // (e.g. "مديدة الحلبة / البلَح" -> "مديدة البلح", "شوربة عدس / خضار" -> "شوربة خضار"),
+        // the single word is an alternative modifier, NOT an autonomous dish name!
+        if (pIdx > 0 && headWord && pTrimmed.split(/\s+/).length === 1) {
+          const constructNorm = normalize(`${headWord} ${pTrimmed}`);
+          const constructStrip = stripArticle(constructNorm);
+          if (constructNorm) {
+            const existing = dishAliasIndex.get(constructNorm);
+            if (existing) {
+              const list = Array.isArray(existing) ? existing : [existing];
+              if (!list.some((item: any) => item.id === d.id)) list.push(d);
+              dishAliasIndex.set(constructNorm, list);
+            } else {
+              dishAliasIndex.set(constructNorm, d);
+            }
+            addPrefix(dishPrefixIndex, constructNorm, d);
+          }
+          if (constructStrip && constructStrip !== constructNorm) {
+            const existing = dishAliasIndex.get(constructStrip);
+            if (existing) {
+              const list = Array.isArray(existing) ? existing : [existing];
+              if (!list.some((item: any) => item.id === d.id)) list.push(d);
+              dishAliasIndex.set(constructStrip, list);
+            } else {
+              dishAliasIndex.set(constructStrip, d);
+            }
+            addPrefix(dishPrefixIndex, constructStrip, d);
+          }
+          continue;
+        }
+
         const pNorm = normalize(pTrimmed);
         const pStrip = stripArticle(pNorm);
         if (pNorm && pNorm !== normAr) {
@@ -1789,22 +1838,42 @@ export class CanonicalSearchEngine {
       const qNorm = queryNorm;
       const qStripped = stripArticle(qNorm);
       const prefixKey = qNorm.slice(0, Math.min(qNorm.length, 3));
+      const expandedVariants = expandSearchQuery(rawQuery);
+      const expandedNorms = expandedVariants.map((v) => normalize(v));
+      const expandedStripped = expandedVariants.map((v) => stripArticle(normalize(v)));
+
+      // Collect all prefix keys from query and its expanded variants
+      const foodPrefixKeys = new Set<string>();
+      if (prefixKey) foodPrefixKeys.add(prefixKey);
+      for (const ev of expandedVariants) {
+        const evNorm = normalize(ev);
+        if (evNorm && evNorm.length >= 2) foodPrefixKeys.add(evNorm.slice(0, Math.min(evNorm.length, 3)));
+        const evStrip = stripArticle(evNorm);
+        if (evStrip && evStrip.length >= 2) foodPrefixKeys.add(evStrip.slice(0, Math.min(evStrip.length, 3)));
+      }
 
       // 1. FOODS: Check foodPrefixIndex & foodAliasIndex
-      const prefixFoods = indexes.foodPrefixIndex.get(prefixKey) || [];
-      for (const f of prefixFoods) {
-        const normAr = normalize(f.nameAr);
-        const strippedAr = stripArticle(normAr);
-        if (normAr.startsWith(qNorm) || strippedAr.startsWith(qStripped) || normAr.includes(qNorm)) {
-          const isPrefix = normAr.startsWith(qNorm) || strippedAr.startsWith(qStripped);
-          addCandidate({
-            canonicalId: f.id,
-            canonicalEntityType: "food",
-            canonicalName: f.nameAr,
-            searchConfidence: isPrefix ? 98 : 82,
-            matchType: isPrefix ? "PREFIX" : "FUZZY",
-            matchedReason: isPrefix ? "Matched via Food Prefix Index" : "Matched via Food Partial Match",
-          });
+      for (const pk of foodPrefixKeys) {
+        const prefixFoods = indexes.foodPrefixIndex.get(pk) || [];
+        for (const f of prefixFoods) {
+          const normAr = normalize(f.nameAr);
+          const strippedAr = stripArticle(normAr);
+          const isDirectPrefix = normAr.startsWith(qNorm) || strippedAr.startsWith(qStripped);
+          const isDirectSub = normAr.includes(qNorm) || strippedAr.includes(qStripped);
+          const isVariantPrefix = expandedNorms.some((en) => normAr.startsWith(en) || strippedAr.startsWith(en) || en.startsWith(normAr) || en.startsWith(strippedAr));
+          const isVariantSub = expandedStripped.some((es) => normAr.includes(es) || strippedAr.includes(es) || es.includes(normAr) || es.includes(strippedAr));
+
+          if (isDirectPrefix || isDirectSub || isVariantPrefix || isVariantSub) {
+            const isPrefix = isDirectPrefix || isVariantPrefix;
+            addCandidate({
+              canonicalId: f.id,
+              canonicalEntityType: "food",
+              canonicalName: f.nameAr,
+              searchConfidence: isPrefix ? 98 : 82,
+              matchType: isPrefix ? "PREFIX" : "FUZZY",
+              matchedReason: isPrefix ? "Matched via Food Prefix Index" : "Matched via Food Partial Match",
+            });
+          }
         }
       }
 
@@ -1893,8 +1962,14 @@ export class CanonicalSearchEngine {
         });
       }
 
-      // Rank candidates using Phase 7.2 Intelligent Weighted Ranking Engine
-      const rankedCandidates = rankCandidates(candidates, rawQuery, SearchRankingProfile.AUTOCOMPLETE);
+      // Rank candidates using Phase 7.2 Intelligent Weighted Ranking Engine.
+      // Entity-type tie-breaks reuse the existing searchEntities() QueryIntent (only needed when types are mixed).
+      const candidateTypes = new Set(candidates.map((c) => c.canonicalEntityType || "food"));
+      const intentHint: QueryIntent | undefined =
+        candidateTypes.size > 1
+          ? (await this.searchEntities(rawQuery, { mode: SearchMode.AUTOCOMPLETE })).queryIntent
+          : undefined;
+      const rankedCandidates = rankCandidates(candidates, rawQuery, SearchRankingProfile.AUTOCOMPLETE, intentHint);
 
       if (rankedCandidates.length === 0) {
         return this.formatResult({
@@ -2833,9 +2908,12 @@ export class CanonicalSearchEngine {
     if (queryTokens.length > 0) {
       const qHead = queryTokens[0];
       const rawDishParts = (candidateDish.nameAr || stripDish).split(/\/|[/—,()]+/);
+      const headPartWords = rawDishParts[0]?.trim().split(/\s+/) || [];
+      const primaryDishHead = headPartWords.length > 1 ? stripArticle(normalize(headPartWords[0])) : "";
       let matchedDishHead = false;
 
-      for (const part of rawDishParts) {
+      for (let pIdx = 0; pIdx < rawDishParts.length; pIdx++) {
+        const part = rawDishParts[pIdx];
         const pNorm = normalize(part.trim());
         const pStrip = stripArticle(pNorm);
         const pTokens = pStrip.split(/\s+/).filter((t) => t.length > 1 && !GENERIC_CATEGORY_WORDS.has(t));
@@ -2844,7 +2922,7 @@ export class CanonicalSearchEngine {
           break;
         }
 
-        const pHead = pTokens[0];
+        const pHead = (pIdx > 0 && primaryDishHead && pTokens.length === 1) ? primaryDishHead : pTokens[0];
         if (
           pHead === qHead ||
           pHead.startsWith(qHead) ||

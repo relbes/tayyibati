@@ -71,7 +71,15 @@ export interface ReportIngredientDecision {
 
 export interface AnalysisReport {
   query: string;
-  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND" | "MULTIPLE_DISHES" | "LIST_ALLOWED" | "LIST_RESTRICTED";
+  displayQuery?: string;
+  queryIntent?: string;
+  resultMode?: "EXACT_FOOD" | "GENERAL_RULE" | "GENERAL_RULE_EXCEPTIONS" | "SPECIFIC_INHERITED" | "MIXED_CATEGORY" | "COMPOSITE_FOOD" | "UNKNOWN_FOOD" | "NOT_FOUND" | "MULTIPLE_DISHES" | "LIST_ALLOWED" | "LIST_RESTRICTED" | "CATEGORY_REPORT" | "UNSUPPORTED_QUESTION" | "MULTI_ITEM";
+  targetCategory?: string;
+  categoryStats?: any;
+  multiItemResults?: any[];
+  needsRecipeVerification?: boolean;
+  recipeVerificationStatus?: string;
+  recipeWarning?: string;
   action?: {
     type: "NAVIGATE_BROWSE" | "CLARIFY" | "DIRECT_EVALUATE";
     filter?: "allowed" | "forbidden" | "conditional" | "all";
@@ -82,12 +90,14 @@ export interface AnalysisReport {
   dishAnalysis?: DishAnalysisPayload;
 
   primaryRuling?: {
+    foodId?: number | string | null;
+    categoryAr?: string | null;
     status: "allowed" | "forbidden" | "conditional" | "unknown";
     nameAr: string;
-    nameEn: string;
-    dbReason: string | null;
-    dbNotes: string | null;
-    isInherited: boolean;
+    nameEn?: string;
+    dbReason?: string | null;
+    dbNotes?: string | null;
+    isInherited?: boolean;
     inheritsFrom?: { nameAr: string; nameEn: string };
   };
 
@@ -114,7 +124,7 @@ export interface AnalysisReport {
   forbidden: IngredientResult[];
   conditional: IngredientResult[];
   unknown: IngredientResult[];
-  explanation: string;
+  explanation?: string;
   suggestions?: string[] | Array<{
     label: string;
     proteinCategory?: string;

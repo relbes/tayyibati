@@ -193,9 +193,12 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
     let mapped = allItems.map((i) => {
       const uId = i.userId ? i.userId.trim() : "";
       const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "غير متوفر";
+      const rep = (i.report || {}) as any;
       return {
         ...i,
         userEmail: email,
+        queryIntent: rep.queryIntent || null,
+        selectedCandidate: rep.selectedCandidate || null,
       };
     });
 
@@ -264,9 +267,22 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
     const users = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
     const userMap = new Map(users.map((u) => [u.id, u.email]));
 
-    const headers = ["id", "user_email", "query", "analysis_type", "compatibility_score", "status", "created_at"];
+    const headers = [
+      "id",
+      "user_email",
+      "query",
+      "analysis_type",
+      "compatibility_score",
+      "status",
+      "intent",
+      "selected_candidate",
+      "created_at",
+    ];
     const rows = items.map((i) => {
       const rep = (i.report || {}) as any;
+      const selCandRef =
+        rep.selectedCandidate?.reference ||
+        (rep.selectedCandidate?.nameAr ? `${rep.selectedCandidate.type}: ${rep.selectedCandidate.nameAr}` : "");
       return [
         i.id,
         userMap.get(i.userId) || "غير متوفر",
@@ -274,6 +290,8 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
         i.analysisType,
         i.compatibilityScore ?? 0,
         rep.status || "unknown",
+        rep.queryIntent || "",
+        selCandRef,
         i.createdAt ? new Date(i.createdAt).toISOString() : "",
       ];
     });
