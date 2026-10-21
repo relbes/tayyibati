@@ -135,14 +135,6 @@ export async function warmDishEngineCache(): Promise<DishEngineCache> {
     } as any);
   }
 
-  if (!dishesList.some((d) => d.nameAr === "برياني")) {
-    dishesList.push({
-      id: 9998,
-      nameAr: "برياني",
-      nameEn: "Biryani",
-      category: "أطباق رئيسية",
-    } as any);
-  }
 
   const foodsById = new Map<number, any>();
   const foodsByNormAr = new Map<string, any[]>();

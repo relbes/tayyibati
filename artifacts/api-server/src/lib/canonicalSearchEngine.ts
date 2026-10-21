@@ -520,6 +520,26 @@ export class CanonicalSearchEngine {
     return stripArticle(str);
   }
 
+  private static testFixture: { knowledgeCache: any; dishCache: any } | null = null;
+  public static setTestFixture(fixture: { knowledgeCache: any; dishCache: any } | null): void {
+    CanonicalSearchEngine.testFixture = fixture;
+    cachedIndexes = null;
+  }
+
+  /**
+   * Toast Specificity Guard:
+   * Determines whether a query explicitly contains permitted whole-grain, bran,
+   * or specific brand qualifiers for toast (e.g. سن, نخالة, قمح كامل, ريتش بيك).
+   * Generic or unqualified toast queries ("توست", "توست سادة", "توست محمص") must never
+   * be allowed to collapse into allowed bran toast.
+   */
+  public static isQualifiedBranToast(query: string | null | undefined): boolean {
+    if (!query) return false;
+    const qNorm = normalize(query);
+    const pattern = /(?:^|\s)(?:سن|السن|نخال[ةه]|النخال[ةه]|بالنخال[ةه]|قمح\s+كامل|القمح\s+الكامل|ريتش\s*بيك|اسمر|الاسمر)(?:$|\s)/;
+    return pattern.test(qNorm);
+  }
+
   /**
    * Precompute O(1) Hash Map and Prefix Indexes for Foods, Dishes, Products, and Aliases
    */
@@ -529,10 +549,12 @@ export class CanonicalSearchEngine {
       return cachedIndexes;
     }
 
-    const knowledgeCache = await getKnowledgeCache();
-    const dishCache = await warmDishEngineCache();
-    await loadDbSynonyms();
-    ProductDatabase.initialize();
+    const knowledgeCache = CanonicalSearchEngine.testFixture ? CanonicalSearchEngine.testFixture.knowledgeCache : await getKnowledgeCache();
+    const dishCache = CanonicalSearchEngine.testFixture ? CanonicalSearchEngine.testFixture.dishCache : await warmDishEngineCache();
+    if (!CanonicalSearchEngine.testFixture) {
+      await loadDbSynonyms();
+      ProductDatabase.initialize();
+    }
 
     const barcodeIndex = new Map<string, any>();
     const exactProductIndex = new Map<string, any>();
@@ -679,6 +701,14 @@ export class CanonicalSearchEngine {
         const pNoAlef = pStrip.replace(/^[اأإآ]/, "");
         const pNoAl = pNorm.startsWith("ال") && pNorm.length > 3 ? pNorm.slice(2) : "";
 
+        // Legacy Composite Cheese Guard:
+        // Food #1578 is a composite legacy bucket ("الكيري / لبنيتا / طعمة").
+        // Do not index standalone "كيري" / "الكيري" tokens for Food #1578 to prevent search collisions,
+        // while allowing "طعمة" and "لبنيتا" to continue resolving to forbidden Food #1578.
+        if (f.id === 1578 && (pStrip === "كيري" || pNorm === "الكيري" || pTrimmed.includes("كيري"))) {
+          continue;
+        }
+
         if (pNorm) {
           addExactFood(pNorm, f);
           addPrefix(foodPrefixIndex, pNorm, f);
@@ -763,8 +793,10 @@ export class CanonicalSearchEngine {
         }
       }
 
-      addPrefix(foodPrefixIndex, normAr, f);
-      addPrefix(foodPrefixIndex, stripAr, f);
+      if (f.id !== 1578) {
+        addPrefix(foodPrefixIndex, normAr, f);
+        addPrefix(foodPrefixIndex, stripAr, f);
+      }
     }
 
     for (const a of knowledgeCache.aliases || []) {
@@ -993,7 +1025,7 @@ export class CanonicalSearchEngine {
     }
 
     const indexes = await this.buildIndexes();
-    const dishCache = await warmDishEngineCache();
+    const dishCache = CanonicalSearchEngine.testFixture ? CanonicalSearchEngine.testFixture.dishCache : await warmDishEngineCache();
     const expandedVariants = expandSearchQuery(rawQuery);
     const synonymTargetVariants = getQuerySynonymTargets(rawQuery);
     const qStripped = stripArticle(queryNorm);
@@ -1077,6 +1109,21 @@ export class CanonicalSearchEngine {
     for (const pk of prefixKeys) {
       const pFoods = indexes.foodPrefixIndex.get(pk) || [];
       for (const f of pFoods) {
+        // Toast Specificity Guard: prevent generic toast queries from matching allowed bran toast via prefix index
+        const isToastQuery = queryNorm.includes("توست") || rawQuery.includes("توست");
+        const isBranToastFood = f.id === 1551 || (f.nameAr && f.nameAr.includes("توست") && f.status === "allowed");
+        if (isToastQuery && isBranToastFood && !CanonicalSearchEngine.isQualifiedBranToast(rawQuery)) {
+          continue;
+        }
+
+        // Food #1578 Disaggregation Guard:
+        // Food #1578 is a composite legacy bucket ("الكيري / لبنيتا / طعمة").
+        // Do not match standalone "كيري" / "الكيري" queries to Food #1578,
+        // while allowing "طعمة" and "لبنيتا" to continue resolving to Food #1578.
+        if (f.id === 1578 && (queryNorm === "كيري" || queryNorm === "الكيري" || qStripped === "كيري")) {
+          continue;
+        }
+
         if (!seenFoodIds.has(f.id)) {
           const fNorm = normalize(f.nameAr);
           const fStrip = stripArticle(fNorm);
@@ -1153,6 +1200,17 @@ export class CanonicalSearchEngine {
       const baseVariantsList = indexes.baseFoodIndex.get(bKey) || [];
       for (const bf of baseVariantsList) {
         if (!seenFoodIds.has(bf.id)) {
+          // Toast Specificity Guard: prevent generic toast queries from matching allowed bran toast
+          const isToastQuery = queryNorm.includes("توست") || (extractedBase && extractedBase.includes("توست"));
+          const isBranToastFood = bf.id === 1551 || (bf.nameAr && bf.nameAr.includes("توست") && bf.status === "allowed");
+          if (isToastQuery && isBranToastFood && !CanonicalSearchEngine.isQualifiedBranToast(rawQuery)) {
+            continue;
+          }
+
+          // Food #1578 Disaggregation Guard:
+          if (bf.id === 1578 && (queryNorm === "كيري" || queryNorm === "الكيري" || qStripped === "كيري")) {
+            continue;
+          }
           seenFoodIds.add(bf.id);
           foods.push({
             canonicalId: bf.id,
@@ -1856,6 +1914,13 @@ export class CanonicalSearchEngine {
       for (const pk of foodPrefixKeys) {
         const prefixFoods = indexes.foodPrefixIndex.get(pk) || [];
         for (const f of prefixFoods) {
+          // Toast Specificity Guard: prevent generic toast queries from matching allowed bran toast via prefix index
+          const isToastQuery = qNorm.includes("توست") || rawQuery.includes("توست");
+          const isBranToastFood = f.id === 1551 || (f.nameAr && f.nameAr.includes("توست") && f.status === "allowed");
+          if (isToastQuery && isBranToastFood && !CanonicalSearchEngine.isQualifiedBranToast(rawQuery)) {
+            continue;
+          }
+
           const normAr = normalize(f.nameAr);
           const strippedAr = stripArticle(normAr);
           const isDirectPrefix = normAr.startsWith(qNorm) || strippedAr.startsWith(qStripped);
@@ -2447,7 +2512,7 @@ export class CanonicalSearchEngine {
       const modifiers = extractionRes.modifiers;
       const baseVariants = expandSearchQuery(extractionRes.baseEntity);
       const baseConfidence = 100;
-      const dishCache = await warmDishEngineCache();
+      const dishCache = CanonicalSearchEngine.testFixture ? CanonicalSearchEngine.testFixture.dishCache : await warmDishEngineCache();
 
       // Rule 1 Prepared Dish Guard:
       // If the query contains explicit culinary/preparation indicators (e.g. "مشوي", "بالفرن", "مقلي", "طاجن", "محشي"),
@@ -2500,6 +2565,10 @@ export class CanonicalSearchEngine {
         const exactFoodHit = indexes.exactFoodIndex.get(bVar);
         if (exactFoodHit) {
           const primaryFood = Array.isArray(exactFoodHit) ? exactFoodHit[0] : exactFoodHit;
+          // Toast Specificity Guard: prevent base entity "توست" from collapsing to allowed bran toast
+          if (bVar === "توست" && (primaryFood.id === 1551 || (primaryFood.nameAr && primaryFood.nameAr.includes("توست") && primaryFood.status === "allowed")) && !CanonicalSearchEngine.isQualifiedBranToast(rawQuery)) {
+            continue;
+          }
           foodCount++;
           foodDetails.push(`${primaryFood.nameAr} via base entity '${baseEntity}' (${baseConfidence}%)`);
           return this.formatResult({
@@ -2576,6 +2645,12 @@ export class CanonicalSearchEngine {
         break;
       }
     }
+    if (baseVariantsList.length > 0) {
+      // Toast Specificity Guard: filter out allowed bran toast for unqualified toast queries
+      if ((queryNorm.includes("توست") || (baseEntity && baseEntity.includes("توست"))) && !CanonicalSearchEngine.isQualifiedBranToast(rawQuery)) {
+        baseVariantsList = baseVariantsList.filter((f: any) => !(f.id === 1551 || (f.nameAr && f.nameAr.includes("توست") && f.status === "allowed")));
+      }
+    }
     if (baseVariantsList.length > 1) {
       const candidates: SearchResult[] = baseVariantsList.map((f: any) => ({
         canonicalId: f.id,
@@ -2615,7 +2690,7 @@ export class CanonicalSearchEngine {
     }
 
     // TIER 7: Candidate-Bounded Fuzzy / Similarity Match (Evaluates all expanded variants)
-    const knowledgeCache = await getKnowledgeCache();
+    const knowledgeCache = CanonicalSearchEngine.testFixture ? CanonicalSearchEngine.testFixture.knowledgeCache : await getKnowledgeCache();
 
     // Check fuzzy on dishes first across all expanded variants with canonical prioritization ranking and Equivalence Guard
     const dishCandidates: Array<{ dish: any; score: number; method: SearchMethod; variant: string }> = [];
@@ -2651,6 +2726,18 @@ export class CanonicalSearchEngine {
     const foodCandidates: Array<{ food: any; score: number; method: SearchMethod; variant: string }> = [];
     for (const variant of expandedVariants) {
       for (const f of knowledgeCache.foods || []) {
+        // Toast Specificity Guard: prevent generic toast queries from fuzzy matching allowed bran toast
+        const isToastQuery = queryNorm.includes("توست") || rawQuery.includes("توست");
+        const isBranToastFood = f.id === 1551 || (f.nameAr && f.nameAr.includes("توست") && f.status === "allowed");
+        if (isToastQuery && isBranToastFood && !CanonicalSearchEngine.isQualifiedBranToast(rawQuery)) {
+          continue;
+        }
+
+        // Food #1578 Disaggregation Guard:
+        if (f.id === 1578 && (queryNorm === "كيري" || queryNorm === "الكيري" || stripArticle(queryNorm) === "كيري")) {
+          continue;
+        }
+
         const fNorm = normalize(f.nameAr);
         const match = this.calculateTokenMatch(variant, fNorm, false);
         if (match.matches && match.score >= 60) {
