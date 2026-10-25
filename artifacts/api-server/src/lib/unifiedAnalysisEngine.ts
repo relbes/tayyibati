@@ -1048,11 +1048,12 @@ export class UnifiedAnalysisEngine {
         };
       });
 
-      // Deduplicate matches by ID
-      const uniqueMatchesMap = new Map<number | string, typeof rawMatches[0]>();
+      // Deduplicate matches by ID and Name to preserve distinct variants of umbrella entities
+      const uniqueMatchesMap = new Map<string, typeof rawMatches[0]>();
       for (const m of rawMatches) {
-        if (!uniqueMatchesMap.has(m.id)) {
-          uniqueMatchesMap.set(m.id, m);
+        const dedupKey = `${m.id}_${m.nameAr}`;
+        if (!uniqueMatchesMap.has(dedupKey)) {
+          uniqueMatchesMap.set(dedupKey, m);
         }
       }
       let pureMatches = Array.from(uniqueMatchesMap.values());

@@ -17,6 +17,7 @@
 
 import { getKnowledgeCache } from "./knowledgeCache";
 import { warmDishEngineCache } from "./dishCompatibilityEngine";
+import { FoodResolutionEngine } from "./foodResolutionEngine";
 import { ProductDatabase } from "./productDatabase";
 import {
   normalize,
@@ -1547,12 +1548,75 @@ export class CanonicalSearchEngine {
       if (exactCandidates.length === 1) {
         // EXACT UNIQUE MATCH: Single exact match resolves directly with zero ambiguity
         const ec = exactCandidates[0];
-        primaryResult = {
-          ...ec,
-          searchOutcome: "FOUND",
-          matchType: "EXACT",
-        };
-        queryIntent = ec.canonicalEntityType === "dish" ? "DISH" : "FOOD";
+
+        // GENERIC AMBIGUOUS DISH VARIANT CHECK:
+        // If the single exact candidate is a Dish (e.g. "شاورما"), check whether it represents
+        // a generic umbrella dish requiring variant selection (e.g. beef/lamb vs chicken).
+        let isAmbiguousUmbrellaDish = false;
+        let umbrellaResolution: any = null;
+        const qNormExact = stripArticle(normalize(rawQuery));
+        if ((ec.canonicalEntityType === "dish" || ec.entity_type === "dish") && (qNormExact === "شاورما" || stripArticle(normalize(ec.canonicalName || "")) === "شاورما")) {
+          try {
+            umbrellaResolution = await FoodResolutionEngine.resolve(rawQuery, "text", 1.0);
+            if (
+              umbrellaResolution &&
+              umbrellaResolution.needsClarification &&
+              umbrellaResolution.clarificationType === "DISH_VARIANT" &&
+              (umbrellaResolution.suggestions?.length || 0) >= 2
+            ) {
+              isAmbiguousUmbrellaDish = true;
+            }
+          } catch (e) {
+            // Safe fallback if FoodResolutionEngine is unavailable
+          }
+        }
+
+        if (isAmbiguousUmbrellaDish && umbrellaResolution?.suggestions) {
+          const variantDishes: CanonicalSearchResult[] = umbrellaResolution.suggestions.map((s: any, idx: number) => {
+            const vName = typeof s === "string" ? s : s.label || s.query || "";
+            return {
+              canonicalId: ec.canonicalId ?? ec.canonical_id ?? 0,
+              canonical_id: ec.canonicalId ?? ec.canonical_id ?? 0,
+              canonicalName: vName,
+              canonical_name: vName,
+              canonicalEntityType: "dish",
+              entity_type: "dish",
+              searchConfidence: 95 - idx,
+              confidence: 95 - idx,
+              matchType: "VARIANT",
+              searchOutcome: "FOUND",
+              matchedReason: `Dish Variant (${typeof s === "object" ? s.proteinSpecificity || s.proteinCategory || "variant" : "variant"})`,
+            };
+          });
+
+          const qAr = umbrellaResolution.questionAr || formatAmbiguityQuestion(rawQuery);
+          displayDishes = variantDishes;
+          primaryResult = {
+            canonicalId: 0,
+            canonical_id: 0,
+            canonicalName: rawQuery,
+            canonical_name: rawQuery,
+            canonicalEntityType: "dish",
+            entity_type: "dish",
+            searchConfidence: 95,
+            confidence: 95,
+            matchType: "AMBIGUOUS",
+            searchOutcome: "AMBIGUOUS",
+            isAmbiguous: true,
+            candidateDishes: variantDishes,
+            candidateFoods: variantDishes,
+            questionAr: qAr,
+            matchedReason: `Ambiguous generic dish with ${variantDishes.length} variants for '${rawQuery}'`,
+          };
+          queryIntent = "DISH";
+        } else {
+          primaryResult = {
+            ...ec,
+            searchOutcome: "FOUND",
+            matchType: "EXACT",
+          };
+          queryIntent = ec.canonicalEntityType === "dish" ? "DISH" : "FOOD";
+        }
       } else if (exactCandidates.length > 1) {
         // Multiple exact candidates: Check if they are distinct entities across Food vs Dish
         const hasBothFoodAndDish = exactCandidates.some((c) => (c.canonicalEntityType || c.entity_type) === "food") && exactCandidates.some((c) => (c.canonicalEntityType || c.entity_type) === "dish");
@@ -1628,15 +1692,22 @@ export class CanonicalSearchEngine {
         }
       } else {
         // Step B: No Exact Match. Evaluate Specific Disambiguation vs Genuine Semantic Ambiguity
+        const candidatePool = queryIntent === "FOOD"
+          ? (displayFoods.length > 0 ? displayFoods : foods)
+          : queryIntent === "DISH"
+          ? (displayDishes.length > 0 ? displayDishes : dishes)
+          : [...displayFoods, ...displayDishes];
+
+        const plausibleCandidates = candidatePool.filter((c) => {
+          const conf = c.searchConfidence ?? c.confidence ?? 0;
+          return conf >= 60 || c.matchType === "PREFIX" || c.search_method === "starts_with";
+        });
+
+        // Also evaluate genuine Dish ambiguity
         const strongDishes = dishes.filter((d) => {
           const s = computeRankingScore(d.canonicalName || "", rawQuery, "dish", d.matchedAlias);
           return s >= 900;
         });
-
-        const qTokens = stripArticle(queryNorm).split(/\s+/);
-        const hasSpecificDescriptor = qTokens.some(
-          (qt) => hasRecognizedDescriptor(qt) || PROTEIN_DESCRIPTORS.has(qt) || PREPARATION_DESCRIPTORS.has(qt)
-        );
 
         const distinctDishes: CanonicalSearchResult[] = [];
         const seenDishIds = new Set<number | string>();
@@ -1649,53 +1720,69 @@ export class CanonicalSearchEngine {
         }
 
         const topDish = dishes[0];
-        const topScore = topDish ? computeRankingScore(topDish.canonicalName || "", rawQuery, "dish", topDish.matchedAlias) : 0;
+        const topScoreDish = topDish ? computeRankingScore(topDish.canonicalName || "", rawQuery, "dish", topDish.matchedAlias) : 0;
         const secondDish = dishes[1];
-        const secondScore = secondDish ? computeRankingScore(secondDish.canonicalName || "", rawQuery, "dish", secondDish.matchedAlias) : 0;
-        const scoreGap = topScore - secondScore;
+        const secondScoreDish = secondDish ? computeRankingScore(secondDish.canonicalName || "", rawQuery, "dish", secondDish.matchedAlias) : 0;
+        const scoreGapDish = topScoreDish - secondScoreDish;
 
-        // Genuine Dish Ambiguity:
-        // 1. Query has DISH intent
-        // 2. Query lacks distinguishing descriptors (e.g. "مكمورة" or "المكمورة الأردنية")
-        // 3. At least 2 distinct strong dishes with small score gap (< 100)
-        // 4. OR generic single-word stem query (like "مكمورة") with multiple candidate dishes where top dish is not exact full match (score < 1200)
-        const isGenericStem = queryWords.length === 1 && topScore < 1200;
-        const hasCompetingStrongDishes = distinctDishes.length >= 2 && strongDishes.length >= 2 && scoreGap < 100;
+        const isGenericStemDish = queryWords.length === 1 && topScoreDish < 1200;
+        const hasCompetingStrongDishes = distinctDishes.length >= 2 && strongDishes.length >= 2 && scoreGapDish < 100;
         const isDishAmbiguous =
           queryIntent === "DISH" &&
-          !hasSpecificDescriptor &&
           distinctDishes.length >= 2 &&
-          (hasCompetingStrongDishes || (isGenericStem && topScore >= 800));
+          (hasCompetingStrongDishes || (isGenericStemDish && topScoreDish >= 800) || plausibleCandidates.length >= 2);
 
-        if (isDishAmbiguous) {
+        // General Ambiguity Evaluation across Foods & Dishes:
+        // A prefix match alone or incomplete query fragment must not arbitrarily crown a specific entity!
+        const topCandidate = candidatePool[0] || null;
+        const secondCandidate = candidatePool[1] || null;
+
+        const topScore = topCandidate
+          ? computeRankingScore(topCandidate.canonicalName || "", rawQuery, topCandidate.canonicalEntityType || "food", topCandidate.matchedAlias)
+          : 0;
+        const secondScore = secondCandidate
+          ? computeRankingScore(secondCandidate.canonicalName || "", rawQuery, secondCandidate.canonicalEntityType || "food", secondCandidate.matchedAlias)
+          : 0;
+        const scoreGap = topScore - secondScore;
+
+        const isPrefixOrFuzzy = topCandidate?.matchType === "PREFIX" || topCandidate?.matchType === "FUZZY" || topCandidate?.search_method === "starts_with";
+        const hasCompetingCandidates = plausibleCandidates.length >= 2 && (isPrefixOrFuzzy || scoreGap < 150 || topScore < 1150);
+
+        if (hasCompetingCandidates || isDishAmbiguous) {
           const qAr = formatAmbiguityQuestion(rawQuery);
-          const allDishCandidates = rankCandidates(dishes, rawQuery, SearchRankingProfile.AUTOCOMPLETE);
-          displayDishes = allDishCandidates;
+          const allCandidates = queryIntent === "FOOD"
+            ? (displayFoods.length > 0 ? displayFoods : foods)
+            : queryIntent === "DISH"
+            ? (displayDishes.length > 0 ? displayDishes : dishes)
+            : [...displayFoods, ...displayDishes];
+
+          displayFoods = queryIntent === "DISH" ? [] : allCandidates;
+          displayDishes = queryIntent === "FOOD" ? [] : allCandidates;
 
           primaryResult = {
             canonicalId: 0,
             canonical_id: 0,
             canonicalName: rawQuery,
             canonical_name: rawQuery,
-            canonicalEntityType: "dish",
-            entity_type: "dish",
+            canonicalEntityType: queryIntent === "DISH" ? "dish" : "food",
+            entity_type: queryIntent === "DISH" ? "dish" : "food",
             searchConfidence: 85,
             confidence: 85,
             matchType: "AMBIGUOUS",
             searchOutcome: "AMBIGUOUS",
             isAmbiguous: true,
-            candidateDishes: allDishCandidates,
-            candidateFoods: allDishCandidates,
+            candidateDishes: allCandidates,
+            candidateFoods: allCandidates,
             questionAr: qAr,
-            matchedReason: `Matched ${allDishCandidates.length} candidate dishes for '${rawQuery}'`,
+            matchedReason: `Matched ${allCandidates.length} candidate entities for partial/ambiguous query '${rawQuery}'`,
           };
         } else {
           // Strong Single Match or Highest-Scoring Semantically Valid Entity
-          const topCandidate = displayDishes[0] || displayFoods[0] || foods[0] || dishes[0] || null;
-          if (topCandidate) {
+          const topCand = displayDishes[0] || displayFoods[0] || foods[0] || dishes[0] || null;
+          if (topCand) {
             primaryResult = {
-              ...topCandidate,
-              searchOutcome: (topCandidate.searchConfidence ?? 0) >= 60 ? "FOUND" : "NOT_FOUND",
+              ...topCand,
+              searchOutcome: (topCand.searchConfidence ?? 0) >= 60 ? "FOUND" : "NOT_FOUND",
             };
           } else {
             primaryResult = null;

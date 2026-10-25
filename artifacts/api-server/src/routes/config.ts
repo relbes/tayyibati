@@ -198,4 +198,98 @@ router.patch("/config/:key", requireAdmin, async (req, res) => {
   }
 });
 
+export interface AppVersionResponse {
+  latestVersion: string;
+  minVersion: string;
+  releaseNotes: string;
+  android: {
+    packageId: string;
+    storeUrl: string;
+    marketUrl: string;
+  };
+  ios: {
+    bundleId: string;
+    storeUrl: string;
+  };
+}
+
+export async function getAppVersionPayload(query?: { simulatedVersion?: unknown }): Promise<AppVersionResponse> {
+  let latestVersion = process.env.APP_LATEST_VERSION?.trim() || "1.0.5";
+  let minVersion = process.env.APP_MIN_VERSION?.trim() || "1.0.0";
+  let releaseNotes =
+    process.env.APP_RELEASE_NOTES?.trim() ||
+    "يتوفر إصدار جديد من تطبيق طيباتي. حدّث التطبيق للحصول على أحدث التحسينات.";
+
+  // Check if appConfigTable has custom version keys (read-only)
+  try {
+    const [rowVersion] = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.key, "app_latest_version"));
+    if (rowVersion?.value?.trim()) {
+      latestVersion = rowVersion.value.trim();
+    }
+    const [rowMin] = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.key, "app_min_version"));
+    if (rowMin?.value?.trim()) {
+      minVersion = rowMin.value.trim();
+    }
+    const [rowNotes] = await db
+      .select()
+      .from(appConfigTable)
+      .where(eq(appConfigTable.key, "app_release_notes"));
+    if (rowNotes?.value?.trim()) {
+      releaseNotes = rowNotes.value.trim();
+    }
+  } catch {
+    // Non-blocking fallback
+  }
+
+  // Support simulatedVersion query for automated verification or non-production testing
+  const allowSimulation =
+    process.env.NODE_ENV !== "production" ||
+    process.env.ENABLE_VERSION_SIMULATION === "true";
+
+  if (allowSimulation && typeof query?.simulatedVersion === "string") {
+    const candidate = query.simulatedVersion.trim();
+    if (/^v?\d+(\.\d+)*(-[\w.]+)?$/i.test(candidate)) {
+      latestVersion = candidate;
+    }
+  }
+
+  const androidPackage = "com.tayyibati.app";
+  const iosBundleId = "com.tayyibati.app";
+
+  return {
+    latestVersion,
+    minVersion,
+    releaseNotes,
+    android: {
+      packageId: androidPackage,
+      storeUrl: `https://play.google.com/store/apps/details?id=${androidPackage}`,
+      marketUrl: `market://details?id=${androidPackage}`,
+    },
+    ios: {
+      bundleId: iosBundleId,
+      storeUrl: `https://apps.apple.com/app/id6738910404`,
+    },
+  };
+}
+
+router.get("/app-version", async (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const payload = await getAppVersionPayload(req.query);
+    res.json(payload);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get app version info");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

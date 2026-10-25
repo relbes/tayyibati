@@ -27,6 +27,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/context/AuthContext";
 import { AnalysisProvider } from "@/context/AnalysisContext";
 import { DeveloperModeProvider } from "@/context/DeveloperModeContext";
+import { AppUpdateProvider } from "@/context/AppUpdateContext";
 import { initializeRevenueCat, SubscriptionProvider } from "@/lib/revenuecat";
 
 try {
@@ -75,11 +76,13 @@ export default function RootLayout() {
           <SubscriptionProvider>
             <AnalysisProvider>
               <DeveloperModeProvider>
-                <GestureHandlerRootView style={{ flex: 1 }}>
-                  <SafeAreaProvider>
-                    <RootLayoutNav />
-                  </SafeAreaProvider>
-                </GestureHandlerRootView>
+                <AppUpdateProvider>
+                  <GestureHandlerRootView style={{ flex: 1 }}>
+                    <SafeAreaProvider>
+                      <RootLayoutNav />
+                    </SafeAreaProvider>
+                  </GestureHandlerRootView>
+                </AppUpdateProvider>
               </DeveloperModeProvider>
             </AnalysisProvider>
           </SubscriptionProvider>
