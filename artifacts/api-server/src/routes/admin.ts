@@ -1,4 +1,4 @@
-import { Router, type Request, type Response, type NextFunction } from "express";
+﻿import { Router, type Request, type Response, type NextFunction } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
 import { db, adminUsersTable, type AdminUser, analysisHistoryTable, userUsageTable, foodsTable, usersTable, subscriptionPlansTable, dishes, pendingKnowledgeReviewsTable, aiFoodKnowledgeCacheTable } from "@workspace/db";
 import { desc, sql, count, avg, eq, and, or, inArray } from "drizzle-orm";
@@ -167,6 +167,78 @@ router.post("/admin/change-password", requireAdmin, async (req, res) => {
   }
 });
 
+/**
+ * Derives a truthful ruling for a history record from the AnalysisReport JSON.
+ *
+ * The AnalysisReport interface does NOT have a root-level `status` field.
+ * The ruling is derived from `primaryRuling.status` when a definitive food was resolved,
+ * from the ingredient breakdown, or from `resultMode` for ambiguous / not-found cases.
+ *
+ * Returns: "allowed" | "forbidden" | "conditional" | "unknown" | "ambiguous" | "not_found"
+ */
+export function deriveRulingFromReport(rep: any): string {
+  if (!rep) return "unknown";
+
+  // Handle case where report is a JSON string
+  if (typeof rep === "string") {
+    try {
+      rep = JSON.parse(rep);
+    } catch {
+      return "unknown";
+    }
+  }
+
+  if (typeof rep !== "object" || rep === null) return "unknown";
+
+  // 1. Ambiguous or multiple-dish results have no definitive ruling.
+  const resultMode: string = String(rep.resultMode || "");
+  if (
+    resultMode === "AMBIGUOUS_FOOD" ||
+    resultMode === "MULTIPLE_DISHES" ||
+    rep.needsClarification === true ||
+    rep.isAmbiguous === true
+  ) {
+    return "ambiguous";
+  }
+
+  // 2. Not-found cases
+  if (resultMode === "UNKNOWN_FOOD" || resultMode === "NOT_FOUND" || rep.notFound === true) {
+    return "not_found";
+  }
+
+  // 3. primaryRuling is the authoritative ruling for a resolved food/dish
+  if (rep.primaryRuling && rep.primaryRuling.status) {
+    const s = String(rep.primaryRuling.status).toLowerCase().trim();
+    if (s === "allowed" || s === "forbidden" || s === "conditional" || s === "unknown") return s;
+  }
+
+  // 4. Ingredient-based derivation: forbidden > conditional > allowed > unknown
+  const hasForbidden = Array.isArray(rep.forbidden) && rep.forbidden.length > 0;
+  const hasConditional = Array.isArray(rep.conditional) && rep.conditional.length > 0;
+  const hasAllowed = Array.isArray(rep.allowed) && rep.allowed.length > 0;
+  if (hasForbidden) return "forbidden";
+  if (hasConditional) return "conditional";
+  if (hasAllowed) return "allowed";
+
+  // 5. Check decisionEngine / decisionOutput finalDecision if present
+  const finalDecision = rep.decisionEngine?.finalDecision || rep.decisionOutput?.finalDecision;
+  if (typeof finalDecision === "string") {
+    const fd = finalDecision.toLowerCase().trim();
+    if (fd === "forbidden" || fd === "allowed" || fd === "conditional") return fd;
+  }
+
+  // 6. Check legacy top-level status field if valid
+  if (typeof rep.status === "string") {
+    const st = rep.status.toLowerCase().trim();
+    if (st === "allowed" || st === "forbidden" || st === "conditional") return st;
+  }
+
+  // 7. compatibilityScore==null with no ingredients means no definitive ruling
+  if (rep.compatibilityScore === null || rep.compatibilityScore === undefined) return "unknown";
+
+  return "unknown";
+}
+
 router.get("/admin/history", requireAdmin, async (req, res) => {
   try {
     const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || "50"), 10) || 50));
@@ -194,11 +266,20 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
       const uId = i.userId ? i.userId.trim() : "";
       const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "غير متوفر";
       const rep = (i.report || {}) as any;
+
+      // Correctly derive ruling — report.status does NOT exist on AnalysisReport
+      const derivedRuling = deriveRulingFromReport(rep);
+
       return {
         ...i,
         userEmail: email,
         queryIntent: rep.queryIntent || null,
         selectedCandidate: rep.selectedCandidate || null,
+        // Accurately derived fields surfaced for the admin UI
+        derivedRuling,
+        resultMode: rep.resultMode || null,
+        needsClarification: rep.needsClarification === true,
+        displayQuery: rep.displayQuery || null,
       };
     });
 
@@ -216,10 +297,8 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
     }
 
     if (statusFilter && statusFilter !== "all") {
-      mapped = mapped.filter((i) => {
-        const r = (i.report || {}) as any;
-        return r.status === statusFilter;
-      });
+      // Filter on derivedRuling — the truthful ruling, not the non-existent rep.status
+      mapped = mapped.filter((i) => (i as any).derivedRuling === statusFilter);
     }
 
     const totalItems = mapped.length;
@@ -263,34 +342,79 @@ router.delete("/admin/history", requireAdmin, async (req, res) => {
 
 router.get("/admin/export/history", requireAdmin, async (req, res) => {
   try {
-    const items = await db.select().from(analysisHistoryTable).orderBy(desc(analysisHistoryTable.createdAt));
+    // Accept the same filter params as GET /admin/history so the export matches the filtered view
+    const searchQuery = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const typeFilter = typeof req.query.analysisType === "string" ? req.query.analysisType : "";
+    const statusFilter = typeof req.query.status === "string" ? req.query.status : "";
+
+    const allItems = await db.select().from(analysisHistoryTable).orderBy(desc(analysisHistoryTable.createdAt));
     const users = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
-    const userMap = new Map(users.map((u) => [u.id, u.email]));
+    const userMap = new Map<string, string>();
+    for (const u of users) {
+      if (u.id && u.email) {
+        userMap.set(u.id, u.email);
+        userMap.set(u.id.trim(), u.email);
+        userMap.set(u.id.toLowerCase(), u.email);
+      }
+    }
+
+    // Apply same filters as the GET endpoint
+    let filtered = allItems.filter((i) => {
+      if (typeFilter && typeFilter !== "all" && i.analysisType !== typeFilter) return false;
+      const uId = i.userId ? i.userId.trim() : "";
+      const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "";
+      if (searchQuery) {
+        const matchesQuery = i.query.toLowerCase().includes(searchQuery);
+        const matchesEmail = email.toLowerCase().includes(searchQuery);
+        const matchesUser = i.userId.toLowerCase().includes(searchQuery);
+        if (!matchesQuery && !matchesEmail && !matchesUser) return false;
+      }
+      if (statusFilter && statusFilter !== "all") {
+        const rep = (i.report || {}) as any;
+        const ruling = deriveRulingFromReport(rep);
+        if (ruling !== statusFilter) return false;
+      }
+      return true;
+    });
 
     const headers = [
       "id",
       "user_email",
       "query",
+      "display_query",
       "analysis_type",
       "compatibility_score",
-      "status",
+      "ruling",
+      "result_mode",
       "intent",
+      "needs_clarification",
       "selected_candidate",
       "created_at",
     ];
-    const rows = items.map((i) => {
+
+    const rows = filtered.map((i) => {
       const rep = (i.report || {}) as any;
+      const uId = i.userId ? i.userId.trim() : "";
+      const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "غير متوفر";
+      const derivedRuling = deriveRulingFromReport(rep);
       const selCandRef =
         rep.selectedCandidate?.reference ||
         (rep.selectedCandidate?.nameAr ? `${rep.selectedCandidate.type}: ${rep.selectedCandidate.nameAr}` : "");
+      // Use null for absent scores — never substitute 0 for null
+      const score = i.compatibilityScore !== null && i.compatibilityScore !== undefined
+        ? i.compatibilityScore
+        : "";
       return [
         i.id,
-        userMap.get(i.userId) || "غير متوفر",
+        email,
         i.query,
+        rep.displayQuery || "",
         i.analysisType,
-        i.compatibilityScore ?? 0,
-        rep.status || "unknown",
+        score,
+        derivedRuling,
+        rep.resultMode || "",
         rep.queryIntent || "",
+        rep.needsClarification === true ? "true" : "false",
         selCandRef,
         i.createdAt ? new Date(i.createdAt).toISOString() : "",
       ];

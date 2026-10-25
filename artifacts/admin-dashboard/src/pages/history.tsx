@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,15 +20,23 @@ import { useLocation } from "wouter";
 
 const PAGE_SIZE = 20;
 
+export type RulingStatus = "allowed" | "forbidden" | "conditional" | "unknown" | "ambiguous" | "not_found";
+
 interface HistoryItem {
   id: number;
   userId: string;
   userEmail?: string;
   query: string;
   analysisType: "text" | "image" | "label";
-  compatibilityScore: number;
+  /** Integer 0-100 or null when no score is available (ambiguous/not-found results) */
+  compatibilityScore: number | null;
   createdAt: string;
   queryIntent?: string | null;
+  /** Truthfully derived ruling from the backend — replaces the broken report.status approach */
+  derivedRuling?: RulingStatus | null;
+  resultMode?: string | null;
+  needsClarification?: boolean;
+  displayQuery?: string | null;
   selectedCandidate?: {
     type: string;
     id?: number | string;
@@ -36,14 +44,20 @@ interface HistoryItem {
     reference: string;
   } | null;
   report: {
-    status?: string;
     explanation?: string;
     queryIntent?: string | null;
+    resultMode?: string | null;
+    needsClarification?: boolean;
+    displayQuery?: string | null;
     selectedCandidate?: {
       type: string;
       id?: number | string;
       nameAr: string;
       reference: string;
+    } | null;
+    primaryRuling?: {
+      status: "allowed" | "forbidden" | "conditional" | "unknown";
+      nameAr: string;
     } | null;
     forbidden?: Array<{ name: string; nameAr?: string; reason?: string }>;
     conditional?: Array<{ name: string; nameAr?: string; reason?: string }>;
@@ -52,6 +66,122 @@ interface HistoryItem {
     matchedFoodId?: number;
     matchedDishId?: number;
   };
+}
+
+/** Maps raw queryIntent values to readable Arabic labels */
+function intentLabel(intent: string | null | undefined): string {
+  if (!intent) return "—";
+  switch (intent.toUpperCase()) {
+    case "FOOD": return "البحث عن طعام";
+    case "DISH": return "البحث عن طبق";
+    case "COMPOSITE": return "بحث مركّب";
+    case "UNKNOWN": return "غير محدد";
+    case "SPECIFIC_INGREDIENT": return "مكوّن محدد";
+    case "BROAD_FOOD_CATEGORY": return "فئة غذائية عامة";
+    case "SPECIFIC_DISH": return "طبق محدد";
+    case "AMBIGUOUS_DISH_FOOD": return "بحث غير محدد";
+    case "PRODUCT_BRAND": return "منتج تجاري";
+    case "INGREDIENT_LIST": return "قائمة مكونات";
+    case "FREE_FORM_MEAL": return "وصف وجبة";
+    default: return intent; // Show raw value as safe fallback for unrecognized values
+  }
+}
+
+/** Maps resultMode values to a clear Arabic result-type label */
+function resultTypeLabel(resultMode: string | null | undefined, needsClarification?: boolean): string {
+  if (needsClarification) return "يتطلب توضيحاً";
+  if (!resultMode) return "—";
+  switch (resultMode) {
+    case "EXACT_FOOD": return "نتيجة محددة";
+    case "GENERAL_RULE": return "قاعدة عامة";
+    case "GENERAL_RULE_EXCEPTIONS": return "قاعدة عامة مع استثناءات";
+    case "SPECIFIC_INHERITED": return "موروث من فئة";
+    case "MIXED_CATEGORY": return "فئة مختلطة";
+    case "COMPOSITE_FOOD": return "طعام مركّب";
+    case "AMBIGUOUS_FOOD": return "خيارات متعددة";
+    case "MULTIPLE_DISHES": return "أطباق متعددة";
+    case "UNKNOWN_FOOD": return "غير معروف";
+    case "NOT_FOUND": return "لم يُعثر عليه";
+    case "LIST_ALLOWED": return "قائمة مسموحة";
+    case "LIST_RESTRICTED": return "قائمة مقيدة";
+    case "CATEGORY_REPORT": return "تقرير فئة";
+    case "UNSUPPORTED_QUESTION": return "سؤال غير مدعوم";
+    case "MULTI_ITEM": return "متعدد العناصر";
+    default: return resultMode;
+  }
+}
+
+/**
+ * Derives a truthful ruling from the AnalysisReport JSON.
+ * Operates on both the backend-derived field and the raw report as a resilient client-side fallback.
+ */
+function deriveRulingFromReport(rep: any): RulingStatus {
+  if (!rep) return "unknown";
+
+  if (typeof rep === "string") {
+    try {
+      rep = JSON.parse(rep);
+    } catch {
+      return "unknown";
+    }
+  }
+
+  if (typeof rep !== "object" || rep === null) return "unknown";
+
+  // 1. Ambiguous or multiple-dish results
+  const resultMode: string = String(rep.resultMode || "");
+  if (
+    resultMode === "AMBIGUOUS_FOOD" ||
+    resultMode === "MULTIPLE_DISHES" ||
+    rep.needsClarification === true ||
+    rep.isAmbiguous === true
+  ) {
+    return "ambiguous";
+  }
+
+  // 2. Not-found cases
+  if (resultMode === "UNKNOWN_FOOD" || resultMode === "NOT_FOUND" || rep.notFound === true) {
+    return "not_found";
+  }
+
+  // 3. primaryRuling is the authoritative ruling for a resolved food/dish
+  if (rep.primaryRuling && rep.primaryRuling.status) {
+    const s = String(rep.primaryRuling.status).toLowerCase().trim();
+    if (s === "allowed" || s === "forbidden" || s === "conditional" || s === "unknown") return s as RulingStatus;
+  }
+
+  // 4. Ingredient-based derivation: forbidden > conditional > allowed > unknown
+  const hasForbidden = Array.isArray(rep.forbidden) && rep.forbidden.length > 0;
+  const hasConditional = Array.isArray(rep.conditional) && rep.conditional.length > 0;
+  const hasAllowed = Array.isArray(rep.allowed) && rep.allowed.length > 0;
+  if (hasForbidden) return "forbidden";
+  if (hasConditional) return "conditional";
+  if (hasAllowed) return "allowed";
+
+  // 5. Decision engine / output fallback
+  const finalDecision = rep.decisionEngine?.finalDecision || rep.decisionOutput?.finalDecision;
+  if (typeof finalDecision === "string") {
+    const fd = finalDecision.toLowerCase().trim();
+    if (fd === "forbidden" || fd === "allowed" || fd === "conditional") return fd as RulingStatus;
+  }
+
+  // 6. Legacy status fallback
+  if (typeof rep.status === "string") {
+    const st = rep.status.toLowerCase().trim();
+    if (st === "allowed" || st === "forbidden" || st === "conditional") return st as RulingStatus;
+  }
+
+  if (rep.compatibilityScore === null || rep.compatibilityScore === undefined) return "unknown";
+
+  return "unknown";
+}
+
+function deriveRuling(item: HistoryItem | null | undefined): RulingStatus {
+  if (!item) return "unknown";
+  if (item.derivedRuling && item.derivedRuling !== "unknown") {
+    return item.derivedRuling;
+  }
+  return deriveRulingFromReport(item.report);
 }
 
 function TypeIcon({ type }: { type: string }) {
@@ -66,7 +196,15 @@ function TypeLabel({ type, lang }: { type: string; lang: "ar" | "en" }) {
   return <span>{tr(lang, "label")}</span>;
 }
 
-function ScoreBadge({ score }: { score: number }) {
+function ScoreBadge({ score }: { score: number | null | undefined }) {
+  // score is an integer 0-100; null/undefined means no score is available (e.g. ambiguous result)
+  if (score === null || score === undefined) {
+    return (
+      <span className="inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium bg-slate-100 text-slate-500 border-slate-200">
+        غير متوفرة
+      </span>
+    );
+  }
   const color = score >= 71 ? "bg-green-100 text-green-800 border-green-200" : score >= 51 ? "bg-amber-100 text-amber-800 border-amber-200" : "bg-red-100 text-red-800 border-red-200";
   return (
     <span className={cn("inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold", color)}>
@@ -81,6 +219,22 @@ function HistoryDetailDialog({ item, open, onClose, lang }: {
   const [, setLocation] = useLocation();
   if (!item) return null;
   const { report } = item;
+
+  // Derive display values from the correctly mapped fields (with client-side report fallback)
+  const ruling = deriveRuling(item);
+  const rmMode = item.resultMode || report.resultMode;
+  const needsClari = item.needsClarification ?? report.needsClarification;
+  const displayQ = item.displayQuery || report.displayQuery;
+  const intent = item.queryIntent || report.queryIntent;
+  const resolvedCandidate = item.selectedCandidate || report.selectedCandidate;
+
+  const rulingLabel =
+    ruling === "allowed" ? "مسموح" :
+    ruling === "forbidden" ? "ممنوع" :
+    ruling === "conditional" ? "مشروط" :
+    ruling === "ambiguous" ? "لم يُحدّد طبق" :
+    ruling === "not_found" ? "غير معروف" :
+    "غير محدد";
 
   const handleOpenKnowledge = () => {
     onClose();
@@ -101,7 +255,7 @@ function HistoryDetailDialog({ item, open, onClose, lang }: {
             <ScoreBadge score={item.compatibilityScore} />
           </DialogTitle>
           <DialogDescription>
-            سجل تحليل وتدقيق بحث المستخدم
+            سجل تحليل وتدقيق بحث المستخدم (معرّف السجل: #{item.id})
           </DialogDescription>
         </DialogHeader>
 
@@ -113,24 +267,47 @@ function HistoryDetailDialog({ item, open, onClose, lang }: {
               <div className="bg-background p-2 rounded border">
                 <span className="text-[10px] text-muted-foreground block">استعلام المستخدم</span>
                 <span className="font-bold text-foreground text-xs truncate block">{item.query}</span>
+                {displayQ && displayQ !== item.query && (
+                  <span className="text-[9px] text-muted-foreground block truncate mt-0.5" title={displayQ}>
+                    معروض: {displayQ}
+                  </span>
+                )}
               </div>
               <div className="bg-background p-2 rounded border">
                 <span className="text-[10px] text-muted-foreground block">القصد المكتشف (Intent)</span>
-                <span className="font-bold text-blue-700 text-xs block font-mono">
-                  {item.queryIntent || report.queryIntent || "غير محدد"}
+                <span className="font-bold text-blue-700 text-xs block">
+                  {intentLabel(intent)}
                 </span>
+                {intent && <span className="text-[9px] text-muted-foreground block font-mono">{intent}</span>}
               </div>
               <div className="bg-background p-2 rounded border">
-                <span className="text-[10px] text-muted-foreground block">المرشح المختار (Candidate)</span>
-                <span className="font-bold text-purple-700 text-xs truncate block">
-                  {(item.selectedCandidate || report.selectedCandidate)?.nameAr || (item.selectedCandidate || report.selectedCandidate)?.reference || "لا يوجد / غير مؤكد"}
+                <span className="text-[10px] text-muted-foreground block">نوع النتيجة</span>
+                <span className="font-bold text-purple-700 text-xs block">
+                  {resultTypeLabel(rmMode, needsClari)}
                 </span>
+                {rmMode && <span className="text-[9px] text-muted-foreground block font-mono">{rmMode}</span>}
               </div>
               <div className="bg-background p-2 rounded border">
                 <span className="text-[10px] text-muted-foreground block">الحكم والنتيجة</span>
-                <span className="font-bold text-emerald-700 text-xs block">{report.status || "محلل"}</span>
+                <span className={`font-bold text-xs block ${
+                  ruling === "allowed" ? "text-green-700" :
+                  ruling === "forbidden" ? "text-red-700" :
+                  ruling === "conditional" ? "text-amber-700" :
+                  "text-slate-600"
+                }`}>{rulingLabel}</span>
               </div>
             </div>
+            {resolvedCandidate && (
+              <div className="text-[11px] text-muted-foreground pt-1 border-t">
+                المرشح المختار:&nbsp;
+                <span className="font-medium text-foreground">
+                  {resolvedCandidate.nameAr || resolvedCandidate.reference}
+                </span>
+                {resolvedCandidate.reference && resolvedCandidate.reference !== resolvedCandidate.nameAr && (
+                  <span className="text-muted-foreground"> ({resolvedCandidate.reference})</span>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground bg-background p-3 rounded border">
@@ -236,10 +413,18 @@ export default function History() {
       const res = await adminFetch(`${API_BASE}/api/admin/history?${queryParams}`);
       const data = await res.json();
       if (data.items) {
-        setItems(data.items);
+        const enriched = data.items.map((i: HistoryItem) => ({
+          ...i,
+          derivedRuling: deriveRuling(i),
+        }));
+        setItems(enriched);
         setTotalItems(data.totalItems || data.items.length);
       } else if (Array.isArray(data)) {
-        setItems(data);
+        const enriched = data.map((i: HistoryItem) => ({
+          ...i,
+          derivedRuling: deriveRuling(i),
+        }));
+        setItems(enriched);
         setTotalItems(data.length);
       }
     } catch (err: any) {
@@ -276,7 +461,13 @@ export default function History() {
 
   const handleExportCsv = async () => {
     try {
-      const res = await adminFetch(`${API_BASE}/api/admin/export/history`);
+      // Forward the same active filters so the CSV matches the filtered view
+      const exportParams = new URLSearchParams();
+      if (search) exportParams.append("search", search);
+      if (analysisTypeFilter && analysisTypeFilter !== "all") exportParams.append("analysisType", analysisTypeFilter);
+      if (statusFilter && statusFilter !== "all") exportParams.append("status", statusFilter);
+      const qs = exportParams.toString();
+      const res = await adminFetch(`${API_BASE}/api/admin/export/history${qs ? "?" + qs : ""}`);
       if (!res.ok) throw new Error("فشل تصدير البيانات");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -391,14 +582,17 @@ export default function History() {
               </SelectContent>
             </Select>
             <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setOffset(0); }}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="الحكم" />
+              <SelectTrigger className="w-[170px]">
+                <SelectValue placeholder="الحكم / النتيجة" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">جميع الأحكام</SelectItem>
-                <SelectItem value="allowed">مسموح (Allowed)</SelectItem>
-                <SelectItem value="forbidden">ممنوع (Forbidden)</SelectItem>
-                <SelectItem value="conditional">مشروط (Conditional)</SelectItem>
+                <SelectItem value="allowed">مسموح</SelectItem>
+                <SelectItem value="forbidden">ممنوع</SelectItem>
+                <SelectItem value="conditional">مشروط</SelectItem>
+                <SelectItem value="ambiguous">لم يُحدّد طبق (غامض)</SelectItem>
+                <SelectItem value="not_found">لم يُعثر عليه</SelectItem>
+                <SelectItem value="unknown">غير محدد</SelectItem>
               </SelectContent>
             </Select>
             <Button variant="secondary" onClick={fetchHistory}>
@@ -433,6 +627,7 @@ export default function History() {
                   <th className="px-4 py-3">البحث (Query)</th>
                   <th className="px-4 py-3">القصد (Intent)</th>
                   <th className="px-4 py-3">نوع التحليل</th>
+                  <th className="px-4 py-3">نوع النتيجة</th>
                   <th className="px-4 py-3">الحكم</th>
                   <th className="px-4 py-3">درجة التوافق</th>
                   <th className="px-4 py-3 text-left">الإجراءات</th>
@@ -442,23 +637,26 @@ export default function History() {
                 {loading ? (
                   Array.from({ length: 8 }).map((_, i) => (
                     <tr key={i}>
-                      {Array.from({ length: 9 }).map((__, j) => (
+                      {Array.from({ length: 10 }).map((__, j) => (
                         <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                       ))}
                     </tr>
                   ))
                 ) : items.length === 0 ? (
                   <tr>
-                    <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-4 py-12 text-center text-muted-foreground">
                       {tr(lang, "noHistory")}
                     </td>
                   </tr>
                 ) : (
                   items.map((item) => {
                     const isSelected = selectedIds.includes(item.id);
-                    const verdictStatus = item.report?.status || "allowed";
+                    // Truthfully derived ruling from backend or report fallback
+                    const ruling = deriveRuling(item);
                     const resolvedCandidate = item.selectedCandidate || item.report?.selectedCandidate;
                     const intent = item.queryIntent || item.report?.queryIntent;
+                    const rmMode = item.resultMode || item.report?.resultMode;
+                    const needsClari = item.needsClarification ?? item.report?.needsClarification;
                     return (
                       <tr key={item.id} className={cn("hover:bg-muted/20 transition-colors", isSelected && "bg-primary/5")}>
                         <td className="px-4 py-3 w-10 text-center">
@@ -482,8 +680,8 @@ export default function History() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-xs">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded font-mono text-[11px] bg-slate-100 text-slate-800 border">
-                            {intent || "—"}
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-slate-100 text-slate-800 border" title={intent || undefined}>
+                            {intentLabel(intent)}
                           </span>
                         </td>
                         <td className="px-4 py-3">
@@ -492,13 +690,32 @@ export default function History() {
                             <TypeLabel type={item.analysisType} lang={lang} />
                           </div>
                         </td>
+                        <td className="px-4 py-3 text-xs">
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] border ${
+                            needsClari ? "bg-blue-50 text-blue-800 border-blue-200" :
+                            rmMode === "AMBIGUOUS_FOOD" || rmMode === "MULTIPLE_DISHES" ? "bg-orange-50 text-orange-800 border-orange-200" :
+                            rmMode === "UNKNOWN_FOOD" || rmMode === "NOT_FOUND" ? "bg-slate-100 text-slate-600 border-slate-200" :
+                            rmMode === "EXACT_FOOD" || rmMode === "SPECIFIC_INHERITED" ? "bg-emerald-50 text-emerald-800 border-emerald-200" :
+                            "bg-slate-100 text-slate-700 border-slate-200"
+                          }`}>
+                            {resultTypeLabel(rmMode, needsClari)}
+                          </span>
+                        </td>
                         <td className="px-4 py-3">
                           <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            verdictStatus === "allowed" ? "bg-green-100 text-green-800" :
-                            verdictStatus === "forbidden" ? "bg-red-100 text-red-800" :
-                            "bg-amber-100 text-amber-800"
+                            ruling === "allowed" ? "bg-green-100 text-green-800" :
+                            ruling === "forbidden" ? "bg-red-100 text-red-800" :
+                            ruling === "conditional" ? "bg-amber-100 text-amber-800" :
+                            ruling === "ambiguous" ? "bg-orange-100 text-orange-800" :
+                            ruling === "not_found" ? "bg-slate-100 text-slate-600" :
+                            "bg-slate-100 text-slate-600"
                           }`}>
-                            {verdictStatus === "allowed" ? "مسموح" : verdictStatus === "forbidden" ? "ممنوع" : "مشروط"}
+                            {ruling === "allowed" ? "مسموح" :
+                             ruling === "forbidden" ? "ممنوع" :
+                             ruling === "conditional" ? "مشروط" :
+                             ruling === "ambiguous" ? "لم يُحدّد طبق" :
+                             ruling === "not_found" ? "غير معروف" :
+                             "غير محدد"}
                           </span>
                         </td>
                         <td className="px-4 py-3"><ScoreBadge score={item.compatibilityScore} /></td>
