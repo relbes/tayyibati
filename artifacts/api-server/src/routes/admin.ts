@@ -244,6 +244,16 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
     const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit || "50"), 10) || 50));
     const offset = Math.max(0, parseInt(String(req.query.offset || "0"), 10) || 0);
     const searchQuery = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const nameFilter = typeof req.query.userName === "string"
+      ? req.query.userName.trim().toLowerCase()
+      : typeof req.query.name === "string"
+      ? req.query.name.trim().toLowerCase()
+      : "";
+    const emailFilter = typeof req.query.userEmail === "string"
+      ? req.query.userEmail.trim().toLowerCase()
+      : typeof req.query.email === "string"
+      ? req.query.email.trim().toLowerCase()
+      : "";
     const typeFilter = typeof req.query.analysisType === "string" ? req.query.analysisType : "";
     const statusFilter = typeof req.query.status === "string" ? req.query.status : "";
 
@@ -252,19 +262,30 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
       .from(analysisHistoryTable)
       .orderBy(desc(analysisHistoryTable.createdAt));
 
-    const users = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
-    const userMap = new Map<string, string>();
+    const users = await db
+      .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
+      .from(usersTable);
+
+    const userEmailMap = new Map<string, string>();
+    const userNameMap = new Map<string, string>();
     for (const u of users) {
-      if (u.id && u.email) {
-        userMap.set(u.id, u.email);
-        userMap.set(u.id.trim(), u.email);
-        userMap.set(u.id.toLowerCase(), u.email);
+      if (u.id) {
+        const email = u.email || "";
+        const name = u.name || "";
+        userEmailMap.set(u.id, email);
+        userEmailMap.set(u.id.trim(), email);
+        userEmailMap.set(u.id.toLowerCase(), email);
+
+        userNameMap.set(u.id, name);
+        userNameMap.set(u.id.trim(), name);
+        userNameMap.set(u.id.toLowerCase(), name);
       }
     }
 
     let mapped = allItems.map((i) => {
       const uId = i.userId ? i.userId.trim() : "";
-      const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "غير متوفر";
+      const email = userEmailMap.get(uId) || userEmailMap.get(uId.toLowerCase()) || "غير متوفر";
+      const name = userNameMap.get(uId) || userNameMap.get(uId.toLowerCase()) || "";
       const rep = (i.report || {}) as any;
 
       // Correctly derive ruling — report.status does NOT exist on AnalysisReport
@@ -273,6 +294,7 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
       return {
         ...i,
         userEmail: email,
+        userName: name,
         queryIntent: rep.queryIntent || null,
         selectedCandidate: rep.selectedCandidate || null,
         // Accurately derived fields surfaced for the admin UI
@@ -288,7 +310,20 @@ router.get("/admin/history", requireAdmin, async (req, res) => {
         (i) =>
           i.query.toLowerCase().includes(searchQuery) ||
           (i.userEmail && i.userEmail.toLowerCase().includes(searchQuery)) ||
+          (i.userName && i.userName.toLowerCase().includes(searchQuery)) ||
           i.userId.toLowerCase().includes(searchQuery)
+      );
+    }
+
+    if (nameFilter) {
+      mapped = mapped.filter(
+        (i) => i.userName && i.userName.toLowerCase().includes(nameFilter)
+      );
+    }
+
+    if (emailFilter) {
+      mapped = mapped.filter(
+        (i) => i.userEmail && i.userEmail.toLowerCase().includes(emailFilter)
       );
     }
 
@@ -344,17 +379,36 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
   try {
     // Accept the same filter params as GET /admin/history so the export matches the filtered view
     const searchQuery = typeof req.query.search === "string" ? req.query.search.trim().toLowerCase() : "";
+    const nameFilter = typeof req.query.userName === "string"
+      ? req.query.userName.trim().toLowerCase()
+      : typeof req.query.name === "string"
+      ? req.query.name.trim().toLowerCase()
+      : "";
+    const emailFilter = typeof req.query.userEmail === "string"
+      ? req.query.userEmail.trim().toLowerCase()
+      : typeof req.query.email === "string"
+      ? req.query.email.trim().toLowerCase()
+      : "";
     const typeFilter = typeof req.query.analysisType === "string" ? req.query.analysisType : "";
     const statusFilter = typeof req.query.status === "string" ? req.query.status : "";
 
     const allItems = await db.select().from(analysisHistoryTable).orderBy(desc(analysisHistoryTable.createdAt));
-    const users = await db.select({ id: usersTable.id, email: usersTable.email }).from(usersTable);
-    const userMap = new Map<string, string>();
+    const users = await db
+      .select({ id: usersTable.id, email: usersTable.email, name: usersTable.name })
+      .from(usersTable);
+    const userEmailMap = new Map<string, string>();
+    const userNameMap = new Map<string, string>();
     for (const u of users) {
-      if (u.id && u.email) {
-        userMap.set(u.id, u.email);
-        userMap.set(u.id.trim(), u.email);
-        userMap.set(u.id.toLowerCase(), u.email);
+      if (u.id) {
+        const email = u.email || "";
+        const name = u.name || "";
+        userEmailMap.set(u.id, email);
+        userEmailMap.set(u.id.trim(), email);
+        userEmailMap.set(u.id.toLowerCase(), email);
+
+        userNameMap.set(u.id, name);
+        userNameMap.set(u.id.trim(), name);
+        userNameMap.set(u.id.toLowerCase(), name);
       }
     }
 
@@ -362,12 +416,21 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
     let filtered = allItems.filter((i) => {
       if (typeFilter && typeFilter !== "all" && i.analysisType !== typeFilter) return false;
       const uId = i.userId ? i.userId.trim() : "";
-      const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "";
+      const email = userEmailMap.get(uId) || userEmailMap.get(uId.toLowerCase()) || "";
+      const name = userNameMap.get(uId) || userNameMap.get(uId.toLowerCase()) || "";
+
       if (searchQuery) {
         const matchesQuery = i.query.toLowerCase().includes(searchQuery);
         const matchesEmail = email.toLowerCase().includes(searchQuery);
+        const matchesName = name.toLowerCase().includes(searchQuery);
         const matchesUser = i.userId.toLowerCase().includes(searchQuery);
-        if (!matchesQuery && !matchesEmail && !matchesUser) return false;
+        if (!matchesQuery && !matchesEmail && !matchesName && !matchesUser) return false;
+      }
+      if (nameFilter) {
+        if (!name.toLowerCase().includes(nameFilter)) return false;
+      }
+      if (emailFilter) {
+        if (!email.toLowerCase().includes(emailFilter)) return false;
       }
       if (statusFilter && statusFilter !== "all") {
         const rep = (i.report || {}) as any;
@@ -379,6 +442,7 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
 
     const headers = [
       "id",
+      "user_name",
       "user_email",
       "query",
       "display_query",
@@ -395,7 +459,8 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
     const rows = filtered.map((i) => {
       const rep = (i.report || {}) as any;
       const uId = i.userId ? i.userId.trim() : "";
-      const email = userMap.get(uId) || userMap.get(uId.toLowerCase()) || "غير متوفر";
+      const email = userEmailMap.get(uId) || userEmailMap.get(uId.toLowerCase()) || "غير متوفر";
+      const name = userNameMap.get(uId) || userNameMap.get(uId.toLowerCase()) || "";
       const derivedRuling = deriveRulingFromReport(rep);
       const selCandRef =
         rep.selectedCandidate?.reference ||
@@ -406,6 +471,7 @@ router.get("/admin/export/history", requireAdmin, async (req, res) => {
         : "";
       return [
         i.id,
+        name,
         email,
         i.query,
         rep.displayQuery || "",

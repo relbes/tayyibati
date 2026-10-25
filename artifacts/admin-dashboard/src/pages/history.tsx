@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { ChevronLeft, ChevronRight, Trash2, Eye, FileText, Camera, Tag, Download, Search, ExternalLink, ArrowRight, CheckSquare, PlusCircle } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, Eye, FileText, Camera, Tag, Download, Search, ExternalLink, ArrowRight, CheckSquare, PlusCircle, User, Mail, RotateCcw } from "lucide-react";
 import { FoodDialog } from "@/components/FoodDialog";
 import { cn } from "@/lib/utils";
 import { API_BASE, adminFetch } from "@/lib/api";
@@ -27,6 +27,7 @@ interface HistoryItem {
   id: number;
   userId: string;
   userEmail?: string;
+  userName?: string;
   query: string;
   analysisType: "text" | "image" | "label";
   /** Integer 0-100 or null when no score is available (ambiguous/not-found results) */
@@ -313,8 +314,8 @@ function HistoryDetailDialog({ item, open, onClose, lang, onOpenAddFood }: {
 
           <div className="grid grid-cols-2 gap-3 text-xs text-muted-foreground bg-background p-3 rounded border">
             <div>
-              <span className="font-medium text-foreground">البريد الإلكتروني:</span>
-              <p className="font-semibold mt-0.5 text-foreground">{item.userEmail || "غير متوفر"}</p>
+              <span className="font-medium text-foreground">المستخدم / البريد:</span>
+              <p className="font-semibold mt-0.5 text-foreground">{item.userName ? `${item.userName} (${item.userEmail || "غير متوفر"})` : (item.userEmail || "غير متوفر")}</p>
             </div>
             <div>
               <span className="font-medium text-foreground">{tr(lang, "date")}:</span>
@@ -398,8 +399,29 @@ export default function History() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [userNameInput, setUserNameInput] = useState("");
+  const [userEmailInput, setUserEmailInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [debouncedUserName, setDebouncedUserName] = useState("");
+  const [debouncedUserEmail, setDebouncedUserEmail] = useState("");
   const [analysisTypeFilter, setAnalysisTypeFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+
+  // Debounce text inputs (search, userName, userEmail)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const cleanSearch = search.trim();
+      const cleanName = userNameInput.trim();
+      const cleanEmail = userEmailInput.trim();
+
+      setDebouncedSearch(cleanSearch);
+      setDebouncedUserName(cleanName);
+      setDebouncedUserEmail(cleanEmail);
+      setOffset(0);
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [search, userNameInput, userEmailInput]);
 
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectedItem, setSelectedItem] = useState<HistoryItem | null>(null);
@@ -425,7 +447,9 @@ export default function History() {
         limit: String(PAGE_SIZE),
         offset: String(offset),
       });
-      if (search) queryParams.append("search", search);
+      if (debouncedSearch) queryParams.append("search", debouncedSearch);
+      if (debouncedUserName) queryParams.append("userName", debouncedUserName);
+      if (debouncedUserEmail) queryParams.append("userEmail", debouncedUserEmail);
       if (analysisTypeFilter && analysisTypeFilter !== "all") queryParams.append("analysisType", analysisTypeFilter);
       if (statusFilter && statusFilter !== "all") queryParams.append("status", statusFilter);
 
@@ -455,7 +479,7 @@ export default function History() {
 
   useEffect(() => {
     fetchHistory();
-  }, [offset, analysisTypeFilter, statusFilter]);
+  }, [offset, debouncedSearch, debouncedUserName, debouncedUserEmail, analysisTypeFilter, statusFilter]);
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
@@ -482,7 +506,9 @@ export default function History() {
     try {
       // Forward the same active filters so the CSV matches the filtered view
       const exportParams = new URLSearchParams();
-      if (search) exportParams.append("search", search);
+      if (debouncedSearch) exportParams.append("search", debouncedSearch);
+      if (debouncedUserName) exportParams.append("userName", debouncedUserName);
+      if (debouncedUserEmail) exportParams.append("userEmail", debouncedUserEmail);
       if (analysisTypeFilter && analysisTypeFilter !== "all") exportParams.append("analysisType", analysisTypeFilter);
       if (statusFilter && statusFilter !== "all") exportParams.append("status", statusFilter);
       const qs = exportParams.toString();
@@ -578,45 +604,116 @@ export default function History() {
 
       <Card>
         <CardContent className="p-4 space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="بحث بالاستعلام أو البريد الإلكتروني..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && fetchHistory()}
-                className="pr-9"
-              />
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative flex-1 min-w-[220px]">
+                <Search className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="بحث بالاستعلام (Query)..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setDebouncedSearch(search.trim());
+                      setOffset(0);
+                    }
+                  }}
+                  className="pr-9"
+                />
+              </div>
+
+              <div className="relative w-full sm:w-[190px]">
+                <User className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="اسم المستخدم..."
+                  value={userNameInput}
+                  onChange={(e) => setUserNameInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setDebouncedUserName(userNameInput.trim());
+                      setOffset(0);
+                    }
+                  }}
+                  className="pr-9"
+                />
+              </div>
+
+              <div className="relative w-full sm:w-[210px]">
+                <Mail className="absolute right-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="البريد الإلكتروني..."
+                  value={userEmailInput}
+                  onChange={(e) => setUserEmailInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      setDebouncedUserEmail(userEmailInput.trim());
+                      setOffset(0);
+                    }
+                  }}
+                  className="pr-9"
+                  dir="ltr"
+                />
+              </div>
+
+              <Select value={analysisTypeFilter} onValueChange={(val) => { setAnalysisTypeFilter(val); setOffset(0); }}>
+                <SelectTrigger className="w-[140px]">
+                  <SelectValue placeholder="نوع البحث" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الأنواع</SelectItem>
+                  <SelectItem value="text">نص (Text)</SelectItem>
+                  <SelectItem value="image">صورة (Image)</SelectItem>
+                  <SelectItem value="label">ملصق (Label)</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setOffset(0); }}>
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue placeholder="الحكم / النتيجة" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">جميع الأحكام</SelectItem>
+                  <SelectItem value="allowed">مسموح</SelectItem>
+                  <SelectItem value="forbidden">ممنوع</SelectItem>
+                  <SelectItem value="conditional">مشروط</SelectItem>
+                  <SelectItem value="ambiguous">لم يُحدّد طبق (غامض)</SelectItem>
+                  <SelectItem value="not_found">لم يُعثر عليه</SelectItem>
+                  <SelectItem value="unknown">غير محدد</SelectItem>
+                </SelectContent>
+              </Select>
+
+              <Button variant="secondary" onClick={() => {
+                setDebouncedSearch(search.trim());
+                setDebouncedUserName(userNameInput.trim());
+                setDebouncedUserEmail(userEmailInput.trim());
+                setOffset(0);
+              }}>
+                بحث
+              </Button>
+
+              {(search.trim() || userNameInput.trim() || userEmailInput.trim() || analysisTypeFilter !== "all" || statusFilter !== "all") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSearch("");
+                    setUserNameInput("");
+                    setUserEmailInput("");
+                    setDebouncedSearch("");
+                    setDebouncedUserName("");
+                    setDebouncedUserEmail("");
+                    setAnalysisTypeFilter("all");
+                    setStatusFilter("all");
+                    setOffset(0);
+                  }}
+                  className="text-muted-foreground hover:text-foreground gap-1.5 h-9"
+                  title="إعادة ضبط جميع الفلاتر"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                  إعادة ضبط
+                </Button>
+              )}
             </div>
-            <Select value={analysisTypeFilter} onValueChange={(val) => { setAnalysisTypeFilter(val); setOffset(0); }}>
-              <SelectTrigger className="w-[150px]">
-                <SelectValue placeholder="نوع البحث" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الأنواع</SelectItem>
-                <SelectItem value="text">نص (Text)</SelectItem>
-                <SelectItem value="image">صورة (Image)</SelectItem>
-                <SelectItem value="label">ملصق (Label)</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={(val) => { setStatusFilter(val); setOffset(0); }}>
-              <SelectTrigger className="w-[170px]">
-                <SelectValue placeholder="الحكم / النتيجة" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">جميع الأحكام</SelectItem>
-                <SelectItem value="allowed">مسموح</SelectItem>
-                <SelectItem value="forbidden">ممنوع</SelectItem>
-                <SelectItem value="conditional">مشروط</SelectItem>
-                <SelectItem value="ambiguous">لم يُحدّد طبق (غامض)</SelectItem>
-                <SelectItem value="not_found">لم يُعثر عليه</SelectItem>
-                <SelectItem value="unknown">غير محدد</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="secondary" onClick={fetchHistory}>
-              بحث
-            </Button>
           </div>
 
           {/* SELECTION BAR */}
@@ -642,7 +739,7 @@ export default function History() {
                     />
                   </th>
                   <th className="px-4 py-3">التاريخ</th>
-                  <th className="px-4 py-3">البريد الإلكتروني</th>
+                  <th className="px-4 py-3">المستخدم / البريد</th>
                   <th className="px-4 py-3">البحث (Query)</th>
                   <th className="px-4 py-3">القصد (Intent)</th>
                   <th className="px-4 py-3">نوع التحليل</th>
@@ -687,8 +784,15 @@ export default function History() {
                         <td className="px-4 py-3 text-muted-foreground text-xs">
                           {new Date(item.createdAt).toLocaleDateString("ar-EG")}
                         </td>
-                        <td className="px-4 py-3 font-medium text-foreground">
-                          {item.userEmail || "غير متوفر"}
+                        <td className="px-4 py-3 font-medium text-foreground max-w-[200px]">
+                          {item.userName ? (
+                            <div>
+                              <p className="font-semibold text-foreground truncate" title={item.userName}>{item.userName}</p>
+                              <p className="text-xs text-muted-foreground truncate" title={item.userEmail}>{item.userEmail || "غير متوفر"}</p>
+                            </div>
+                          ) : (
+                            <p className="text-foreground truncate" title={item.userEmail}>{item.userEmail || "غير متوفر"}</p>
+                          )}
                         </td>
                         <td className="px-4 py-3 max-w-xs font-semibold">
                           <p className="truncate">{item.query}</p>
