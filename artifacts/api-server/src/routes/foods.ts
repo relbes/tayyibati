@@ -1,16 +1,16 @@
 import { Router, Request, Response } from "express";
 import crypto from "crypto";
 import { db } from "@workspace/db";
-import { foodsTable, usersTable } from "@workspace/db";
+import { foodsTable, usersTable, dishes, foodAliases, dishAliases } from "@workspace/db";
 import { eq, ilike, and, or, sql, inArray } from "drizzle-orm";
 import { logger } from "../lib/logger";
 import { requireAdmin } from "./admin";
 import { requireAuth } from "../middleware/requireAuth";
 
-import { getKnowledgeCache, normalizeName, stripArticle } from "../lib/knowledgeCache";
+import { getKnowledgeCache, normalizeName, stripArticle, clearKnowledgeCache } from "../lib/knowledgeCache";
 import { normalize } from "../lib/arabicNormalization";
 import { expandSearchQuery } from "../lib/searchExpansion";
-import { CanonicalSearchEngine, SearchMode } from "../lib/canonicalSearchEngine";
+import { CanonicalSearchEngine, SearchMode, invalidateSearchIndexes } from "../lib/canonicalSearchEngine";
 
 const router = Router();
 
@@ -540,6 +540,219 @@ router.get("/foods/:id", async (req, res) => {
   }
 });
 
+export interface FoodNameCheckResult {
+  exists: boolean;
+  matchType?: "exact_food" | "food_alias" | "exact_dish" | "dish_alias";
+  matchedItem?: {
+    type: "food" | "dish";
+    id: number;
+    nameAr: string;
+    nameEn?: string | null;
+    category?: string | null;
+    status?: string | null;
+    aliasMatched?: string | null;
+  };
+  message?: string;
+  messageAr?: string;
+  normalizedInput?: string;
+  strippedInput?: string;
+}
+
+export async function checkFoodOrAliasMatch(rawName: string): Promise<FoodNameCheckResult> {
+  const clean = (rawName || "").trim();
+  if (!clean) {
+    return { exists: false };
+  }
+
+  const normInput = normalize(clean);
+  const strippedInput = stripArticle(normInput);
+
+  if (!normInput) {
+    return { exists: false };
+  }
+
+  // 1. Check Foods (exact canonical nameAr or nameEn)
+  const allFoods = await db
+    .select({
+      id: foodsTable.id,
+      nameAr: foodsTable.nameAr,
+      nameEn: foodsTable.nameEn,
+      category: foodsTable.category,
+      status: foodsTable.status,
+    })
+    .from(foodsTable);
+
+  for (const f of allFoods) {
+    const fNorm = normalize(f.nameAr);
+    const fStripped = stripArticle(fNorm);
+    const fEnNorm = f.nameEn ? normalize(f.nameEn) : "";
+
+    if (fNorm === normInput || fStripped === strippedInput || (fEnNorm && fEnNorm === normInput)) {
+      return {
+        exists: true,
+        matchType: "exact_food",
+        matchedItem: {
+          type: "food",
+          id: f.id,
+          nameAr: f.nameAr,
+          nameEn: f.nameEn,
+          category: f.category,
+          status: f.status,
+        },
+        message: `The food "${f.nameAr}" already exists in the database.`,
+        messageAr: `هذا الطعام موجود بالفعل في قاعدة البيانات باسم "${f.nameAr}".`,
+        normalizedInput: normInput,
+        strippedInput: strippedInput,
+      };
+    }
+  }
+
+  // 2. Check Food Aliases
+  const allAliases = await db
+    .select({
+      id: foodAliases.id,
+      foodId: foodAliases.foodId,
+      aliasAr: foodAliases.aliasAr,
+      aliasEn: foodAliases.aliasEn,
+    })
+    .from(foodAliases);
+
+  for (const a of allAliases) {
+    const aNorm = normalize(a.aliasAr);
+    const aStripped = stripArticle(aNorm);
+    const aEnNorm = a.aliasEn ? normalize(a.aliasEn) : "";
+
+    if (aNorm === normInput || aStripped === strippedInput || (aEnNorm && aEnNorm === normInput)) {
+      const parentFood = allFoods.find((f) => f.id === a.foodId);
+      return {
+        exists: true,
+        matchType: "food_alias",
+        matchedItem: {
+          type: "food",
+          id: parentFood?.id ?? a.foodId,
+          nameAr: parentFood?.nameAr ?? a.aliasAr,
+          nameEn: parentFood?.nameEn ?? null,
+          category: parentFood?.category ?? null,
+          status: parentFood?.status ?? null,
+          aliasMatched: a.aliasAr,
+        },
+        message: `This name is already registered as an alias for food "${parentFood?.nameAr || a.aliasAr}".`,
+        messageAr: `هذا الاسم مسجل بالفعل كاسم بديل (Alias) للطعام "${parentFood?.nameAr || a.aliasAr}".`,
+        normalizedInput: normInput,
+        strippedInput: strippedInput,
+      };
+    }
+  }
+
+  // 3. Check Dishes
+  const allDishes = await db
+    .select({
+      id: dishes.id,
+      nameAr: dishes.nameAr,
+      nameEn: dishes.nameEn,
+      category: dishes.category,
+    })
+    .from(dishes);
+
+  for (const d of allDishes) {
+    const dNorm = normalize(d.nameAr);
+    const dStripped = stripArticle(dNorm);
+    const dEnNorm = d.nameEn ? normalize(d.nameEn) : "";
+
+    if (dNorm === normInput || dStripped === strippedInput || (dEnNorm && dEnNorm === normInput)) {
+      return {
+        exists: true,
+        matchType: "exact_dish",
+        matchedItem: {
+          type: "dish",
+          id: d.id,
+          nameAr: d.nameAr,
+          nameEn: d.nameEn,
+          category: d.category,
+          status: null,
+        },
+        message: `A dish with this name already exists in the database.`,
+        messageAr: `هذا الاسم مسجل بالفعل كطبق (Dish) في قاعدة البيانات باسم "${d.nameAr}".`,
+        normalizedInput: normInput,
+        strippedInput: strippedInput,
+      };
+    }
+  }
+
+  // 4. Check Dish Aliases
+  const allDishAliases = await db
+    .select({
+      id: dishAliases.id,
+      dishId: dishAliases.dishId,
+      aliasAr: dishAliases.aliasAr,
+      aliasEn: dishAliases.aliasEn,
+    })
+    .from(dishAliases);
+
+  for (const da of allDishAliases) {
+    const daNorm = normalize(da.aliasAr);
+    const daStripped = stripArticle(daNorm);
+    const daEnNorm = da.aliasEn ? normalize(da.aliasEn) : "";
+
+    if (daNorm === normInput || daStripped === strippedInput || (daEnNorm && daEnNorm === normInput)) {
+      const parentDish = allDishes.find((d) => d.id === da.dishId);
+      return {
+        exists: true,
+        matchType: "dish_alias",
+        matchedItem: {
+          type: "dish",
+          id: parentDish?.id ?? da.dishId,
+          nameAr: parentDish?.nameAr ?? da.aliasAr,
+          nameEn: parentDish?.nameEn ?? null,
+          category: parentDish?.category ?? null,
+          status: null,
+          aliasMatched: da.aliasAr,
+        },
+        message: `This name is already registered as an alias for dish "${parentDish?.nameAr || da.aliasAr}".`,
+        messageAr: `هذا الاسم مسجل بالفعل كاسم بديل (Alias) للطبق "${parentDish?.nameAr || da.aliasAr}".`,
+        normalizedInput: normInput,
+        strippedInput: strippedInput,
+      };
+    }
+  }
+
+  return {
+    exists: false,
+    normalizedInput: normInput,
+    strippedInput: strippedInput,
+  };
+}
+
+// GET /api/admin/foods/check-name - Check if name matches any food or alias
+router.get("/admin/foods/check-name", requireAdmin, async (req, res) => {
+  try {
+    const rawName = typeof req.query.name === "string" ? req.query.name : "";
+    if (!rawName.trim()) {
+      return void res.status(400).json({ error: "name parameter is required" });
+    }
+    const result = await checkFoodOrAliasMatch(rawName);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Failed to check food name");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/foods/check-name - Support JSON body check
+router.post("/admin/foods/check-name", requireAdmin, async (req, res) => {
+  try {
+    const rawName = typeof req.body?.name === "string" ? req.body.name : "";
+    if (!rawName.trim()) {
+      return void res.status(400).json({ error: "name field is required" });
+    }
+    const result = await checkFoodOrAliasMatch(rawName);
+    res.json(result);
+  } catch (err) {
+    req.log.error({ err }, "Failed to check food name");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.post("/foods", requireAdmin, async (req, res) => {
   try {
     const { nameAr, nameEn, category, status, reason, notes } = req.body;
@@ -547,18 +760,22 @@ router.post("/foods", requireAdmin, async (req, res) => {
       return void res.status(400).json({ error: "Missing required fields" });
     }
 
+    if (!["allowed", "forbidden", "conditional"].includes(status)) {
+      return void res.status(400).json({ error: "Invalid status value" });
+    }
+
     const trimmedAr = String(nameAr).trim();
     const trimmedEn = String(nameEn).trim();
-    const normInput = normalizeName(trimmedAr);
 
-    const allFoods = await db.select({ id: foodsTable.id, nameAr: foodsTable.nameAr }).from(foodsTable);
-    const isDuplicate = allFoods.some((f) => normalizeName(f.nameAr) === normInput);
-
-    if (isDuplicate) {
+    // Atomic server duplicate & alias check
+    const checkResult = await checkFoodOrAliasMatch(trimmedAr);
+    if (checkResult.exists) {
       return void res.status(409).json({
         error: "food_already_exists",
-        message: "This food already exists in the database.",
-        messageAr: "هذا الطعام موجود بالفعل في قاعدة البيانات.",
+        matchType: checkResult.matchType,
+        matchedItem: checkResult.matchedItem,
+        message: checkResult.message || "This food already exists in the database.",
+        messageAr: checkResult.messageAr || "هذا الطعام أو الاسم البديل موجود بالفعل في قاعدة البيانات.",
       });
     }
 
@@ -573,6 +790,15 @@ router.post("/foods", requireAdmin, async (req, res) => {
         notes: notes ? String(notes).trim() : null,
       })
       .returning();
+
+    // Refresh in-memory caches
+    try {
+      clearKnowledgeCache();
+      invalidateSearchIndexes();
+    } catch (cacheErr) {
+      req.log.warn({ cacheErr }, "Failed to clear cache after food insert");
+    }
+
     res.status(201).json(food);
   } catch (err) {
     req.log.error({ err }, "Failed to create food");

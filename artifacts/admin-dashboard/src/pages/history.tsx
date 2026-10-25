@@ -13,7 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { useLang } from "@/contexts/LangContext";
 import { tr } from "@/lib/i18n";
-import { ChevronLeft, ChevronRight, Trash2, Eye, FileText, Camera, Tag, Download, Search, ExternalLink, ArrowRight, CheckSquare } from "lucide-react";
+import { ChevronLeft, ChevronRight, Trash2, Eye, FileText, Camera, Tag, Download, Search, ExternalLink, ArrowRight, CheckSquare, PlusCircle } from "lucide-react";
+import { FoodDialog } from "@/components/FoodDialog";
 import { cn } from "@/lib/utils";
 import { API_BASE, adminFetch } from "@/lib/api";
 import { useLocation } from "wouter";
@@ -213,8 +214,8 @@ function ScoreBadge({ score }: { score: number | null | undefined }) {
   );
 }
 
-function HistoryDetailDialog({ item, open, onClose, lang }: {
-  item: HistoryItem | null; open: boolean; onClose: () => void; lang: "ar" | "en";
+function HistoryDetailDialog({ item, open, onClose, lang, onOpenAddFood }: {
+  item: HistoryItem | null; open: boolean; onClose: () => void; lang: "ar" | "en"; onOpenAddFood?: (item: HistoryItem) => void;
 }) {
   const [, setLocation] = useLocation();
   if (!item) return null;
@@ -369,8 +370,18 @@ function HistoryDetailDialog({ item, open, onClose, lang }: {
           )}
         </div>
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="gap-2 flex-wrap sm:flex-nowrap">
           <Button variant="outline" onClick={onClose}>إغلاق</Button>
+          <Button
+            onClick={() => {
+              onClose();
+              onOpenAddFood?.(item);
+            }}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5"
+          >
+            <PlusCircle className="h-4 w-4" />
+            إضافة طعام (Add Food)
+          </Button>
           <Button onClick={handleOpenKnowledge} className="bg-primary hover:bg-primary/90 text-primary-foreground gap-1.5">
             <ExternalLink className="h-4 w-4" />
             فتح السجل المعرفي (Open Knowledge Record)
@@ -395,6 +406,14 @@ export default function History() {
   const [deleteTarget, setDeleteTarget] = useState<HistoryItem | null>(null);
   const [isBulkDeleteOpen, setIsBulkDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [addFoodOpen, setAddFoodOpen] = useState(false);
+  const [addFoodInitialQuery, setAddFoodInitialQuery] = useState("");
+
+  const handleOpenAddFood = (item: HistoryItem) => {
+    const target = (item.displayQuery || item.query || "").trim();
+    setAddFoodInitialQuery(target);
+    setAddFoodOpen(true);
+  };
 
   const { toast } = useToast();
   const { lang } = useLang();
@@ -719,12 +738,21 @@ export default function History() {
                           </span>
                         </td>
                         <td className="px-4 py-3"><ScoreBadge score={item.compatibilityScore} /></td>
-                        <td className="px-4 py-3 text-left space-x-1 space-x-reverse">
-                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedItem(item)}>
+                        <td className="px-4 py-3 text-left space-x-1 space-x-reverse whitespace-nowrap">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
+                            title="إضافة طعام من هذا البحث"
+                            onClick={() => handleOpenAddFood(item)}
+                          >
+                            <PlusCircle className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setSelectedItem(item)} title="عرض التفاصيل">
                             <Eye className="h-4 w-4 text-blue-600" />
                           </Button>
                           <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-red-50"
-                            onClick={() => setDeleteTarget(item)}>
+                            onClick={() => setDeleteTarget(item)} title="حذف">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </td>
@@ -756,7 +784,22 @@ export default function History() {
         </CardContent>
       </Card>
 
-      <HistoryDetailDialog item={selectedItem} open={!!selectedItem} onClose={() => setSelectedItem(null)} lang={lang} />
+      <HistoryDetailDialog
+        item={selectedItem}
+        open={!!selectedItem}
+        onClose={() => setSelectedItem(null)}
+        lang={lang}
+        onOpenAddFood={handleOpenAddFood}
+      />
+
+      <FoodDialog
+        open={addFoodOpen}
+        onClose={() => setAddFoodOpen(false)}
+        initialNameAr={addFoodInitialQuery}
+        onSaved={() => {
+          fetchHistory();
+        }}
+      />
 
       {/* SINGLE DELETE CONFIRM DIALOG */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(v) => !v && setDeleteTarget(null)}>
